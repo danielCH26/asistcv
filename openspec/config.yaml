@@ -1,0 +1,55 @@
+# AsistCV — OpenSpec Configuration
+
+## Context
+
+Job-search-assistant agéntico. Producto: asistente de búsqueda de empleo con 3 capacidades:
+1. Match JD↔perfil
+2. Adaptar CV + outreach + brief empresa  
+3. Tracking pipeline
+
+## Stack
+
+- **Frontend**: SvelteKit (static export) → Firebase Hosting
+- **Backend**: FastAPI (Python 3.12) → Cloud Run (GCP)
+- **DB**: Postgres + pgvector → Cloud SQL db-f1-micro
+- **LLM**: Vertex AI Claude 3.5 Haiku
+- **Embeddings**: Vertex AI text-multilingüe
+- **CI/CD**: Cloud Build
+- **Secrets**: Secret Manager
+
+## Strict TDD
+
+**Status**: false
+
+**Reason**: Proyecto greenfield sin código. Testing capabilities se definirán en fase design cuando se configure el proyecto Python/SvelteKit.
+
+## Testing Capabilities
+
+| Layer | Available | Tool |
+| ----- | --------- | ---- |
+| Unit | ❌ | Pendiente de setup |
+| Integration | ❌ | Pendiente de setup |
+| E2E | ❌ | Pendiente de setup |
+
+| Tool | Available | Command |
+| ---- | --------- | --------|
+| Linter | ❌ | Pendiente |
+| Type checker | ❌ | Pendiente |
+| Formatter | ❌ | Pendiente |
+
+## Phase Rules
+
+- **propose**: Crear proposal con alcance MVP y anti-patrones definidos
+- **spec**: Especificar las 3 capacidades con escenarios
+- **design**: Definir arquitectura técnica y modelo de datos
+- **tasks**: Dividir en slices implementables
+- **apply**: Implementar por tasks
+- **verify**: Tests manuales + validación contra spec
+- **archive**: Sync specs a main
+
+## Preferences (from user conversation)
+
+- artifact_store: hybrid
+- execution_mode: interactive
+- delivery_strategy: ask-on-risk
+- review_budget_lines: 600
