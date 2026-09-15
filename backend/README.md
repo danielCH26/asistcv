@@ -6,6 +6,9 @@ FastAPI application serving the AsistCV REST API.
 
 - Python 3.12+
 - FastAPI
+- SQLModel + SQLAlchemy (async)
+- Alembic (migrations)
+- PostgreSQL + pgvector
 - UV (package manager)
 
 ## Prerequisites
@@ -38,6 +41,18 @@ uv run mypy app/
 From the repository root:
 
 ```bash
+# Start local PostgreSQL database
+make db-up
+
+# Stop database
+make db-down
+
+# Run migrations
+make migrate
+
+# Rollback last migration
+make migrate-down
+
 # Run backend dev server
 make backend-run
 
@@ -60,7 +75,7 @@ Copy `.env.example` to `.env` and configure as needed:
 | `APP_ENV` | `development` | Application environment |
 | `LOG_LEVEL` | `INFO` | Logging level |
 | `API_PREFIX` | `/v1` | API URL prefix |
-| `DATABASE_URL` | `None` | PostgreSQL connection string |
+| `DATABASE_URL` | `postgresql+psycopg://asistcv:asistcv@localhost:5432/asistcv` | PostgreSQL connection string |
 | `LLM_PROVIDER` | `mock` | LLM provider (`mock` or `vertex`) |
 | `BACKEND_API_KEY` | `None` | API key for MCP adapter |
 
@@ -89,13 +104,22 @@ backend/
 │   │       ├── health.py    # /health endpoint
 │   │       ├── ping.py      # /v1/ping endpoint
 │   │       └── match.py     # /v1/match endpoint (placeholder)
-│   ├── db/                  # Database layer (Sprint 4)
-│   └── llm/                 # LLM integration (PR 3)
+│   ├── db/                  # Database layer (SQLModel)
+│   │   ├── models.py        # SQLModel definitions
+│   │   ├── session.py       # Session management
+│   │   └── seed.py          # Seed data
+│   └── llm/                 # LLM integration
+├── alembic/                 # Database migrations
+│   ├── versions/            # Migration files
+│   └── env.py               # Alembic configuration
 ├── tests/
 │   ├── conftest.py          # Pytest fixtures
-│   └── test_health.py      # Smoke tests
-├── pyproject.toml          # Project configuration
-└── .env.example            # Environment variables template
+│   ├── test_health.py       # Smoke tests
+│   ├── test_models.py       # Model tests
+│   └── test_migrations.py   # Migration tests
+├── alembic.ini              # Alembic configuration
+├── pyproject.toml           # Project configuration
+└── .env.example             # Environment variables template
 ```
 
 ## Development
@@ -114,4 +138,6 @@ uv run pytest --cov=app --cov-report=term-missing
 
 # Run specific test file
 uv run pytest tests/test_health.py -v
+uv run pytest tests/test_models.py -v
+uv run pytest tests/test_migrations.py -v
 ```

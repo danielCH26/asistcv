@@ -17,7 +17,7 @@ class Settings(BaseSettings):
         default=["http://localhost:5173", "http://localhost:8000"]
     )
     api_prefix: str = "/v1"
-    database_url: str | None = None
+    database_url: str = "postgresql+psycopg://asistcv:asistcv@localhost:5432/asistcv"
     llm_provider: str = Field(default="mock", validation_alias="LLM_PROVIDER")
     backend_api_key: str | None = Field(default=None, validation_alias="BACKEND_API_KEY")
 

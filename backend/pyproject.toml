@@ -9,6 +9,10 @@ dependencies = [
     "pydantic-settings>=2.3.0",
     "structlog>=24.1.0",
     "httpx>=0.27.0",
+    "sqlmodel>=0.0.22",
+    "alembic>=1.13.0",
+    "psycopg[binary]>=3.2.0",
+    "asyncpg>=0.29.0",
 ]
 
 [project.optional-dependencies]
@@ -62,6 +66,26 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "structlog.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "sqlmodel.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "alembic.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "psycopg.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "asyncpg.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "pgvector.*"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -113,7 +113,7 @@ db-down:
 
 migrate:
 	@echo "Running migrations..."
-	cd backend && uv run alembic upgrade head
+	cd backend && uv run alembic upgrade head && uv run python -m app.db.seed
 
 migrate-down:
 	@echo "Rolling back migration..."

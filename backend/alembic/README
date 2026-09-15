@@ -1,0 +1,35 @@
+# Alembic Migrations for AsistCV
+
+This directory contains database migrations for AsistCV.
+
+## Usage
+
+### Apply migrations
+```bash
+cd backend
+uv run alembic upgrade head
+```
+
+### Create a new migration
+```bash
+cd backend
+uv run alembic revision --autogenerate -m "description"
+```
+
+### Rollback last migration
+```bash
+cd backend
+uv run alembic downgrade -1
+```
+
+### Generate SQL for offline migration
+```bash
+cd backend
+uv run alembic upgrade head --sql > migration.sql
+```
+
+## Notes
+
+- Migrations use SQLModel for model definitions
+- The `vector` extension is enabled in the initial migration for future pgvector support
+- Vector columns (vector(1024)) are NOT included in Sprint 0 - they will be added in Slice 1 (issue #16)
