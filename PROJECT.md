@@ -6,7 +6,7 @@ Asistente agéntico de búsqueda de empleo. Analiza descripciones de puesto cont
 
 AsistCV es una herramienta personal que ayuda a aplicar mejor a los 5-10 puestos que valen la pena, en lugar de auto-aplicar a 100. La audiencia primaria es el propio autor durante su búsqueda de empleo; las audiencias secundarias son desarrolladores Latam que aplican a empresas US/EU, personas en transición de carrera y pequeños equipos de recruiting.
 
-Fase actual: **setup cerrado, Slice 1 en planificación**. Documento fundacional, stack y roadmap están publicados; la estructura SDD está inicializada en `openspec/`; el próximo paso es el proposal del Slice 1 (Match JD ↔ Perfil).
+Fase actual: **Sprint 0 cerrado en local, migración a stack free tier en curso**. Documentación fundacional, stack y roadmap están publicados; el backend FastAPI, las migraciones Alembic, el mock LLM y el adapter MCP están operativos contra Postgres local con pgvector. El próximo paso es cerrar la migración al stack free tier (Neon, HuggingFace Spaces, Cloudflare Pages, Groq, HF Inference, GitHub Actions) y arrancar el Slice 1 (Match JD ↔ Perfil).
 
 ## El problema
 
@@ -46,39 +46,51 @@ El espacio está lleno de herramientas con propuestas similares y problemas dife
 
 ## Estado del proyecto
 
-Fase actual: setup cerrado. Documentación fundacional completa, stack y roadmap definidos, repo público y estructura SDD inicializada. La próxima fase es la planificación del Slice 1 (Match JD ↔ Perfil) y su implementación.
+### Contexto del stack
+
+El stack original estaba diseñado sobre GCP completo (Cloud Run, Cloud SQL, Vertex AI, Cloud Build, Secret Manager), pero requiere tarjeta de crédito para habilitar billing, lo que bloquea el deploy. En septiembre de 2026 se migró a un stack 100% free tier — Cloudflare Pages, HuggingFace Spaces, Neon, Groq, HuggingFace Inference API, GitHub Actions — sin cambios en los frameworks (FastAPI, SvelteKit, pgvector, SDK `mcp`) y manteniendo las mismas decisiones de diseño. Detalle en [`STACK.md`](./STACK.md).
+
+### Hitos
 
 - [x] Documento fundacional ([`job-search-assistant.md`](./job-search-assistant.md))
 - [x] Stack tecnológico definido ([`STACK.md`](./STACK.md))
 - [x] Roadmap ([`ROADMAP.md`](./ROADMAP.md))
 - [x] Repo público en GitHub (https://github.com/danielCH26/asistcv)
 - [x] Estructura SDD inicializada ([`openspec/`](./openspec/))
-- [ ] Proposal del Slice 1
-- [ ] Specs del Slice 1
-- [ ] Design técnico del Slice 1
-- [ ] Implementación del Slice 1
-- [ ] Deploy funcional
+- [x] Monorepo con `backend/`, `frontend/`, `mcp-adapter/`, `infra/`
+- [x] Backend FastAPI con healthcheck, settings, logging estructurado y `LLMProvider` (mock + factory)
+- [x] Alembic + SQLModel operativos contra Postgres local con pgvector (docker-compose)
+- [x] Adapter MCP stdio con tools `ping` y `evaluate_match`
+- [ ] Reescribir backend: settings + clientes LLM (Groq) y embeddings (HF Inference API); agregar `groq` y `httpx` (ya presente) a `pyproject.toml`
+- [ ] Provisionar Neon Postgres + pgvector y migrar schema
+- [ ] CI/CD con GitHub Actions (build + deploy a HF Spaces y Cloudflare Pages)
+- [ ] Deploy backend en HuggingFace Spaces
+- [ ] Deploy frontend en Cloudflare Pages
+- [ ] Validación end-to-end con credenciales reales (Groq, HF, Neon)
+- [ ] Proposal, specs, design e implementación del Slice 1
 
 ## Stack tecnológico (resumen)
 
 | Capa | Tecnología | Destino |
 |---|---|---|
-| Frontend | SvelteKit (static export) | Firebase Hosting |
-| Backend | FastAPI sobre Python 3.12 | Cloud Run (GCP) |
-| Base de datos | Postgres + pgvector | Cloud SQL `db-f1-micro` |
-| LLM | Claude 3.5 Haiku | Vertex AI |
-| Embeddings | text-multilingual-embedding-002 | Vertex AI |
+| Frontend | SvelteKit (static export) | Cloudflare Pages |
+| Backend | FastAPI sobre Python 3.12 | HuggingFace Spaces (SDK Docker) |
+| Base de datos | Postgres + pgvector | Neon (serverless) |
+| LLM | Llama 3.3 70B Versatile | Groq |
+| Embeddings | BGE-M3 | HuggingFace Inference API |
 | Adapter MCP | Python con SDK `mcp` oficial | Local / ejecución por usuario |
-| CI/CD | Cloud Build | Triggers desde GitHub |
-| Secretos | Secret Manager | GCP |
+| CI/CD | GitHub Actions | Pipelines por push y por PR |
+| Secretos | GitHub Secrets + env vars en HF Spaces | — |
 
-Costo estimado total: **$10-20 / mes**, dominado por Cloud SQL. Decisiones completas, con justificación y alternativas descartadas, en [`STACK.md`](./STACK.md).
+Costo estimado total: **$0 / mes**, sin tarjeta de crédito requerida. Decisiones completas, con justificación y alternativas descartadas, en [`STACK.md`](./STACK.md).
 
 ## Roadmap (resumen)
 
 | Slice | Capacidad | Estado |
 |---|---|---|
-| 1 | Match JD ↔ Perfil | Pendiente (próximo) |
+| Sprint 0 — Fundación técnica | Backend, mock LLM, Alembic, MCP adapter | Cerrado en local |
+| Migración a free tier | Settings + clients + deploy en HF / Cloudflare / Neon | En curso |
+| 1 | Match JD ↔ Perfil | Pendiente (próximo, depende de la migración) |
 | 2 | Adaptar CV + Outreach | Pendiente (depende de Slice 1) |
 | 3 | Tracking Pipeline | Pendiente (depende de Slice 2) |
 
@@ -101,7 +113,7 @@ Las métricas vienen del documento fundacional. Las primarias son criterio de é
 
 | Métrica | Objetivo |
 |---|---|
-| Costo por aplicación procesada | Dentro del presupuesto ($10-20/mes) |
+| Costo por aplicación procesada | Dentro del presupuesto ($0 / mes, free tier) |
 | Latencia mediana de `POST /jobs/evaluate` | Por debajo de 30 segundos |
 | Tasa de respuestas positivas | Medida y registrada |
 | Calidad de CV adaptado | Evaluación con panel de 3-5 personas |
@@ -114,45 +126,54 @@ asistcv/
 ├── PROJECT.md                  # este archivo
 ├── ROADMAP.md                  # plan de slices con scope, métricas y criterios
 ├── STACK.md                    # decisiones arquitectónicas cerradas y abiertas
+├── README.md                   # quick start
+├── Makefile                    # tareas de dev local
 ├── openspec/                   # artifacts del flujo SDD
 │   ├── config.yaml             # configuración del proyecto OpenSpec
 │   ├── specs/                  # specs principales (se llena con el Slice 1)
 │   └── changes/                # proposals de cambio (uno por slice)
-└── .gitignore
-
-# Directorios que se crean durante el Slice 1:
-├── backend/                    # FastAPI service (Cloud Run)
-├── frontend/                   # SvelteKit app (Firebase Hosting)
+├── backend/                    # FastAPI service (deploy a HuggingFace Spaces)
+├── frontend/                   # SvelteKit app (deploy a Cloudflare Pages)
 ├── mcp-adapter/                # SDK `mcp` en Python, corre local
-└── infra/                      # cloudbuild.yaml, migraciones DB, scripts de deploy
+└── infra/                      # docker-compose local, scripts de deploy
 ```
 
 ## Desarrollo local
 
-Sección placeholder. Se completa cuando exista código del Slice 1.
+El desarrollo local es independiente del deploy: docker-compose levanta Postgres con pgvector, el backend corre con `LLM_PROVIDER=mock` sin credenciales, y el frontend con `npm run dev`. El deploy corre sobre GitHub Actions y se describe en [`STACK.md`](./STACK.md).
 
 ### Prerequisitos
 
 - Python 3.12
 - Node 20+
-- gcloud CLI (autenticado contra el proyecto GCP)
+- Docker y Docker Compose
 - gh CLI (para PRs contra el repo público)
 
 ### Setup
 
-Pendiente. Se documentará cuando se cree `backend/` y `frontend/`.
+```bash
+make setup          # instala deps de backend y frontend
+make db-up          # levanta Postgres con pgvector en docker-compose
+make backend-run    # API en http://localhost:8000
+make frontend-run   # UI en http://localhost:5173
+make mcp-run        # arranca el adapter MCP stdio
+```
 
 ### Cómo correr el backend
 
-Pendiente.
+`make backend-run` (o `cd backend && uv run uvicorn app.main:app --reload`). Con `LLM_PROVIDER=mock` no hace falta credencial de LLM; los providers reales (Groq, HF Inference) se activan por env vars cuando llega el momento del deploy.
 
 ### Cómo correr el frontend
 
-Pendiente.
+`make frontend-run` (o `cd frontend && npm run dev`).
 
 ### Cómo correr el MCP adapter
 
-Pendiente.
+`make mcp-run` (o `cd mcp-adapter && uv run asistcv-mcp`). Conectable desde Claude Desktop o Cursor; apunta al backend local por defecto.
+
+### Cómo correr los tests
+
+`make test` corre los tres paquetes (`backend/`, `frontend/`, `mcp-adapter/`) según los targets disponibles.
 
 ## Licencia
 
