@@ -73,12 +73,12 @@ Chain strategy: stacked-to-main
 
 ## Phase 2: FastAPI Skeleton (PR 2 → issue #7, base: post-PR1)
 
-- [ ] 2.1 `backend/pyproject.toml`: proyecto UV, `requires-python >=3.12`; deps `fastapi`, `uvicorn[standard]`, `pydantic-settings`, `structlog`; dev `pytest`, `httpx`. **AC**: `uv sync` resuelve lockfile. (medium)
-- [ ] 2.2 Crear `backend/app/settings.py` (pydantic-settings): `APP_ENV`, `LLM_PROVIDER` (default `mock`), `DATABASE_URL` opcional, `BACKEND_API_KEY` opcional. **AC**: instancia carga sin env vars obligatorias ni credenciales GCP. (low)
-- [ ] 2.3 Crear `backend/app/main.py` + `backend/app/api/routes.py`: `GET /health` → `{"status":"ok"}`, `GET /v1/ping` → `{"pong":true}`, `/docs` habilitado. **AC**: `curl :8000/health` y `curl :8000/v1/ping` → 200; `curl -I :8000/docs` → 200. (medium)
-- [ ] 2.4 Crear `backend/app/logging.py`: structlog en JSON + middleware de request log. **AC**: cada request emite 1 línea JSON parseable en stdout. (low)
-- [ ] 2.5 Crear `backend/app/api/v1/match.py`: `POST /v1/match` placeholder con schemas pydantic request/response, retorna 501 "provider not wired". **AC**: curl → 501 con cuerpo JSON. (low)
-- [ ] 2.6 Crear `backend/tests/test_smoke.py`: health 200, ping 200, match 501, `/docs` accesible. **AC**: `cd backend && uv run pytest -q` verde. (low)
+- [x] 2.1 `backend/pyproject.toml`: proyecto UV, `requires-python >=3.12`; deps `fastapi`, `uvicorn[standard]`, `pydantic-settings`, `structlog`; dev `pytest`, `httpx`. **AC**: `uv sync` resuelve lockfile. (medium)
+- [x] 2.2 Crear `backend/app/settings.py` (pydantic-settings): `APP_ENV`, `LLM_PROVIDER` (default `mock`), `DATABASE_URL` opcional, `BACKEND_API_KEY` opcional. **AC**: instancia carga sin env vars obligatorias ni credenciales GCP. (low)
+- [x] 2.3 Crear `backend/app/main.py` + `backend/app/api/routes.py`: `GET /health` → `{"status":"ok"}`, `GET /v1/ping` → `{"pong":true}`, `/docs` habilitado. **AC**: `curl :8000/health` y `curl :8000/v1/ping` → 200; `curl -I :8000/docs` → 200. (medium)
+- [x] 2.4 Crear `backend/app/logging.py`: structlog en JSON + middleware de request log. **AC**: cada request emite 1 línea JSON parseable en stdout. (low)
+- [x] 2.5 Crear `backend/app/api/v1/match.py`: `POST /v1/match` placeholder con schemas pydantic request/response, retorna 501 "provider not wired". **AC**: curl → 501 con cuerpo JSON. (low)
+- [x] 2.6 Crear `backend/tests/test_smoke.py`: health 200, ping 200, match 501, `/docs` accesible. **AC**: `cd backend && uv run pytest -q` verde. (low)
 
 ## Phase 3: Mock LLM Provider (PR 3 → issue #12, base: post-PR2)
 
