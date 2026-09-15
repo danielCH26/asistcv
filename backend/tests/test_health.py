@@ -20,17 +20,22 @@ def test_ping_endpoint(client: TestClient):
     assert "timestamp" in data
 
 
-def test_match_placeholder(client: TestClient):
-    """Test /v1/match endpoint returns placeholder response."""
+def test_match_endpoint_with_mock(client: TestClient):
+    """Test /v1/match endpoint returns mock analysis with LLM_PROVIDER=mock."""
     response = client.post(
         "/v1/match",
         json={"jd_text": "test job description", "profile_id": 1}
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["score"] is None
-    assert data["status"] == "not_implemented_yet"
-    assert "Sprint 1" in data["message"]
+    # Mock provider returns default response for unknown keywords
+    assert data["score"] is not None
+    assert isinstance(data["score"], int)
+    assert 0 <= data["score"] <= 100
+    assert "strengths" in data
+    assert "gaps" in data
+    assert "energy_level" in data
+    assert "reasoning" in data
 
 
 def test_docs_available(client: TestClient):

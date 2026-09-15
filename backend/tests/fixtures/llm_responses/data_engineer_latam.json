@@ -1,0 +1,18 @@
+{
+  "keywords": ["data engineer", "latam", "etl", "spark", "airflow", "sql"],
+  "response": {
+    "score": 85,
+    "strengths": [
+      "Strong ETL and data pipeline experience",
+      "Proficient with Apache Spark and Airflow",
+      "Excellent SQL and database design skills",
+      "Experience with distributed computing"
+    ],
+    "gaps": [
+      "Limited ML/MLOps integration experience",
+      "No GCP Dataflow exposure"
+    ],
+    "energy_level": "high",
+    "reasoning": "Experienced data engineer with solid pipeline architecture skills. Strong fit for Latam timezone collaboration. Ready to contribute from day one with minimal onboarding."
+  }
+}

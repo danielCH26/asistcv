@@ -1,0 +1,18 @@
+{
+  "keywords": ["junior", "fullstack", "madrid", "javascript", "react", "node"],
+  "response": {
+    "score": 62,
+    "strengths": [
+      "Willingness to learn and grow",
+      "Basic JavaScript and React knowledge",
+      "Node.js fundamentals in place"
+    ],
+    "gaps": [
+      "Limited production experience",
+      "No cloud infrastructure knowledge",
+      "Missing advanced testing patterns"
+    ],
+    "energy_level": "medium",
+    "reasoning": "Junior fullstack candidate with foundational skills. Strong learning attitude but needs mentorship for production-grade development. Good cultural fit for Madrid office."
+  }
+}

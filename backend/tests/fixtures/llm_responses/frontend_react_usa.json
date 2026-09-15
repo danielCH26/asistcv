@@ -1,0 +1,17 @@
+{
+  "keywords": ["frontend", "react", "usa", "typescript", "css", "ui"],
+  "response": {
+    "score": 72,
+    "strengths": [
+      "Strong React with TypeScript proficiency",
+      "Modern CSS and UI design systems experience",
+      "Good understanding of component architecture"
+    ],
+    "gaps": [
+      "Limited backend integration experience",
+      "No server-side rendering expertise"
+    ],
+    "energy_level": "medium",
+    "reasoning": "Solid frontend developer with React and TypeScript. Good for US-based remote position. Would benefit from fullstack exposure."
+  }
+}

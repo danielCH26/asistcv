@@ -1,0 +1,17 @@
+{
+  "keywords": ["python", "remote", "senior", "fastapi", "django"],
+  "response": {
+    "score": 78,
+    "strengths": [
+      "Strong Python expertise with modern async patterns",
+      "Extensive experience with FastAPI and Django frameworks",
+      "Proven remote collaboration skills"
+    ],
+    "gaps": [
+      "Limited experience with GCP managed services",
+      "No documented experience with vertex-ai"
+    ],
+    "energy_level": "high",
+    "reasoning": "Senior Python developer with strong async and framework experience. Excellent fit for remote work culture. Gap in GCP-specific knowledge but can be trained."
+  }
+}

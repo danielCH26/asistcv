@@ -82,12 +82,12 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Mock LLM Provider (PR 3 → issue #12, base: post-PR2)
 
-- [ ] 3.1 Crear `backend/app/llm/base.py`: protocolo `LLMProvider` con `evaluate_match(jd, cv) -> MatchEvaluation` + modelos pydantic de resultado. **AC**: importable, type-checks. (medium)
-- [ ] 3.2 Crear `backend/app/llm/mock.py`: `MockProvider` determinista sobre fixtures `backend/tests/fixtures/match_*.json`. **AC**: misma entrada → misma salida byte-idéntica. (medium)
-- [ ] 3.3 Crear `backend/app/llm/vertex.py`: `VertexAIProvider` stub que lanza error explícito si faltan credenciales GCP (sin lógica de inference). **AC**: con env sin creds → error claro, no crash silencioso. (low)
-- [ ] 3.4 Crear `backend/app/llm/factory.py`: `get_llm_provider()` según `settings.llm_provider` (`mock` | `vertex`). **AC**: `LLM_PROVIDER=mock` → MockProvider; `vertex` → VertexProvider. (low)
-- [ ] 3.5 Reescribir handler de `/v1/match` (2.5) para delegar en factory. **AC**: con `LLM_PROVIDER=mock`, POST → 200 con evaluación fixture determinista. (low)
-- [ ] 3.6 Crear `backend/tests/llm/`: determinismo del mock (2 llamadas iguales), selección de factory por env, vertex sin creds → error. **AC**: `uv run pytest tests/llm -q` verde. (low)
+- [x] 3.1 Crear `backend/app/llm/base.py`: protocolo `LLMProvider` con `evaluate_match(jd, cv) -> MatchEvaluation` + modelos pydantic de resultado. **AC**: importable, type-checks. (medium)
+- [x] 3.2 Crear `backend/app/llm/mock.py`: `MockProvider` determinista sobre fixtures `backend/tests/fixtures/match_*.json`. **AC**: misma entrada → misma salida byte-idéntica. (medium)
+- [x] 3.3 Crear `backend/app/llm/vertex.py`: `VertexAIProvider` stub que lanza error explícito si faltan credenciales GCP (sin lógica de inference). **AC**: con env sin creds → error claro, no crash silencioso. (low)
+- [x] 3.4 Crear `backend/app/llm/factory.py`: `get_llm_provider()` según `settings.llm_provider` (`mock` | `vertex`). **AC**: `LLM_PROVIDER=mock` → MockProvider; `vertex` → VertexProvider. (low)
+- [x] 3.5 Reescribir handler de `/v1/match` (2.5) para delegar en factory. **AC**: con `LLM_PROVIDER=mock`, POST → 200 con evaluación fixture determinista. (low)
+- [x] 3.6 Crear `backend/tests/llm/`: determinismo del mock (2 llamadas iguales), selección de factory por env, vertex sin creds → error. **AC**: `uv run pytest tests/llm -q` verde. (low)
 
 ## Phase 4: Alembic + Postgres Local (PR 4 → issue #9, base: post-PR2, paralelo a PR 3)
 
