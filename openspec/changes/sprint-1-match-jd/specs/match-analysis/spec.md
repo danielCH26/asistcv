@@ -94,6 +94,19 @@ Si `BACKEND_API_KEY` está definida, todos los endpoints excepto `/health` deben
 - WHEN el cliente envía `GET /v1/analyses?profile_id=1`
 - THEN el sistema responde 200 sólo con análisis del perfil 1
 
+#### Scenario: Detalle de un análisis
+
+- GIVEN un análisis persistido con id conocido
+- WHEN el cliente envía `GET /v1/analyses/{id}`
+- THEN el sistema responde 200 con `score`, `strengths`, `gaps`, `energy_level`, `reasoning`, `created_at`
+- AND `job_description` embebido con `title` (si existe), `company` (si existe) y snippet del `raw_text`
+
+#### Scenario: Detalle de análisis inexistente
+
+- GIVEN un `id` que no existe en `analyses`
+- WHEN el cliente envía `GET /v1/analyses/{id}`
+- THEN el sistema responde 404 con mensaje identificable
+
 ### Requirement: Persistencia de JD con embedding
 
 Cada JD se persiste en `job_descriptions` con embedding (vector 1024, modelo `BAAI/bge-m3`) antes de invocar el LLM.
