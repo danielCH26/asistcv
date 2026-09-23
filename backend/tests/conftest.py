@@ -29,40 +29,50 @@ _test_factory = None
 
 
 def _to_sync_url(url: str) -> str:
-    """Devuelve la URL sync para tareas admin con psycopg 3.
+    """Devuelve la URL como dict de kwargs para psycopg.connect().
 
-    psycopg.connect() acepta `postgresql://` (sin driver) — psycopg 3 lo
-    interpreta correctamente. NO usar `postgresql+psycopg://` (psycopg 3 lo
-    rechaza como connection string, solo acepta esa forma como DSN parseado).
+    psycopg.connect() con un string de URL cae en psycopg2 como fallback.
+    La forma correcta es pasar los componentes como kwargs (host, port,
+    user, password, dbname) — eso fuerza psycopg 3.
     """
-    if "+asyncpg" in url:
-        return url.replace("+asyncpg", "")
-    return url
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    return {
+        "host": parsed.hostname,
+        "port": parsed.port,
+        "user": parsed.username,
+        "password": parsed.password,
+        "dbname": parsed.path.lstrip("/"),
+    }
 
 
 def _ensure_database_exists(url: str) -> None:
-    """Crea la base de test si no existe (entorno local; en CI ya existe)."""
-    from urllib.parse import urlparse, urlunparse
+    """Crea la base de test si no existe (entorno local; en CI ya existe).
 
+    Espera un string; internamente lo parsea a kwargs para psycopg 3.
+    """
     import psycopg
 
-    parsed = urlparse(url)
-    dbname = parsed.path.lstrip("/")
-    admin_url = urlunparse(parsed._replace(path="/postgres"))
+    conninfo = _to_sync_url(url)
+
+    # Para crear la DB, conectamos primero a la DB postgres default
+    admin_conninfo = dict(conninfo)
+    admin_conninfo["dbname"] = "postgres"
 
     try:
-        with psycopg.connect(admin_url) as conn:
+        with psycopg.connect(**admin_conninfo) as conn:
             exists = conn.execute(
-                "SELECT 1 FROM pg_database WHERE datname = %s", (dbname,)
+                "SELECT 1 FROM pg_database WHERE datname = %s", (conninfo["dbname"],)
             ).fetchone()
             if not exists:
                 conn.autocommit = True
-                conn.execute(f'CREATE DATABASE "{dbname}"')
+                conn.execute(f'CREATE DATABASE "{conninfo["dbname"]}"')
     except psycopg.OperationalError as exc:
         raise RuntimeError(
-            f"No se pudo conectar a Postgres para preparar la base de test "
-            f"({admin_url}). Levantá el DB local con 'make db-up' o definí "
-            f"TEST_DATABASE_URL/DATABASE_URL."
+            f"No se pudo conectar a Postgres para preparar la base de test. "
+            f"Levantá el DB local con 'make db-up' o definí TEST_DATABASE_URL/DATABASE_URL. "
+            f"Detail: {exc}"
         ) from exc
 
 
@@ -89,7 +99,7 @@ async def test_db():
         original_db_url = os.environ.get("DATABASE_URL")
         os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 
-        _ensure_database_exists(_to_sync_url(TEST_DATABASE_URL))
+        _ensure_database_exists(TEST_DATABASE_URL)
 
         reset_engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
         async with reset_engine.begin() as conn:
