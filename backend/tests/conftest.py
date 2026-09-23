@@ -14,12 +14,18 @@ from sqlalchemy.pool import NullPool
 
 from app.main import app
 
-# URL de la base de datos de test (misma cadena de fallback que test_migrations):
-# TEST_DATABASE_URL -> DATABASE_URL (definida en CI) -> default local (5433).
-TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL") or os.environ.get(
-    "DATABASE_URL",
-    "postgresql+asyncpg://asistcv:asistcv@localhost:5433/asistcv_test",
+# URL de la base de datos de test. Prioriza URLs con driver (+asyncpg) — las
+# sin driver (como la del CI: postgresql://) hay que normalizarlas.
+TEST_DATABASE_URL = (
+    os.environ.get("TEST_DATABASE_URL")
+    or os.environ.get("DATABASE_URL")
+    or "postgresql+asyncpg://asistcv:asistcv@localhost:5433/asistcv_test"
 )
+
+# Normalizar: si la URL viene sin driver (ej. CI exporta postgresql://), le
+# agregamos +asyncpg para que SQLAlchemy no caiga en psycopg2 fallback.
+if TEST_DATABASE_URL.startswith("postgresql://") and "+" not in TEST_DATABASE_URL.split("/", 1)[0]:
+    TEST_DATABASE_URL = TEST_DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
 # Estado global: el setup de la DB de test corre una sola vez por sesión,
 # aunque pytest-asyncio re-instancie fixtures (loop scopes distintos).
