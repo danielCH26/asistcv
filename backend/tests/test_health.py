@@ -20,31 +20,24 @@ def test_ping_endpoint(client: TestClient):
     assert "timestamp" in data
 
 
-def test_match_endpoint_with_mock(client: TestClient):
-    """Test /v1/match endpoint returns mock analysis with LLM_PROVIDER=mock."""
-    from unittest.mock import AsyncMock, MagicMock
+async def test_match_endpoint_smoke(async_client, clean_db, patch_match_db, create_profile):
+    """Smoke: /v1/match con MockProvider persiste JD + análisis (mock real de fábrica)."""
+    from sqlmodel import select
 
-    from app.db.models import Profile
-    from app.db.session import get_session
-    from app.main import app
+    from app.db.models import Analysis, JobDescription
 
-    profile = Profile(id=1, name="Test User")
-    execute_result = MagicMock()
-    execute_result.scalar_one_or_none.return_value = profile
+    profile = await create_profile(name="Smoke User")
 
-    async def override_get_session():
-        session = AsyncMock()
-        session.execute = AsyncMock(return_value=execute_result)
-        yield session
-
-    app.dependency_overrides[get_session] = override_get_session
-    try:
-        response = client.post(
-            "/v1/match",
-            json={"jd_text": "test job description", "profile_id": 1}
-        )
-    finally:
-        app.dependency_overrides.pop(get_session, None)
+    response = await async_client.post(
+        "/v1/match",
+        json={
+            "jd_text": (
+                "We are looking for a Python developer with strong backend "
+                "experience in FastAPI and PostgreSQL for a remote role."
+            ),
+            "profile_id": profile.id,
+        },
+    )
 
     assert response.status_code == 200
     data = response.json()
@@ -56,6 +49,14 @@ def test_match_endpoint_with_mock(client: TestClient):
     assert "gaps" in data
     assert "energy_level" in data
     assert "reasoning" in data
+
+    # Persistencia mínima: 1 JD + 1 análisis.
+    async with clean_db.session_factory() as session:
+        jds = (await session.execute(select(JobDescription))).scalars().all()
+        analyses = (await session.execute(select(Analysis))).scalars().all()
+        assert len(jds) == 1
+        assert len(analyses) == 1
+        assert analyses[0].job_description_id == jds[0].id
 
 
 def test_docs_available(client: TestClient):

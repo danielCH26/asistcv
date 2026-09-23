@@ -9,7 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.api.v1 import health, match, ping
+from app.api.v1 import analyses, health, match, ping
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 
@@ -91,3 +91,4 @@ app.add_middleware(LoggingMiddleware)
 app.include_router(health.router)
 app.include_router(ping.router, prefix=settings.api_prefix)
 app.include_router(match.router, prefix=settings.api_prefix)
+app.include_router(analyses.router, prefix=settings.api_prefix)

@@ -3,7 +3,7 @@ Seed initial data for AsistCV database.
 
 This creates a test profile to verify the database is working.
 """
-from datetime import datetime
+from datetime import UTC, datetime
 
 
 async def seed_initial_data():
@@ -56,8 +56,8 @@ async def seed_initial_data():
             experience=seed_data["experience"],
             skills=seed_data["skills"],
             preferences=seed_data["preferences"],
-            created_at=datetime.now(datetime.UTC),
-            updated_at=datetime.now(datetime.UTC),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
 
         session.add(profile)

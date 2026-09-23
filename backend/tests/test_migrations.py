@@ -154,3 +154,168 @@ def test_models_registered_with_metadata():
     assert "profiles" in tables, "Profile table should be registered"
     assert "job_descriptions" in tables, "JobDescription table should be registered"
     assert "analyses" in tables, "Analysis table should be registered"
+
+
+# --- Tests de la migración 002 (vectores + HNSW + FK profile_id) ---
+
+
+async def _fetch_vector_columns(engine) -> dict[str, set[str]]:
+    """Devuelve {tabla: {columnas de embedding/modelo presentes}} post-migración."""
+    async with engine.connect() as conn:
+        result = await conn.execute(text("""
+            SELECT table_name, column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+            AND table_name IN ('profiles', 'job_descriptions', 'analyses')
+            AND column_name IN ('embedding', 'embedding_model')
+        """))
+        columns: dict[str, set[str]] = {}
+        for table_name, column_name in result.fetchall():
+            columns.setdefault(table_name, set()).add(column_name)
+    return columns
+
+
+async def _fetch_hnsw_indexes(engine) -> set[str]:
+    """Devuelve los nombres de índices HNSW presentes en el DB."""
+    async with engine.connect() as conn:
+        result = await conn.execute(text("""
+            SELECT i.relname
+            FROM pg_index ix
+            JOIN pg_class i ON i.oid = ix.indexrelid
+            JOIN pg_class t ON t.oid = ix.indrelid
+            JOIN pg_am am ON am.oid = i.relam
+            WHERE am.amname = 'hnsw'
+        """))
+        return {row[0] for row in result.fetchall()}
+
+
+@pytest.mark.asyncio
+async def test_migration_002_vector_columns(setup_test_db):
+    """002 agrega embedding vector(1024) y embedding_model varchar(100) en 3 tablas."""
+    engine = setup_test_db
+
+    async with engine.connect() as conn:
+        result = await conn.execute(text("""
+            SELECT table_name, column_name, udt_name,
+                   character_maximum_length, is_nullable
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+            AND table_name IN ('profiles', 'job_descriptions', 'analyses')
+            AND column_name IN ('embedding', 'embedding_model')
+        """))
+        rows = result.fetchall()
+
+    found = {(r[0], r[1]): (r[2], r[3], r[4]) for r in rows}
+    for table in ("job_descriptions", "analyses", "profiles"):
+        embedding = found.get((table, "embedding"))
+        assert embedding is not None, f"{table}.embedding should exist"
+        assert embedding[0] == "vector", f"{table}.embedding should be a vector column"
+        assert embedding[2] == "YES", f"{table}.embedding should be nullable"
+
+        model = found.get((table, "embedding_model"))
+        assert model is not None, f"{table}.embedding_model should exist"
+        assert model[0] == "varchar", (
+            f"{table}.embedding_model should be varchar"
+        )
+        assert model[1] == 100, f"{table}.embedding_model should be varchar(100)"
+        assert model[2] == "YES", f"{table}.embedding_model should be nullable"
+
+
+@pytest.mark.asyncio
+async def test_migration_002_hnsw_indexes(setup_test_db):
+    """002 crea los 3 índices HNSW con operator class vector_cosine_ops."""
+    engine = setup_test_db
+
+    async with engine.connect() as conn:
+        result = await conn.execute(text("""
+            SELECT i.relname AS index_name, t.relname AS table_name,
+                   opc.opcname AS opclass
+            FROM pg_index ix
+            JOIN pg_class i ON i.oid = ix.indexrelid
+            JOIN pg_class t ON t.oid = ix.indrelid
+            JOIN pg_am am ON am.oid = i.relam
+            JOIN pg_opclass opc ON opc.oid = ix.indclass[0]
+            WHERE am.amname = 'hnsw'
+        """))
+        rows = result.fetchall()
+
+    indexes = {r[0]: (r[1], r[2]) for r in rows}
+    expected = {
+        "idx_jd_embedding_hnsw": "job_descriptions",
+        "idx_analyses_embedding_hnsw": "analyses",
+        "idx_profiles_embedding_hnsw": "profiles",
+    }
+    for index_name, table_name in expected.items():
+        assert index_name in indexes, f"HNSW index {index_name} should exist"
+        assert indexes[index_name][0] == table_name
+        assert indexes[index_name][1] == "vector_cosine_ops", (
+            f"{index_name} should use vector_cosine_ops"
+        )
+
+
+@pytest.mark.asyncio
+async def test_migration_002_profile_foreign_key(setup_test_db):
+    """002 agrega la FK faltante analyses.profile_id -> profiles.id."""
+    engine = setup_test_db
+
+    async with engine.connect() as conn:
+        result = await conn.execute(text("""
+            SELECT kcu.column_name, ccu.table_name AS foreign_table,
+                   ccu.column_name AS foreign_column
+            FROM information_schema.table_constraints AS tc
+            JOIN information_schema.key_column_usage AS kcu
+                ON tc.constraint_name = kcu.constraint_name
+            JOIN information_schema.constraint_column_usage AS ccu
+                ON ccu.constraint_name = tc.constraint_name
+            WHERE tc.constraint_type = 'FOREIGN KEY'
+                AND tc.table_name = 'analyses'
+                AND kcu.column_name = 'profile_id'
+        """))
+        fk = result.fetchone()
+
+    assert fk is not None, "analyses.profile_id should have a foreign key"
+    assert fk[1] == "profiles", "FK should reference profiles"
+    assert fk[2] == "id", "FK should reference profiles.id"
+
+
+@pytest.mark.asyncio
+async def test_migration_002_downgrade_upgrade_reversible(setup_test_db):
+    """002 es reversible: down a 001 elimina columnas/índices/FK; up los restaura."""
+    engine = setup_test_db
+
+    import asyncio
+
+    from alembic.config import Config
+
+    from alembic import command
+
+    alembic_cfg = Config("alembic.ini")
+
+    # Downgrade: 002 -> 001 (en thread worker: alembic usa asyncio.run interno)
+    await asyncio.to_thread(command.downgrade, alembic_cfg, "001_initial_tables")
+
+    columns = await _fetch_vector_columns(engine)
+    assert columns == {}, "vector columns should be dropped after downgrade"
+
+    hnsw_indexes = await _fetch_hnsw_indexes(engine)
+    assert hnsw_indexes == set(), "HNSW indexes should be dropped after downgrade"
+
+    async with engine.connect() as conn:
+        result = await conn.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'analyses'
+            AND column_name = 'profile_id'
+        """))
+        assert result.fetchone() is None, "profile_id should be dropped"
+
+    # Upgrade: 001 -> 002 (re-aplicación idempotente)
+    await asyncio.to_thread(command.upgrade, alembic_cfg, "head")
+
+    columns = await _fetch_vector_columns(engine)
+    for table in ("job_descriptions", "analyses", "profiles"):
+        assert columns.get(table) == {"embedding", "embedding_model"}, (
+            f"{table} should have embedding columns again after re-upgrade"
+        )
+
+    hnsw_indexes = await _fetch_hnsw_indexes(engine)
+    assert len(hnsw_indexes) == 3, "3 HNSW indexes should exist after re-upgrade"
