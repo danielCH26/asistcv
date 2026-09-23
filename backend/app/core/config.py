@@ -1,5 +1,11 @@
 """
 Configuration management using pydantic-settings.
+
+NOTE on list-type env vars (cors_origins, etc.): pydantic-settings parses
+env vars as JSON for list types, BEFORE any field validator runs.
+So `CORS_ORIGINS` must be set as a JSON array string:
+  CORS_ORIGINS='["http://localhost:5173","http://localhost:8000"]'
+NOT as CSV. The default below is used when the env var is not set.
 """
 from functools import lru_cache
 
@@ -14,7 +20,7 @@ class Settings(BaseSettings):
     environment: str = Field(default="development", validation_alias="APP_ENV")
     log_level: str = Field(default="INFO", validation_alias="LOG_LEVEL")
     cors_origins: list[str] = Field(
-        default=["http://localhost:5173", "http://localhost:8000"]
+        default=["http://localhost:5173", "http://localhost:8000"],
     )
     api_prefix: str = "/v1"
     database_url: str = "postgresql://asistcv:asistcv@localhost:5433/asistcv"
