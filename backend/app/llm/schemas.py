@@ -21,3 +21,4 @@ class Embedding(BaseModel):
 
     vector: list[float] = Field(..., description="Embedding vector (1024 dimensions)")
     model: str = Field(..., description="Model used to generate the embedding")
+    provider: str = Field(default="unknown", description="Provider that generated the embedding")

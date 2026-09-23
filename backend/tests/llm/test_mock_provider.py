@@ -145,18 +145,19 @@ class TestFactory:
             # Clean up cache
             get_llm_provider.cache_clear()
 
-    def test_factory_raises_on_vertex_without_credentials(self):
-        """With LLM_PROVIDER=vertex, should raise NotImplementedError."""
+    def test_factory_raises_on_vertex_not_supported(self):
+        """With LLM_PROVIDER=vertex, should raise ValueError (no longer supported)."""
         with patch("app.llm.factory.get_settings") as mock_settings:
             mock_settings.return_value.llm_provider = "vertex"
 
             # Clear the cache
             get_llm_provider.cache_clear()
 
-            with pytest.raises(NotImplementedError) as exc_info:
+            with pytest.raises(ValueError) as exc_info:
                 get_llm_provider()
 
-            assert "Sprint 1" in str(exc_info.value)
+            assert "Unknown LLM provider" in str(exc_info.value)
+            assert "vertex" in str(exc_info.value)
 
             # Clean up cache
             get_llm_provider.cache_clear()

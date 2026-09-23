@@ -21,6 +21,18 @@ class Settings(BaseSettings):
     llm_provider: str = Field(default="mock", validation_alias="LLM_PROVIDER")
     backend_api_key: str | None = Field(default=None, validation_alias="BACKEND_API_KEY")
 
+    # Groq configuration
+    groq_api_key: str | None = Field(default=None, validation_alias="GROQ_API_KEY")
+    groq_model: str = Field(default="llama-3.3-70b-versatile", validation_alias="GROQ_MODEL")
+
+    # HuggingFace configuration
+    huggingface_api_key: str | None = Field(
+        default=None, validation_alias="HUGGINGFACE_API_KEY"
+    )
+    hf_embedding_model: str = Field(
+        default="BAAI/bge-m3", validation_alias="HF_EMBEDDING_MODEL"
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
