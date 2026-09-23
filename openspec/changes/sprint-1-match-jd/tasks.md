@@ -215,11 +215,11 @@ Nota: el budget del proyecto es 600 líneas/PR (config.yaml); la guard default d
 
 ### PR-E — MCP a producción (~60 l) — Issue #18 + #20
 
-- [ ] E1. `mcp-adapter/src/asistcv_mcp/config.py`: `backend_url` → Render + timeout 30→60 s
+- [x] E1. `mcp-adapter/src/asistcv_mcp/config.py`: `backend_url` → Render + timeout 30→60 s
   - AC: adapter apunta al backend de Render; timeout efectivo 60 s (cubre cold start 30–50 s).
-- [ ] E2. `backend_api_key` en config del adapter + formatos
+- [x] E2. `backend_api_key` en config del adapter + formatos
   - AC: adapter envía `Authorization: Bearer` cuando la key está configurada; formatos de salida según issue #18.
-- [ ] E3. Smoke del adapter contra Render con JD real
+- [x] E3. Smoke del adapter contra Render con JD real
   - AC: llamada match vía MCP contra producción responde 200 con análisis completo; sin key se obtiene 401 esperado.
   - Depende de: B mergeado y A+B deployados en Render.
 

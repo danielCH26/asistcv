@@ -14,10 +14,10 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    backend_url: str = "http://localhost:8000"
+    backend_url: str = "https://asistcv-backend.onrender.com"
     backend_api_key: str | None = None
     log_level: str = "INFO"
-    timeout_seconds: float = 30.0
+    timeout_seconds: float = 60.0
 
 
 @lru_cache
