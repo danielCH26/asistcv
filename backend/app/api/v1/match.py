@@ -2,10 +2,15 @@
 Match endpoint for JD vs profile analysis with transactional persistence.
 
 Flow (design section 5): validate -> JD embedding (HF) -> profile lookup ->
-on-demand profile re-embedding -> prompt (full profile; retrieval in PR-C)
--> LLM (Groq) -> parse -> SINGLE transaction (INSERT job_descriptions +
-INSERT analyses). If the LLM or the embedding provider fails, nothing is
-persisted.
+on-demand profile re-embedding -> prompt (full profile OR retrieval
+top-K fragments) -> LLM (Groq) -> parse -> SINGLE transaction (INSERT
+job_descriptions + INSERT analyses). If the LLM or the embedding
+provider fails, nothing is persisted.
+
+Retrieval is gated by `RETRIEVAL_SIZE_THRESHOLD_CHARS`: profiles below
+the threshold go in as the full JSON (current behavior); above, the
+service returns the top-K fragments most similar to the JD embedding.
+Both paths share the same downstream behavior (LLM + transaction).
 """
 import json
 
@@ -20,6 +25,10 @@ from app.core.logging import get_logger
 from app.db.models import Analysis, JobDescription, Profile
 from app.db.session import get_session_context
 from app.llm.factory import get_llm_provider
+from app.services.retrieval import (
+    profile_text_length,
+    retrieve_profile_context,
+)
 
 router = APIRouter(tags=["match"])
 logger = get_logger("app.api.match")
@@ -57,8 +66,10 @@ async def match(
     fails, nothing is persisted (a JD without an analysis is noise in
     single-user mode).
 
-    Note: the full profile is used as context. Semantic retrieval over
-    fragments arrives in PR-C (issue #16).
+    The profile context is selected by the retrieval service: full profile
+    below `RETRIEVAL_SIZE_THRESHOLD_CHARS`, top-K fragments above it. The
+    retrieval result is JSON-serializable so it doubles as the
+    `profile_snapshot` persisted on the analysis row.
     """
     provider = get_llm_provider()
 
@@ -87,32 +98,32 @@ async def match(
             detail=f"Profile with id {request.profile_id} not found",
         )
 
-    profile_context = {
-        "id": profile.id,
-        "name": profile.name,
-        "headline": profile.headline,
-        "experience": profile.experience,
-        "skills": profile.skills,
-        "preferences": profile.preferences,
-    }
-
     # Paso 4b: re-embedding on-demand del perfil (vector NULL o modelo distinto).
     # El embedding del JD histórico nunca se regenera (es snapshot del análisis).
     settings = get_settings()
-    profile_embedding = profile.embedding
-    profile_embedding_model = profile.embedding_model
     profile_reembedded = False
-    if profile_embedding is None or profile_embedding_model != settings.hf_embedding_model:
+    if profile.embedding is None or profile.embedding_model != settings.hf_embedding_model:
         try:
-            profile_text = json.dumps(profile_context, ensure_ascii=False, default=str)
-            profile_emb = await provider.generate_embedding(profile_text)
-            profile_embedding = profile_emb.vector
-            profile_embedding_model = profile_emb.model
+            profile_payload = {
+                "id": profile.id,
+                "name": profile.name,
+                "headline": profile.headline,
+                "experience": profile.experience,
+                "skills": profile.skills,
+                "preferences": profile.preferences,
+            }
+            profile_text_chars = profile_text_length(profile)
+            profile_emb = await provider.generate_embedding(
+                json.dumps(profile_payload, ensure_ascii=False, default=str)
+            )
+            profile.embedding = profile_emb.vector
+            profile.embedding_model = profile_emb.model
             profile_reembedded = True
             logger.warning(
                 "profile_reembedded_on_demand",
                 profile_id=request.profile_id,
-                embedding_model=profile_embedding_model,
+                embedding_model=profile.embedding_model,
+                profile_text_chars=profile_text_chars,
             )
         except Exception as exc:
             # Degradación elegante: el match continúa sin vector de perfil.
@@ -122,11 +133,48 @@ async def match(
                 error=str(exc)[:200],
             )
 
-    # Pasos 5-7: contexto completo + LLM + parse/validación del esquema.
+    # Paso 5: retrieval semántico con umbral (PR-C, task C4). El servicio
+    # devuelve el contexto listo para el prompt — perfil completo si el
+    # texto serializado entra en el umbral, si no los top-K fragmentos.
+    profile_context = await retrieve_profile_context(
+        profile=profile,
+        jd_embedding=list(jd_embedding.vector),
+        settings=settings,
+        provider=provider,
+        regenerate_profile_embedding=profile_reembedded,
+    )
+
+    logger.info(
+        "match_retrieval",
+        profile_id=request.profile_id,
+        chars_profile=len(profile_context.text),
+        retrieval_used=profile_context.mode == "retrieved",
+        fragments_sent=profile_context.chunks_used,
+    )
+
+    # Snapshot persistido en `analyses.profile_snapshot`: la estructura
+    # serializada que efectivamente vio el LLM (incluye la marca de modo
+    # para reproducibilidad).
+    snapshot = {
+        "mode": profile_context.mode,
+        "context": profile_context.text,
+        "chunks_used": profile_context.chunks_used,
+    }
+
+    # Pasos 6-7: LLM + parse/validación del esquema.
     try:
         analysis = await provider.generate_match(
             jd_text=request.jd_text,
-            profile_context=profile_context,
+            profile_context={
+                "id": profile.id,
+                "name": profile.name,
+                "headline": profile.headline,
+                "experience": profile.experience,
+                "skills": profile.skills,
+                "preferences": profile.preferences,
+                "retrieval_mode": profile_context.mode,
+                "retrieval_context": profile_context.text,
+            },
         )
     except groq.RateLimitError as exc:
         raise HTTPException(
@@ -155,7 +203,7 @@ async def match(
             analysis_row = Analysis(
                 job_description_id=jd_row.id,
                 profile_id=request.profile_id,
-                profile_snapshot=profile_context,
+                profile_snapshot=snapshot,
                 score=analysis.score,
                 strengths=analysis.strengths,
                 gaps=analysis.gaps,
@@ -169,8 +217,8 @@ async def match(
             if profile_reembedded:
                 db_profile = await session.get(Profile, request.profile_id)
                 if db_profile is not None:
-                    db_profile.embedding = profile_embedding
-                    db_profile.embedding_model = profile_embedding_model
+                    db_profile.embedding = profile.embedding
+                    db_profile.embedding_model = profile.embedding_model
 
             await session.commit()
     except SQLAlchemyError:

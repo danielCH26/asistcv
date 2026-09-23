@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.deps import verify_api_key
-from app.api.v1 import analyses, health, match, ping
+from app.api.v1 import analyses, health, match, ping, profiles
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging, get_logger
 
@@ -130,6 +130,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.include_router(
         analyses.router,
+        prefix=settings.api_prefix,
+        dependencies=[Depends(verify_api_key)],
+    )
+    app.include_router(
+        profiles.router,
         prefix=settings.api_prefix,
         dependencies=[Depends(verify_api_key)],
     )

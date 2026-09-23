@@ -95,13 +95,29 @@ def _run_alembic_upgrade() -> None:
 async def test_db():
     """Base de datos de test aislada con migraciones aplicadas.
 
-    Estado determinista: resetea el schema public y re-aplica migraciones una
-    sola vez por sesión. Alembic usa asyncio.run internamente, así que se
-    ejecuta en un thread worker para no chocar con el event loop de los tests.
+    Estado determinista: resetea el schema public y re-aplica migraciones
+    una sola vez por sesión, y re-aplica si otro módulo las bajó (e.g.
+    `tests/test_migrations.py` hace `downgrade base` al final). Alembic
+    usa asyncio.run internamente, así que se ejecuta en un thread worker
+    para no chocar con el event loop de los tests.
     """
     global _alembic_ready, _test_engine, _test_factory
 
-    if not _alembic_ready:
+    needs_setup = not _alembic_ready
+
+    if _alembic_ready:
+        probe = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
+        async with probe.connect() as conn:
+            result = await conn.execute(
+                text(
+                    "SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema='public' AND table_name='profiles'"
+                )
+            )
+            needs_setup = result.scalar() is None
+        await probe.dispose()
+
+    if needs_setup:
         original_db_url = os.environ.get("DATABASE_URL")
         os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 

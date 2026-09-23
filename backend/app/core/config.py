@@ -33,6 +33,15 @@ class Settings(BaseSettings):
         default="BAAI/bge-m3", validation_alias="HF_EMBEDDING_MODEL"
     )
 
+    # Retrieval configuration (PR-C, issue #16)
+    retrieval_size_threshold_chars: int = Field(
+        default=3000, validation_alias="RETRIEVAL_SIZE_THRESHOLD_CHARS"
+    )
+    retrieval_top_k: int = Field(default=8, validation_alias="RETRIEVAL_TOP_K")
+    retrieval_fragment_target_chars: int = Field(
+        default=500, validation_alias="RETRIEVAL_FRAGMENT_TARGET_CHARS"
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

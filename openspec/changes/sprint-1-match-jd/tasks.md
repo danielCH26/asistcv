@@ -199,18 +199,18 @@ Nota: el budget del proyecto es 600 líneas/PR (config.yaml); la guard default d
 
 ### PR-C — Retrieval semántico con umbral (~200 l) — Issue #16 + #20
 
-- [ ] C1. Agregar `RETRIEVAL_SIZE_THRESHOLD_CHARS=3000` y `RETRIEVAL_TOP_K=8` a `backend/app/core/config.py`
+- [x] C1. Agregar `RETRIEVAL_SIZE_THRESHOLD_CHARS=3000` y `RETRIEVAL_TOP_K=8` a `backend/app/core/config.py`
   - AC: defaults en `Settings`; override por env verificado en test.
   - Escenarios: semantic-retrieval — "Umbral configurable desde entorno".
-- [ ] C2. Crear `backend/app/services/retrieval.py`
+- [x] C2. Crear `backend/app/services/retrieval.py`
   - AC: fragmentos por `experience[i]` y `skills`/`preferences` aplanados por sección, cada uno con origen `(section, index)`; ranking coseno con numpy sobre embeddings de fragmentos vía `generate_embedding`; caché en memoria por `(profile_id, profile.updated_at, embedding_model)`; perfil ≤ umbral → texto completo sin segmentación; interfaz única: embedding del JD → contexto serializable a JSON, sin tipos pgvector expuestos; K=8 fragmentos de ~500 chars.
   - Escenarios: semantic-retrieval — "Perfil chico usa contexto completo", "Perfil grande activa retrieval semántico", "Búsqueda top-k por similitud coseno", "Interfaz agnóstica del backend de vectores".
-- [ ] C3. Fallbacks del servicio
+- [x] C3. Fallbacks del servicio
   - AC: embedding ausente → perfil completo + warning; error pgvector → perfil completo, log nivel `error` con stack trace, y `POST /v1/match` responde 200.
   - Escenarios: semantic-retrieval — "Fallback por embedding ausente", "Fallback por error de pgvector".
-- [ ] C4. Conectar retrieval en `backend/app/api/v1/match.py` (paso 5 del flujo)
+- [x] C4. Conectar retrieval en `backend/app/api/v1/match.py` (paso 5 del flujo)
   - AC: contexto = perfil completo si ≤ umbral, si no top-K de fragmentos; logging estructurado por request de `chars_profile`, `retrieval_used`, `fragments_sent` (base para recalibración del umbral).
-- [ ] C5. Tests retrieval + snapshot de prompts
+- [x] C5. Tests retrieval + snapshot de prompts
   - AC: unit tests con fixtures de vectores deterministas; fallbacks cubiertos; snapshots de prompts congelados en este PR — cualquier cambio posterior de prompt exige actualización explícita del snapshot.
 
 ### PR-E — MCP a producción (~60 l) — Issue #18 + #20

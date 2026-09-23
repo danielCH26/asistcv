@@ -109,7 +109,9 @@ async def test_match_happy_path_persists_jd_and_analysis(
         row = analyses[0]
         assert row.job_description_id == jd.id, "FK analyses -> job_descriptions"
         assert row.profile_id == profile.id, "FK analyses -> profiles"
-        assert row.profile_snapshot["name"] == "Test User"
+        assert row.profile_snapshot["mode"] == "complete"
+        assert "Test User" in row.profile_snapshot["context"]
+        assert row.profile_snapshot["chunks_used"] is None
         assert row.score == 85
         assert row.strengths == ["Python", "FastAPI"]
         assert row.gaps == ["Kubernetes"]
