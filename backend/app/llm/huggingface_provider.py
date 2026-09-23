@@ -1,20 +1,19 @@
 """
 HuggingFace provider implementation for embedding operations.
 
-This provider uses the HuggingFace Inference API for embeddings.
+Uses the official `huggingface_hub` SDK with the new `InferenceClient`
+(which routes through `router.huggingface.co`). This replaces the
+deprecated `api-inference.huggingface.co` endpoint.
 """
 import asyncio
 import logging
 from typing import Any
 
-import httpx
+from huggingface_hub import InferenceClient
 
 from app.llm.schemas import Embedding, MatchAnalysis
 
 logger = logging.getLogger(__name__)
-
-# HF Inference API endpoint for BGE-M3
-HF_EMBEDDING_URL = "https://api-inference.huggingface.co/models/BAAI/bge-m3"
 
 # Expected embedding dimension for BGE-M3
 EXPECTED_DIMENSION = 1024
@@ -22,7 +21,7 @@ EXPECTED_DIMENSION = 1024
 
 class HuggingFaceProvider:
     """
-    Embedding provider using HuggingFace Inference API.
+    Embedding provider using HuggingFace Inference API (via InferenceClient).
 
     This provider only implements generate_embedding.
     For LLM operations, use GroqProvider.
@@ -38,14 +37,14 @@ class HuggingFaceProvider:
         Initialize the HuggingFace provider.
 
         Args:
-            api_key: HuggingFace API token (with Read permission)
+            api_key: HuggingFace API token (with inference permissions)
             embedding_model: Model to use for embeddings (default: BAAI/bge-m3)
             timeout: Request timeout in seconds (default: 30.0)
         """
         self._api_key = api_key
         self._embedding_model = embedding_model
         self._timeout = timeout
-        self._max_retries = 3
+        self._client = InferenceClient(token=api_key, timeout=timeout)
 
     async def generate_embedding(self, text: str) -> Embedding:
         """
@@ -59,104 +58,84 @@ class HuggingFaceProvider:
 
         Raises:
             ValueError: If the API response is invalid
-            httpx.HTTPStatusError: If the API returns an error
+            RuntimeError: If all retries fail
         """
-        headers = {
-            "Authorization": f"Bearer {self._api_key}",
-            "Content-Type": "application/json",
-        }
-
-        payload = {"inputs": text}
-
         last_error: Exception | None = None
+        max_retries = 3
 
-        for attempt in range(self._max_retries + 1):
+        for attempt in range(max_retries + 1):
             try:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
-                    response = await client.post(
-                        HF_EMBEDDING_URL,
-                        headers=headers,
-                        json=payload,
+                # InferenceClient.feature_extraction is sync; run in thread
+                vector = await asyncio.to_thread(
+                    self._client.feature_extraction,
+                    text=text,
+                    model=self._embedding_model,
+                )
+
+                # Handle different response formats
+                # feature_extraction may return:
+                # - numpy.ndarray (flat or 2D)
+                # - list (flat or 2D)
+                if hasattr(vector, "tolist"):
+                    vector = vector.tolist()
+
+                # If 2D (one row per input text), take the first row
+                if isinstance(vector, list) and vector and isinstance(vector[0], list):
+                    vector = vector[0]
+
+                if not isinstance(vector, list):
+                    raise ValueError(f"Unexpected embedding type: {type(vector)}")
+
+                if len(vector) != EXPECTED_DIMENSION:
+                    raise ValueError(
+                        f"Embedding dimension mismatch: expected {EXPECTED_DIMENSION}, "
+                        f"got {len(vector)}"
                     )
 
-                    if response.status_code == 429:
-                        # Rate limit - exponential backoff
-                        wait_time = 2**attempt
-                        logger.warning(
-                            "HF rate limit hit, retrying",
-                            extra={"attempt": attempt + 1, "wait_seconds": wait_time},
-                        )
-                        await asyncio.sleep(wait_time)
-                        continue
+                logger.info(
+                    "HF embedding generated",
+                    extra={
+                        "model": self._embedding_model,
+                        "dimension": len(vector),
+                    },
+                )
 
-                    response.raise_for_status()
+                return Embedding(
+                    vector=vector,
+                    model=self._embedding_model,
+                    provider="huggingface",
+                )
 
-                    # httpx 0.28+ may return a coroutine for .json()
-                    data = response.json()
-                    # Check if it's a coroutine and await it
-                    if asyncio.iscoroutine(data):
-                        data = await data
+            except Exception as e:
+                last_error = e
+                error_msg = str(e).lower()
 
-                    # BGE-M3 returns a list of embeddings (we sent one text)
-                    if not isinstance(data, list) or len(data) == 0:
-                        raise ValueError(f"Invalid HF response format: {type(data)}")
-
-                    embedding_data = data[0]
-
-                    # Extract the embedding vector
-                    if isinstance(embedding_data, dict):
-                        vector = embedding_data.get("embedding")
-                        if vector is None:
-                            raise ValueError("No embedding found in response")
-                    elif isinstance(embedding_data, list):
-                        vector = embedding_data
-                    else:
-                        raise ValueError(f"Unexpected embedding format: {type(embedding_data)}")
-
-                    # Validate dimension
-                    if len(vector) != EXPECTED_DIMENSION:
-                        raise ValueError(
-                            f"Embedding dimension mismatch: expected {EXPECTED_DIMENSION}, "
-                            f"got {len(vector)}"
-                        )
-
-                    logger.info(
-                        "HF embedding generated",
+                # Detect rate limit / service unavailable for backoff
+                if "429" in error_msg or "rate" in error_msg or "503" in error_msg or "loading" in error_msg:
+                    wait_time = 2**attempt + 5
+                    logger.warning(
+                        "HF service issue, retrying",
                         extra={
-                            "model": self._embedding_model,
-                            "dimension": len(vector),
+                            "attempt": attempt + 1,
+                            "wait_seconds": wait_time,
+                            "error": str(e)[:200],
+                        },
+                    )
+                else:
+                    wait_time = 2**attempt
+                    logger.warning(
+                        "HF request error, retrying",
+                        extra={
+                            "attempt": attempt + 1,
+                            "wait_seconds": wait_time,
+                            "error": str(e)[:200],
                         },
                     )
 
-                    return Embedding(
-                        vector=vector,
-                        model=self._embedding_model,
-                        provider="huggingface",
-                    )
-
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 503:
-                    # Service unavailable - model might be loading
-                    wait_time = 2**attempt + 5  # Extra wait for model loading
-                    logger.warning(
-                        "HF service unavailable, retrying",
-                        extra={"attempt": attempt + 1, "wait_seconds": wait_time},
-                    )
+                if attempt < max_retries:
                     await asyncio.sleep(wait_time)
-                    last_error = e
-                else:
-                    raise
 
-            except httpx.RequestError as e:
-                last_error = e
-                wait_time = 2**attempt
-                logger.warning(
-                    "HF request error, retrying",
-                    extra={"attempt": attempt + 1, "wait_seconds": wait_time, "error": str(e)},
-                )
-                await asyncio.sleep(wait_time)
-
-        raise last_error or RuntimeError("HF API call failed after retries")
+        raise RuntimeError(f"HF API call failed after {max_retries + 1} attempts: {last_error}")
 
     async def generate_match(
         self,
@@ -165,10 +144,6 @@ class HuggingFaceProvider:
     ) -> MatchAnalysis:
         """
         Generate match analysis is not supported by HuggingFace provider.
-
-        Args:
-            jd_text: The job description text
-            profile_context: Context information about the candidate
 
         Raises:
             NotImplementedError: Always, use GroqProvider for LLM operations
