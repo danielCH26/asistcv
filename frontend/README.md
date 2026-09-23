@@ -4,6 +4,25 @@ SvelteKit + adapter-static frontend for AsistCV. Single-page application that
 hits the FastAPI backend (Render) and renders an honest match between a job
 description and the user's profile.
 
+## Auth model (current deployment)
+
+The frontend ships **without an API key embedded in the bundle**. The backend
+runs in **open mode** (no `BACKEND_API_KEY` env var set on Render). The
+`PUBLIC_BACKEND_API_KEY` build env on Cloudflare Pages must remain empty.
+
+This is the safest deployment for an MVP: nothing sensitive is exposed in the
+client bundle, and the backend can be locked down later via Cloudflare Access
+or a reverse-proxy auth layer (Sprint 4 polish).
+
+**Trade-off**: anyone with the Cloudflare Pages URL can call your backend
+and burn the Groq free tier. Mitigations to add in Sprint 2/4:
+- Rate limiting on the backend
+- Cloudflare Access in front of the Pages site
+- Switch back to API-key mode if/when you need stronger guarantees
+
+The **MCP adapter still uses the API key** (its key is local, not in any
+public bundle) — that path is unaffected.
+
 ## Stack
 
 - **SvelteKit 2.15** + Svelte 4
