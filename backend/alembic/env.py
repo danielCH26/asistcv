@@ -29,14 +29,14 @@ if database_url.startswith("postgresql://") and "+psycopg" not in database_url a
 elif database_url.startswith("postgresql+psycopg://"):
     database_url = database_url.replace("postgresql+psycopg://", "postgresql+asyncpg://", 1)
 
-# asyncpg does not accept `sslmode` (that's a libpq/psycopg parameter).
-# Neon and other managed providers include `?sslmode=require` in their
-# connection strings — strip it and pass `ssl=true` via connect_args instead.
+# asyncpg does not accept libpq-only parameters (`sslmode`, `channel_binding`,
+# etc.). Managed providers like Neon include them in their connection strings.
+# Strip everything from the query string except parameters asyncpg understands.
 _parsed = _urlparse.urlparse(database_url)
 _query = _urlparse.parse_qs(_parsed.query)
-if "sslmode" in _query:
-    _query.pop("sslmode")
-    database_url = _urlparse.urlunparse(_parsed._replace(query=_urlparse.urlencode(_query, doseq=True)))
+_ASYNCPG_KNOWN_PARAMS = {"service", "ssl", "timeout", "command_timeout", "application_name", "server_settings"}
+if _query and not set(_query.keys()).issubset(_ASYNCPG_KNOWN_PARAMS):
+    database_url = _urlparse.urlunparse(_parsed._replace(query=""))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

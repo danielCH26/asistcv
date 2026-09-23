@@ -33,15 +33,17 @@ def get_engine():
         elif database_url.startswith("postgresql+psycopg://"):
             database_url = database_url.replace("postgresql+psycopg://", "postgresql+asyncpg://", 1)
 
-        # asyncpg does not accept `sslmode` (libpq parameter) — strip it from
-        # the query string (Neon and other managed providers include it).
+        # asyncpg does not accept libpq-only parameters (`sslmode`,
+        # `channel_binding`, etc.). Managed providers like Neon include them
+        # in their connection strings. Strip the whole query string unless
+        # every parameter is one asyncpg understands.
         import urllib.parse as _urlparse
 
         _parsed = _urlparse.urlparse(database_url)
         _query = _urlparse.parse_qs(_parsed.query)
-        if "sslmode" in _query:
-            _query.pop("sslmode")
-            database_url = _urlparse.urlunparse(_parsed._replace(query=_urlparse.urlencode(_query, doseq=True)))
+        asyncpg_known_params = {"service", "ssl", "timeout", "command_timeout", "application_name", "server_settings"}
+        if _query and not set(_query.keys()).issubset(asyncpg_known_params):
+            database_url = _urlparse.urlunparse(_parsed._replace(query=""))
 
         # asyncpg needs `ssl=true` for remote managed providers; local doesn't.
         is_local = "localhost" in database_url or "127.0.0.1" in database_url
