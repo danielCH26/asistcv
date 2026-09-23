@@ -186,14 +186,14 @@ Nota: el budget del proyecto es 600 líneas/PR (config.yaml); la guard default d
 
 ### PR-B — Auth por API key (~120 l) — Issue #15 (cierre) + #20
 
-- [ ] B1. Crear `backend/app/api/deps.py` con `verify_api_key` (dependency, no middleware)
+- [x] B1. Crear `backend/app/api/deps.py` con `verify_api_key` (dependency, no middleware)
   - AC: `backend_api_key` None → pass-through; key definida → exige `Authorization: Bearer` con `secrets.compare_digest`; 401 sin tocar session ni proveedores externos.
   - Escenarios: match-analysis — "API key inválida o ausente en modo protegido", "Modo abierto sin API key".
-- [ ] B2. Modificar `backend/app/main.py` — wiring por router + docs condicional
+- [x] B2. Modificar `backend/app/main.py` — wiring por router + docs condicional
   - AC: `/health` y `/` exentos (root route mínima con nombre/metadata); `/ping`, `/v1/match`, `/v1/analyses` protegidos vía `dependencies=[Depends(verify_api_key)]`; con key definida la app se instancia con `docs_url=None, redoc_url=None, openapi_url=None`; en dev/CI siguen disponibles.
-- [ ] B3. Verificar/agregar `backend_api_key` en `backend/app/core/config.py`
+- [x] B3. Verificar/agregar `backend_api_key` en `backend/app/core/config.py`
   - AC: setting opcional (None default) leída de env `BACKEND_API_KEY`; cubierta por tests de Settings.
-- [ ] B4. Tests de auth
+- [x] B4. Tests de auth
   - AC: 401 sin header; 401 con key incorrecta; 200 en modo abierto; `/health` 200 sin key; `/ping` 401 en modo protegido; OpenAPI 404 en modo protegido y 200 en abierto; usando `dependency_overrides`.
   - Escenarios: match-analysis — ambos scenarios del Requirement "Autenticación por API key".
 
