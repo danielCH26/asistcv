@@ -9,13 +9,13 @@ Job-search-assistant agéntico. Producto: asistente de búsqueda de empleo con 3
 
 ## Stack
 
-- **Frontend**: SvelteKit (static export) → Firebase Hosting
-- **Backend**: FastAPI (Python 3.12) → Cloud Run (GCP)
-- **DB**: Postgres + pgvector → Cloud SQL db-f1-micro
-- **LLM**: Vertex AI Claude 3.5 Haiku
-- **Embeddings**: Vertex AI text-multilingüe
-- **CI/CD**: Cloud Build
-- **Secrets**: Secret Manager
+- **Frontend**: SvelteKit (adapter-static) → Cloudflare Pages
+- **Backend**: FastAPI (Python 3.12) → Render
+- **DB**: Postgres + pgvector → Neon
+- **LLM**: Groq (`qwen/qwen3.8-27b`, `max_tokens=800`)
+- **Embeddings**: HuggingFace Inference (`BAAI/bge-m3`, 1024 dim)
+- **CI/CD**: GitHub Actions
+- **Secrets**: Render env vars + GitHub Actions secrets
 
 ## Strict TDD
 
