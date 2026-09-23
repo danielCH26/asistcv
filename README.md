@@ -1,6 +1,7 @@
 # AsistCV
 
 [![CI](https://github.com/danielCH26/asistcv/actions/workflows/ci.yml/badge.svg)](https://github.com/danielCH26/asistcv/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 Asistente agéntico de búsqueda de empleo. Match JD ↔ perfil, adaptar CV + outreach, tracking pipeline. Diseñado para ayudar a aplicar mejor a los 5–10 puestos que valen la pena, no a auto-aplicar a 100.
 
