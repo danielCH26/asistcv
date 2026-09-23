@@ -58,9 +58,12 @@ logs/
 # Node / SvelteKit (frontend)
 node_modules/
 .svelte-kit/
-package-lock.json
 yarn.lock
 pnpm-lock.yaml
+# package-lock.json is committed ONLY for the frontend (needed by CI);
+# ignore it everywhere else (in case someone runs npm in the backend root, etc.)
+package-lock.json
+!frontend/package-lock.json
 
 # Testing y cobertura
 .pytest_cache/
