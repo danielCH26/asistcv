@@ -12,8 +12,8 @@ async def seed_initial_data():
 
     Creates a single test profile for development/testing purposes.
     """
-    from app.db.session import get_session_context
     from app.db.models import Profile
+    from app.db.session import get_session_context
 
     seed_data = {
         "name": "Test User",

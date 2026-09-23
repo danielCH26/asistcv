@@ -8,20 +8,25 @@ from logging.config import fileConfig
 
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlmodel import SQLModel
 
 from alembic import context
 
 # Import SQLModel and all models to register them with the metadata
-from app.db.models import Profile, JobDescription, Analysis
-from sqlmodel import SQLModel
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
 # Get database URL from environment variable
-database_url = os.environ.get("DATABASE_URL", "postgresql+asyncpg://asistcv:asistcv@localhost:5432/asistcv")
+database_url = os.environ.get("DATABASE_URL", "postgresql://asistcv:asistcv@localhost:5433/asistcv")
+
+# Normalize: ensure async driver for the async engine (same logic as app/db/session.py)
+if database_url.startswith("postgresql://") and "+psycopg" not in database_url and "+asyncpg" not in database_url:
+    database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+elif database_url.startswith("postgresql+psycopg://"):
+    database_url = database_url.replace("postgresql+psycopg://", "postgresql+asyncpg://", 1)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
