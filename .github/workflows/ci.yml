@@ -122,9 +122,18 @@ jobs:
     name: Docker build (backend)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: ${{ hashFiles('backend/Dockerfile') != '' }}
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check Dockerfile exists
+        id: check
+        run: |
+          if [ -f backend/Dockerfile ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build backend image
+        if: steps.check.outputs.exists == 'true'
         run: docker build -t asistcv-backend:ci ./backend
