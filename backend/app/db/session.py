@@ -33,10 +33,25 @@ def get_engine():
         elif database_url.startswith("postgresql+psycopg://"):
             database_url = database_url.replace("postgresql+psycopg://", "postgresql+asyncpg://", 1)
 
+        # asyncpg does not accept `sslmode` (libpq parameter) — strip it from
+        # the query string (Neon and other managed providers include it).
+        import urllib.parse as _urlparse
+
+        _parsed = _urlparse.urlparse(database_url)
+        _query = _urlparse.parse_qs(_parsed.query)
+        if "sslmode" in _query:
+            _query.pop("sslmode")
+            database_url = _urlparse.urlunparse(_parsed._replace(query=_urlparse.urlencode(_query, doseq=True)))
+
+        # asyncpg needs `ssl=true` for remote managed providers; local doesn't.
+        is_local = "localhost" in database_url or "127.0.0.1" in database_url
+        connect_args = {} if is_local else {"ssl": True}
+
         _engine = create_async_engine(
             database_url,
             echo=False,
             poolclass=NullPool,
+            connect_args=connect_args,
         )
     return _engine
 

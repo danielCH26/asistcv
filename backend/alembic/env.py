@@ -4,6 +4,7 @@ Alembic environment configuration for AsistCV migrations.
 Supports both online (connected to DB) and offline (generates SQL) modes.
 """
 import os
+import urllib.parse as _urlparse
 from logging.config import fileConfig
 
 from sqlalchemy import pool
@@ -27,6 +28,15 @@ if database_url.startswith("postgresql://") and "+psycopg" not in database_url a
     database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 elif database_url.startswith("postgresql+psycopg://"):
     database_url = database_url.replace("postgresql+psycopg://", "postgresql+asyncpg://", 1)
+
+# asyncpg does not accept `sslmode` (that's a libpq/psycopg parameter).
+# Neon and other managed providers include `?sslmode=require` in their
+# connection strings — strip it and pass `ssl=true` via connect_args instead.
+_parsed = _urlparse.urlparse(database_url)
+_query = _urlparse.parse_qs(_parsed.query)
+if "sslmode" in _query:
+    _query.pop("sslmode")
+    database_url = _urlparse.urlunparse(_parsed._replace(query=_urlparse.urlencode(_query, doseq=True)))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -74,10 +84,16 @@ def do_run_migrations(connection: Connection) -> None:
 
 async def run_async_migrations() -> None:
     """Run migrations in 'online' mode with async engine."""
+    # asyncpg needs `ssl=true` for managed providers (Neon, RDS, etc.).
+    # Local connections (localhost/127.0.0.1) don't need TLS.
+    is_local = "localhost" in database_url or "127.0.0.1" in database_url
+    connect_args = {} if is_local else {"ssl": True}
+
     # Create async engine directly with the database URL
     connectable: AsyncEngine = create_async_engine(
         database_url,
         poolclass=pool.NullPool,
+        connect_args=connect_args,
     )
 
     async with connectable.connect() as connection:
