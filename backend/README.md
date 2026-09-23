@@ -75,9 +75,51 @@ Copy `.env.example` to `.env` and configure as needed:
 | `APP_ENV` | `development` | Application environment |
 | `LOG_LEVEL` | `INFO` | Logging level |
 | `API_PREFIX` | `/v1` | API URL prefix |
-| `DATABASE_URL` | `postgresql+psycopg://asistcv:asistcv@localhost:5432/asistcv` | PostgreSQL connection string |
-| `LLM_PROVIDER` | `mock` | LLM provider (`mock` or `vertex`) |
+| `DATABASE_URL` | `postgresql://asistcv:asistcv@localhost:5433/asistcv` | PostgreSQL connection string |
+| `LLM_PROVIDER` | `mock` | LLM provider (`mock` or `groq`) |
 | `BACKEND_API_KEY` | `None` | API key for MCP adapter |
+
+## Switching between local and production DB
+
+The backend reads the connection string from the `DATABASE_URL` environment variable.
+
+### Local development (default)
+
+Uses the PostgreSQL from `infra/docker-compose.yml`, exposed on host port **5433**:
+
+```bash
+make db-up                     # start local Postgres on port 5433
+uv run alembic upgrade head
+```
+
+No extra configuration needed: when `DATABASE_URL` is unset, the app falls back to
+`postgresql://asistcv:asistcv@localhost:5433/asistcv`.
+
+### Production (Neon Postgres)
+
+```bash
+export DATABASE_URL="postgresql://user:pass@ep-xxx.neon.tech/db?sslmode=require"
+```
+
+- `sslmode=require` is mandatory: Neon only accepts TLS connections.
+- Both `postgresql://...` and `postgresql+asyncpg://...` URLs work; the app
+  (`app/db/session.py`) and Alembic (`alembic/env.py`) normalize the URL to the
+  async driver automatically.
+- Verify the connection and the pgvector extension before running migrations:
+
+```bash
+uv run python scripts/test_neon_connection.py
+```
+
+### Running migrations against Neon
+
+```bash
+export DATABASE_URL="postgresql://user:pass@ep-xxx.neon.tech/db?sslmode=require"
+uv run alembic upgrade head
+```
+
+`alembic/env.py` reads the same `DATABASE_URL` and rewrites it to
+`postgresql+asyncpg://` under the hood.
 
 ## API Endpoints
 

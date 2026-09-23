@@ -7,7 +7,6 @@ import pytest
 
 from app.llm.huggingface_provider import (
     EXPECTED_DIMENSION,
-    HF_EMBEDDING_URL,
     HuggingFaceProvider,
 )
 
@@ -25,7 +24,7 @@ class TestHuggingFaceProvider:
         assert provider._api_key == "test_token"
         assert provider._embedding_model == "BAAI/bge-m3"
         assert provider._timeout == 30.0
-        assert provider._max_retries == 3
+        assert provider._client is not None
 
     def test_provider_custom_config(self):
         """Provider should accept custom configuration."""
@@ -60,9 +59,12 @@ class TestHuggingFaceProviderConfiguration:
         provider = HuggingFaceProvider(api_key="test", embedding_model="custom-model")
         assert provider._embedding_model == "custom-model"
 
-    def test_uses_correct_api_endpoint(self):
-        """Should use HF Inference API endpoint."""
-        assert HF_EMBEDDING_URL == "https://api-inference.huggingface.co/models/BAAI/bge-m3"
+    def test_uses_inference_client(self):
+        """Should use huggingface_hub InferenceClient (routes via router.huggingface.co)."""
+        from huggingface_hub import InferenceClient
+
+        provider = HuggingFaceProvider(api_key="test")
+        assert isinstance(provider._client, InferenceClient)
 
     def test_expected_dimension(self):
         """Should have correct expected dimension."""

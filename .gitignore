@@ -84,3 +84,6 @@ local-storage/
 
 # Agente local (no es parte del proyecto)
 .atl/
+
+# CodeGraph local index (tooling, not project)
+.codegraph/

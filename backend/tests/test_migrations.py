@@ -4,21 +4,31 @@ Test migrations can be applied and reverted.
 Uses a test database to verify alembic migrations work correctly.
 """
 import os
+
 import pytest
 from sqlalchemy import text
 
-
-# Test database URL - uses a separate database for testing
-TEST_DATABASE_URL = os.environ.get(
-    "TEST_DATABASE_URL",
-    "postgresql+asyncpg://asistcv:asistcv@localhost:5432/asistcv_test"
+# Test database URL - uses a separate database for testing.
+# Fallback chain: TEST_DATABASE_URL -> DATABASE_URL (set in CI) -> local default (5433).
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL") or os.environ.get(
+    "DATABASE_URL",
+    "postgresql+asyncpg://asistcv:asistcv@localhost:5433/asistcv_test",
 )
+
+
+def _to_async_driver_url(url: str) -> str:
+    """Return url with an async driver (asyncpg) for SQLAlchemy async engines."""
+    scheme, _, rest = url.partition("://")
+    if "+" not in scheme:
+        return f"{scheme}+asyncpg://{rest}"
+    return url
 
 
 @pytest.fixture(scope="module")
 def setup_test_db():
     """Set up test database and run migrations."""
     import asyncio
+
     from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy.pool import NullPool
 
@@ -28,6 +38,7 @@ def setup_test_db():
 
     # Run migrations using alembic command
     from alembic.config import Config
+
     from alembic import command
 
     alembic_cfg = Config("alembic.ini")
@@ -37,7 +48,7 @@ def setup_test_db():
 
     # Create test engine
     engine = create_async_engine(
-        TEST_DATABASE_URL,
+        _to_async_driver_url(TEST_DATABASE_URL),
         poolclass=NullPool,
         echo=False,
     )
@@ -123,6 +134,7 @@ async def test_migrations_vector_extension(setup_test_db):
 def test_alembic_config_exists():
     """Verify alembic.ini exists and is valid."""
     import os
+
     from alembic.config import Config
 
     assert os.path.exists("alembic.ini"), "alembic.ini should exist"
@@ -134,7 +146,6 @@ def test_alembic_config_exists():
 
 def test_models_registered_with_metadata():
     """Verify all models are registered with SQLModel metadata."""
-    from app.db.models import Profile, JobDescription, Analysis
     from sqlmodel import SQLModel
 
     # Get all tables from metadata

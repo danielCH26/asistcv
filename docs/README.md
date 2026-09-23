@@ -8,6 +8,7 @@ Technical documentation for AsistCV.
 - API reference
 - Development guides
 - Deployment procedures
+- [CI Setup](CI_SETUP.md) - GitHub Actions workflow and branch protection
 
 ## Organization
 

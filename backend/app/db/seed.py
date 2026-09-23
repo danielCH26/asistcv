@@ -39,8 +39,9 @@ async def seed_initial_data():
     async with get_session_context() as session:
         # Check if profile already exists
         from sqlalchemy import select
+        from sqlmodel import col
         result = await session.execute(
-            select(Profile).where(Profile.name == "Test User")
+            select(Profile).where(col(Profile.name) == "Test User")
         )
         existing = result.scalar_one_or_none()
 

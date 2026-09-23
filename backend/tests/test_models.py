@@ -1,13 +1,11 @@
 """
 Test SQLModel models can be imported and instantiated.
 """
-import pytest
-from datetime import datetime
 
 
 def test_import_models():
     """Verify all models can be imported."""
-    from app.db.models import Profile, JobDescription, Analysis
+    from app.db.models import Analysis, JobDescription, Profile
 
     assert Profile is not None
     assert JobDescription is not None
@@ -80,7 +78,7 @@ def test_analysis_model_instantiation():
 
 def test_model_table_names():
     """Verify table names are correct."""
-    from app.db.models import Profile, JobDescription, Analysis
+    from app.db.models import Analysis, JobDescription, Profile
 
     assert Profile.__tablename__ == "profiles"
     assert JobDescription.__tablename__ == "job_descriptions"
@@ -90,11 +88,6 @@ def test_model_table_names():
 def test_analysis_foreign_key():
     """Verify Analysis has foreign key to JobDescription."""
     from app.db.models import Analysis
-    from sqlalchemy import inspect
-
-    # Get the foreign keys from the mapper
-    mapper = inspect(Analysis)
-    fk_list = [fk for fk in mapper.relationships]
 
     # Check that job_description_id is a foreign key
     # The relationship is defined via the Column, so we check the column info
