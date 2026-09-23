@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     # Groq configuration
     groq_api_key: str | None = Field(default=None, validation_alias="GROQ_API_KEY")
-    groq_model: str = Field(default="llama-3.3-70b-versatile", validation_alias="GROQ_MODEL")
+    groq_model: str = Field(default="qwen/qwen3.8-27b", validation_alias="GROQ_MODEL")
 
     # HuggingFace configuration
     huggingface_api_key: str | None = Field(

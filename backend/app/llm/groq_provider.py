@@ -63,18 +63,18 @@ class GroqProvider:
     def __init__(
         self,
         api_key: str,
-        model: str = "llama-3.3-70b-versatile",
+        model: str = "qwen/qwen3.8-27b",
         temperature: float = 0.3,
-        max_tokens: int = 1500,
+        max_tokens: int = 800,
     ):
         """
         Initialize the Groq provider.
 
         Args:
             api_key: Groq API key
-            model: Model name to use (default: llama-3.3-70b-versatile)
+            model: Model name to use (default: qwen/qwen3.8-27b)
             temperature: Sampling temperature (default: 0.3)
-            max_tokens: Maximum tokens in response (default: 1500)
+            max_tokens: Maximum tokens in response (default: 800)
         """
         self._client = groq.AsyncGroq(api_key=api_key)
         self._model = model
