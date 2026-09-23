@@ -1,118 +1,113 @@
-# Deploy — HuggingFace Spaces
+# Deploy — Render
 
-How to deploy the AsistCV backend (FastAPI) to HuggingFace Spaces using the Docker SDK.
+How to deploy the AsistCV backend (FastAPI + Docker) to Render's free tier.
+
+> **Why Render (and not HuggingFace Spaces)?** HF's free tier only allows
+> Static Spaces (file hosting, no runtime, no secrets). Render's free tier
+> offers a real Web Service: 750h/month, no credit card, native GitHub
+> integration. Previously documented plan B from the stack migration.
 
 ## Prerequisites
 
-- A HuggingFace account with access to Spaces.
-- Docker installed locally (to test the image before pushing).
-- The backend Dockerfile lives at `backend/Dockerfile`. HF requires the Dockerfile
-  at the **root** of the Space repository, so we push only the `backend/` subtree
-  (see [Push to HF](#push-to-hf)).
+- A Render account (https://render.com — sign up with GitHub, no card needed)
+- The repo pushed to GitHub (danielCH26/asistcv)
+- Working secrets: `GROQ_API_KEY`, `HUGGINGFACE_API_KEY`, `DATABASE_URL` (Neon)
+- The backend Dockerfile lives at `backend/Dockerfile` (already validated)
 
-## 1. Create the Space
+## 1. Create the Web Service
 
-1. Go to https://huggingface.co/new-space
-2. Fill in:
-   - **Space name**: `asistcv-backend`
-   - **SDK**: **Docker** → template **Blank**
-   - **Hardware**: **CPU basic** (2 vCPU, no GPU — enough for the API)
-   - **Visibility**: public or private (private works; the Space URL then requires
-     your HF token for API calls)
-3. Click **Create Space**.
+1. Go to https://dashboard.render.com → **New** → **Web Service**
+2. **Connect** the GitHub repo `danielCH26/asistcv` (grant Render access if asked)
+3. Configure:
 
-The Space repository will contain a `README.md`. Make sure it has this front-matter
-so HF knows it is a Docker Space and which port the app listens on:
+| Setting | Value |
+|---|---|
+| **Name** | `asistcv-backend` |
+| **Project** | `asistcv` (optional, groups the service) |
+| **Language / Runtime** | **Docker** (auto-detected from `backend/Dockerfile`) |
+| **Root Directory** | `backend` ← important: monorepo, Dockerfile is inside backend/ |
+| **Region** | closest to you (e.g. São Paulo if available, otherwise Oregon/Virginia) |
+| **Branch** | `main` |
+| **Instance Type** | **Free** |
 
-```yaml
----
-title: AsistCV Backend
-emoji: 📄
-sdk: docker
-app_port: 7860
----
-```
+4. Click **Deploy Web Service** (first deploy takes 3-5 min: Docker build + image pull)
 
-`app_port: 7860` matches the `EXPOSE 7860` in the Dockerfile.
+## 2. Environment Variables
 
-## 2. Configure Secrets
+In the service → **Environment** → **Add Environment Variable** (Render calls
+secrets "environment variables"; they are injected at runtime, not committed):
 
-In the Space: **Settings → Variables and secrets → New secret**.
+| Key | Value |
+|---|---|
+| `GROQ_API_KEY` | your Groq key (`gsk_...`) |
+| `HUGGINGFACE_API_KEY` | your HF token (`hf_...`) |
+| `DATABASE_URL` | Neon connection string (`postgresql://neondb_owner:...@ep-...neon.tech/asistcv?sslmode=require&channel_binding=require`) |
+| `LLM_PROVIDER` | `groq` |
 
-| Secret | Example value | Purpose |
-|--------|---------------|---------|
-| `DATABASE_URL` | `postgresql://user:pass@ep-xxx.neon.tech/db?sslmode=require` | Neon Postgres connection string (the app reads `DATABASE_URL`; a secret named `NEON_DATABASE_URL` would be ignored) |
-| `GROQ_API_KEY` | `gsk_...` | Groq LLM provider |
-| `HUGGINGFACE_API_KEY` | `hf_...` | HF Inference API (embeddings, BGE-M3) |
-| `BACKEND_API_KEY` | random string | Shared key for the MCP adapter |
-| `LLM_PROVIDER` | `groq` | Selects the Groq provider (`groq`, not `mock`) |
+Click **Save Changes** — Render redeploys automatically after env changes.
 
-Notes:
+**Note on the port**: Render auto-detects the port exposed by the Dockerfile
+(EXPOSE 7860) via its `PORT` mechanism. If the service doesn't bind, set
+explicitly: Environment → `PORT` = `7860`.
 
-- Secrets are injected as environment variables at container start.
-- Never commit secrets to the repo; HF secrets are the only supported way.
-- CORS: if the frontend will call the Space, add the frontend origin to the
-  `CORS_ORIGINS`-style config or extend `cors_origins` in `backend/app/core/config.py`.
+## 3. Verify the deploy
 
-## 3. Connect the local repo to HF
+When the deploy status turns **Live**:
 
 ```bash
-git remote add huggingface https://huggingface.co/spaces/<user>/asistcv-backend.git
-```
-
-Authenticate if needed (HF CLI or token in URL):
-
-```bash
-huggingface-cli login
-# or: git remote add huggingface https://<user>:<hf_token>@huggingface.co/spaces/<user>/asistcv-backend.git
-```
-
-## 4. Push to HF
-
-HF looks for `Dockerfile` at the root of the Space repo, but in this monorepo it
-lives under `backend/`. Push only that subtree:
-
-```bash
-git subtree push --prefix backend huggingface main
-```
-
-If the Space repo already has commits (e.g. the initial README) and the subtree
-push conflicts, force the history with `--force` on a fresh Space or use:
-
-```bash
-git subtree split --prefix=backend -b hf-deploy
-git push huggingface hf-deploy:main --force
-```
-
-## 5. Verify the deploy
-
-1. Open the Space page and check the build logs (**Logs → Build**), then runtime
-   logs (**Logs → Container**).
-2. Hit the health endpoint:
-
-```bash
-curl https://<user>-asistcv-backend.hf.space/health
+# Render assigns the URL https://asistcv-backend-XXXX.onrender.com (check the dashboard)
+curl https://<your-url>.onrender.com/health
 # → {"status":"ok"}
+
+curl https://<your-url>.onrender.com/v1/ping
+# → {"pong":true,...}
+
+curl -X POST https://<your-url>.onrender.com/v1/match \
+  -H 'Content-Type: application/json' \
+  -d '{"jd_text":"Senior Python developer wanted for remote work with FastAPI and PostgreSQL","profile_id":1}'
+# → MatchAnalysis with real score from Qwen via Groq
 ```
 
-3. Interactive docs: `https://<user>-asistcv-backend.hf.space/docs`
+## 4. Automatic deploys
 
-Migrations are **not** run automatically on deploy. Run them against Neon from
-your local machine:
+By default, Render **auto-deploys on every push to `main`**. Combined with the
+GitHub Actions CI (which must pass first if you enable branch protection), the
+flow is:
 
-```bash
-cd backend
-export DATABASE_URL="postgresql://user:pass@ep-xxx.neon.tech/db?sslmode=require"
-uv run python scripts/test_neon_connection.py   # verify connection + pgvector
-uv run alembic upgrade head
+```
+push to main → CI green → Render auto-deploy → new version live
 ```
 
-## Known limitations
+To make CI gate the deploy: Render → Settings → **Build & Deploy** →
+**Deploy Hook** or enable "Wait for CI" via GitHub Checks (Render → Settings →
+"Prevent deploy if build fails" / GitHub integration settings).
 
-- **Cold start**: free Spaces sleep after ~48h of inactivity; the next request
-  takes ~1–2 min while the container rebuilds/boots.
-- **CPU basic**: 2 vCPU, 16 GB RAM, no GPU. Fine for API + small LLM calls
-  (Groq runs remotely), slow for anything compute-heavy.
-- **Ephemeral storage**: the container filesystem is reset on restart; never
-  store state locally (that is what Neon is for).
-- **Single instance**: no horizontal scaling on the free tier.
+## Limitations of the free tier
+
+- **Cold starts**: after ~15 min without traffic, the service spins down.
+  The next request takes **30-50s** to respond (container boot). For the MCP
+  adapter, raise its timeout (`TIMEOUT_SECONDS=60` in mcp-adapter settings).
+- **750 hours/month**: enough for one always-on service (a month has ~744h).
+  A second service (e.g. frontend preview) consumes from the same pool.
+- **512 MB RAM / shared CPU**: plenty for FastAPI; the heavy work (LLM,
+  embeddings) happens in Groq/HF, not here.
+- **Sleep on inactivity**: the Neon serverless DB also auto-suspends; first
+  query after inactivity adds ~500ms. Acceptable for single-user.
+
+## Update an existing deploy
+
+Push to `main` (auto-deploy) or use **Manual Deploy** → **Deploy latest commit**
+from the service dashboard.
+
+## Troubleshooting
+
+- **Service "Deploy failed"**: check the **Logs** tab; most common cause is a
+  missing env var (RuntimeError at startup) or the Dockerfile build error.
+- **502/timeout right after Live**: the container is still waking up (cold
+  start). Retry after 30-60s.
+- **`DATABASE_URL` errors at runtime**: confirm the Neon string includes
+  `?sslmode=require&channel_binding=require` — our SQLAlchemy config strips
+  libpq-only params for asyncpg automatically (see `app/db/session.py`).
+- ** CORS errors from the frontend**: add the Cloudflare Pages domain to
+  `CORS_ORIGINS` env var (comma-separated), e.g.
+  `CORS_ORIGINS=http://localhost:5173,https://asistcv-frontend.pages.dev`.
