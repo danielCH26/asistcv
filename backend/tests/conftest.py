@@ -29,8 +29,15 @@ _test_factory = None
 
 
 def _to_sync_url(url: str) -> str:
-    """Devuelve la URL con driver sync (psycopg) para tareas admin."""
-    return url.replace("+asyncpg", "")
+    """Devuelve la URL sync para tareas admin con psycopg 3.
+
+    psycopg.connect() acepta `postgresql://` (sin driver) — psycopg 3 lo
+    interpreta correctamente. NO usar `postgresql+psycopg://` (psycopg 3 lo
+    rechaza como connection string, solo acepta esa forma como DSN parseado).
+    """
+    if "+asyncpg" in url:
+        return url.replace("+asyncpg", "")
+    return url
 
 
 def _ensure_database_exists(url: str) -> None:
