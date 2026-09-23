@@ -18,6 +18,7 @@ Los jobs corren en paralelo:
 | `test-backend` | Migraciones + pytest con cobertura, contra Postgres+pgvector real | `alembic upgrade head`, `pytest --cov=app` |
 | `test-mcp` | pytest del adapter (sin DB) | `uv run pytest` |
 | `docker-build` | Verifica que la imagen del backend compila (sin push) | `docker build -t asistcv-backend:ci ./backend` |
+| `frontend-i18n-parity` | Paridad de claves entre `es.json` y `en.json` del frontend (spec match-ui) | `npm ci && node scripts/check-i18n-keys.mjs` en `frontend/` |
 
 Detalles importantes:
 
@@ -38,8 +39,9 @@ Para que no se pueda mergear a `main` con CI rojo:
    - `Typecheck (mypy)`
    - `Tests (backend)`
    - `Tests (mcp-adapter)`
+   - `Frontend i18n parity`
 
-   > Los nombres de check son los `name:` de cada job. Si preferís referirte por job id, son `lint`, `typecheck`, `test-backend`, `test-mcp`.
+   > Los nombres de check son los `name:` de cada job. Si preferís referirte por job id, son `lint`, `typecheck`, `test-backend`, `test-mcp`, `frontend-i18n-parity`.
 5. Opcional pero recomendado:
    - **Require branches to be up to date before merging** (evita mergear código que pasó CI sobre un `main` distinto).
    - **Require a pull request before merging** si querés forzar revisión.

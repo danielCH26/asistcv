@@ -9,7 +9,7 @@
 	},
 	"home": {
 		"heading": "Paste a Job Description",
-		"intro": "Paste the JD text (minimum 50 characters) and get an honest match against your profile.",
+		"intro": "Paste the JD text (at least 50 characters) and get an honest match against your profile.",
 		"profileLabel": "Active profile",
 		"profileDefault": "Default profile (#1)"
 	},
@@ -18,16 +18,16 @@
 		"submit": "Analyze",
 		"submitting": "Analyzing…",
 		"charsHint": "{count} characters",
-		"validationShort": "The JD must have at least 50 characters before submitting.",
+		"validationShort": "The JD must be at least 50 characters before you can submit it.",
 		"validationEmpty": "Paste the JD text before submitting."
 	},
 	"loading": {
 		"title": "Analyzing…",
-		"subtitle": "It can take up to 1 minute if the server is in cold start.",
-		"detail": "When Render hibernates the container, the first request wakes the instance up."
+		"subtitle": "It can take up to a minute if the instance is waking up from cold start.",
+		"detail": "When Render hibernates the container, the first request after inactivity wakes it up."
 	},
 	"error": {
-		"title": "Could not analyze the match",
+		"title": "We couldn't analyze the match",
 		"retry": "Retry",
 		"401Hint": "Invalid credentials. Check PUBLIC_BACKEND_API_KEY in the frontend build."
 	},
@@ -39,16 +39,16 @@
 		"energyLow": "Low energy",
 		"energyMedium": "Medium energy",
 		"energyHigh": "High energy",
-		"modeComplete": "Complete profile",
+		"modeComplete": "Full profile",
 		"modeRetrieved": "Semantic retrieval",
 		"chunksUsed": "{count} chunks"
 	},
 	"history": {
 		"heading": "Analysis history",
-		"intro": "Previous analyses, ordered from newest to oldest.",
+		"intro": "Previous analyses, newest first.",
 		"loading": "Loading history…",
 		"empty": "No analyses yet.",
-		"errorLoad": "Could not load history.",
+		"errorLoad": "Couldn't load the history.",
 		"retry": "Retry",
 		"prev": "Previous",
 		"next": "Next",
@@ -62,7 +62,7 @@
 		"loading": "Loading detail…",
 		"notFound": "Analysis not found.",
 		"back": "Back to history",
-		"jobSnippet": "JD",
+		"jobSnippet": "Job Description",
 		"createdAt": "Analyzed on {date}"
 	},
 	"language": {

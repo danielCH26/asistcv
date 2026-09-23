@@ -7,7 +7,7 @@
 	import EnergyBadge from '$components/EnergyBadge.svelte';
 	import ReasoningBox from '$components/ReasoningBox.svelte';
 	import { loadAnalysisDetail } from '$stores/history';
-	import type { AnalysisDetail, EnergyLevel } from '$api/types';
+	import { ApiError, type AnalysisDetail, type EnergyLevel } from '$api/types';
 
 	export let data: { id: string };
 
@@ -15,11 +15,20 @@
 	let status: 'loading' | 'error' | 'done' = 'loading';
 	let errorMessage: string | null = null;
 
+	const SNIPPET_MAX_CHARS = 200;
+
 	function isEnergyLevel(value: string | null): value is EnergyLevel {
 		return value === 'low' || value === 'medium' || value === 'high';
 	}
 
 	$: energyLevel = detail && isEnergyLevel(detail.energy_level) ? detail.energy_level : null;
+
+	$: snippet =
+		detail
+			? detail.job_description.snippet.length > SNIPPET_MAX_CHARS
+				? detail.job_description.snippet.slice(0, SNIPPET_MAX_CHARS).trimEnd() + '…'
+				: detail.job_description.snippet
+			: '';
 
 	function formatDate(value: string): string {
 		try {
@@ -38,14 +47,19 @@
 			errorMessage = 'Invalid analysis id';
 			return;
 		}
-		const result = await loadAnalysisDetail(parsed);
-		if (!result) {
+		try {
+			const result = await loadAnalysisDetail(parsed);
+			if (!result) {
+				status = 'error';
+				errorMessage = null;
+				return;
+			}
+			detail = result;
+			status = 'done';
+		} catch (err) {
 			status = 'error';
-			errorMessage = 'Could not load detail';
-			return;
+			errorMessage = err instanceof ApiError ? err.message : 'Unexpected error';
 		}
-		detail = result;
-		status = 'done';
 	});
 
 	function back() {
@@ -64,15 +78,27 @@
 	</header>
 
 	{#if status === 'loading'}
-		<p>{$_('detail.loading')}</p>
+		<div class="detail__skeleton" role="status" aria-live="polite" aria-busy="true">
+			<div class="detail__skeleton-row detail__skeleton-row--top">
+				<div class="detail__skeleton detail__skeleton--score"></div>
+				<div class="detail__skeleton detail__skeleton--meta"></div>
+			</div>
+			<div class="detail__skeleton detail__skeleton--snippet"></div>
+			<div class="detail__skeleton detail__skeleton--list"></div>
+			<div class="detail__skeleton detail__skeleton--reasoning"></div>
+		</div>
+		<p class="detail__loading-text">{$_('detail.loading')}</p>
 	{/if}
 
 	{#if status === 'error'}
 		<div class="detail__error" role="alert">
-			<p>{$_('detail.notFound')}</p>
+			<p class="detail__error-title">{$_('detail.notFound')}</p>
 			{#if errorMessage}
 				<small>{errorMessage}</small>
 			{/if}
+			<button type="button" class="detail__error-back" on:click={back}>
+				{$_('detail.back')}
+			</button>
 		</div>
 	{/if}
 
@@ -81,9 +107,9 @@
 			<div class="detail__top">
 				<ScoreCard score={detail.score ?? 0} />
 				<div class="detail__meta">
-{#if energyLevel}
-					<EnergyBadge level={energyLevel} />
-				{/if}
+					{#if energyLevel}
+						<EnergyBadge level={energyLevel} />
+					{/if}
 					<p class="detail__date">
 						{$_('detail.createdAt', { values: { date: formatDate(detail.created_at) } })}
 					</p>
@@ -92,9 +118,13 @@
 
 			<section class="detail__jd">
 				<h3>{$_('detail.jobSnippet')}</h3>
-				<p class="detail__snippet">{detail.job_description.snippet}</p>
+				<p class="detail__snippet">{snippet}</p>
 				{#if detail.job_description.title}
-					<small>{detail.job_description.title}{detail.job_description.company ? ` · ${detail.job_description.company}` : ''}</small>
+					<small>
+						{detail.job_description.title}{detail.job_description.company
+							? ` · ${detail.job_description.company}`
+							: ''}
+					</small>
 				{/if}
 			</section>
 
@@ -133,6 +163,10 @@
 		background: var(--surface);
 		color: var(--text);
 		cursor: pointer;
+	}
+
+	.detail__back:hover {
+		background: var(--surface-alt);
 	}
 
 	.detail__card {
@@ -183,10 +217,117 @@
 	}
 
 	.detail__error {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
 		padding: 1rem 1.25rem;
 		background: var(--error-bg);
 		color: var(--error);
 		border: 1px solid var(--error);
 		border-radius: 8px;
+	}
+
+	.detail__error-title {
+		margin: 0;
+		font-weight: 600;
+	}
+
+	.detail__error-back {
+		align-self: flex-start;
+		margin-top: 0.5rem;
+		padding: 0.4rem 0.75rem;
+		border: 1px solid var(--error);
+		border-radius: 6px;
+		background: transparent;
+		color: var(--error);
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.detail__skeleton {
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		padding: 1.5rem;
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.detail__skeleton-row {
+		display: flex;
+		gap: 1rem;
+		flex-wrap: wrap;
+	}
+
+	.detail__skeleton-row--top {
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	.detail__skeleton--score,
+	.detail__skeleton--meta,
+	.detail__skeleton--snippet,
+	.detail__skeleton--list,
+	.detail__skeleton--reasoning {
+		background: linear-gradient(
+			90deg,
+			var(--surface-alt) 0%,
+			var(--border) 50%,
+			var(--surface-alt) 100%
+		);
+		background-size: 200% 100%;
+		animation: skeleton-shimmer 1.4s ease-in-out infinite;
+		border-radius: 8px;
+		min-height: 1.25rem;
+	}
+
+	.detail__skeleton--score {
+		min-width: 140px;
+		min-height: 110px;
+	}
+
+	.detail__skeleton--meta {
+		flex: 1;
+		min-width: 180px;
+		min-height: 60px;
+	}
+
+	.detail__skeleton--snippet {
+		min-height: 80px;
+	}
+
+	.detail__skeleton--list {
+		min-height: 120px;
+	}
+
+	.detail__skeleton--reasoning {
+		min-height: 100px;
+	}
+
+	.detail__loading-text {
+		margin: 0;
+		text-align: center;
+		color: var(--text-muted);
+		font-size: 0.9rem;
+	}
+
+	@keyframes skeleton-shimmer {
+		0% {
+			background-position: 200% 0;
+		}
+		100% {
+			background-position: -200% 0;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.detail__skeleton--score,
+		.detail__skeleton--meta,
+		.detail__skeleton--snippet,
+		.detail__skeleton--list,
+		.detail__skeleton--reasoning {
+			animation: none;
+		}
 	}
 </style>
