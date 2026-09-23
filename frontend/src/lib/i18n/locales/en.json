@@ -1,0 +1,73 @@
+{
+	"app": {
+		"title": "AsistCV",
+		"tagline": "JD ↔ Profile Match",
+		"nav": {
+			"home": "Home",
+			"history": "History"
+		}
+	},
+	"home": {
+		"heading": "Paste a Job Description",
+		"intro": "Paste the JD text (minimum 50 characters) and get an honest match against your profile.",
+		"profileLabel": "Active profile",
+		"profileDefault": "Default profile (#1)"
+	},
+	"form": {
+		"placeholder": "Paste the full JD text here…",
+		"submit": "Analyze",
+		"submitting": "Analyzing…",
+		"charsHint": "{count} characters",
+		"validationShort": "The JD must have at least 50 characters before submitting.",
+		"validationEmpty": "Paste the JD text before submitting."
+	},
+	"loading": {
+		"title": "Analyzing…",
+		"subtitle": "It can take up to 1 minute if the server is in cold start.",
+		"detail": "When Render hibernates the container, the first request wakes the instance up."
+	},
+	"error": {
+		"title": "Could not analyze the match",
+		"retry": "Retry",
+		"401Hint": "Invalid credentials. Check PUBLIC_BACKEND_API_KEY in the frontend build."
+	},
+	"result": {
+		"scoreLabel": "Score",
+		"strengths": "Strengths",
+		"gaps": "Gaps",
+		"reasoning": "Reasoning",
+		"energyLow": "Low energy",
+		"energyMedium": "Medium energy",
+		"energyHigh": "High energy",
+		"modeComplete": "Complete profile",
+		"modeRetrieved": "Semantic retrieval",
+		"chunksUsed": "{count} chunks"
+	},
+	"history": {
+		"heading": "Analysis history",
+		"intro": "Previous analyses, ordered from newest to oldest.",
+		"loading": "Loading history…",
+		"empty": "No analyses yet.",
+		"errorLoad": "Could not load history.",
+		"retry": "Retry",
+		"prev": "Previous",
+		"next": "Next",
+		"page": "Page {page}",
+		"scoreShort": "Score {score}",
+		"dateUnknown": "Unknown date",
+		"view": "View detail"
+	},
+	"detail": {
+		"heading": "Analysis detail",
+		"loading": "Loading detail…",
+		"notFound": "Analysis not found.",
+		"back": "Back to history",
+		"jobSnippet": "JD",
+		"createdAt": "Analyzed on {date}"
+	},
+	"language": {
+		"toggle": "Toggle language",
+		"es": "Español",
+		"en": "English"
+	}
+}

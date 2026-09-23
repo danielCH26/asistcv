@@ -1,0 +1,73 @@
+{
+	"app": {
+		"title": "AsistCV",
+		"tagline": "Match JD ↔ Perfil",
+		"nav": {
+			"home": "Inicio",
+			"history": "Historial"
+		}
+	},
+	"home": {
+		"heading": "Pegá una Job Description",
+		"intro": "Pegá el texto del JD (mínimo 50 caracteres) y obtené un match honesto contra tu perfil.",
+		"profileLabel": "Perfil activo",
+		"profileDefault": "Perfil por defecto (#1)"
+	},
+	"form": {
+		"placeholder": "Pegá acá el texto completo del JD…",
+		"submit": "Analizar",
+		"submitting": "Analizando…",
+		"charsHint": "{count} caracteres",
+		"validationShort": "El JD debe tener al menos 50 caracteres para enviarse.",
+		"validationEmpty": "Pegá el texto del JD antes de enviar."
+	},
+	"loading": {
+		"title": "Analizando…",
+		"subtitle": "Puede tardar hasta 1 minuto si el servidor está en cold start.",
+		"detail": "Cuando Render hiberna el contenedor, el primer request despierta la instancia."
+	},
+	"error": {
+		"title": "No se pudo analizar el match",
+		"retry": "Reintentar",
+		"401Hint": "Credenciales inválidas. Verificá PUBLIC_BACKEND_API_KEY en el build del frontend."
+	},
+	"result": {
+		"scoreLabel": "Score",
+		"strengths": "Fortalezas",
+		"gaps": "Gaps",
+		"reasoning": "Razonamiento",
+		"energyLow": "Baja energía",
+		"energyMedium": "Energía media",
+		"energyHigh": "Alta energía",
+		"modeComplete": "Perfil completo",
+		"modeRetrieved": "Retrieval semántico",
+		"chunksUsed": "{count} fragmentos"
+	},
+	"history": {
+		"heading": "Historial de análisis",
+		"intro": "Análisis previos ordenados del más nuevo al más antiguo.",
+		"loading": "Cargando historial…",
+		"empty": "Aún no hay análisis.",
+		"errorLoad": "No se pudo cargar el historial.",
+		"retry": "Reintentar",
+		"prev": "Anterior",
+		"next": "Siguiente",
+		"page": "Página {page}",
+		"scoreShort": "Score {score}",
+		"dateUnknown": "Fecha desconocida",
+		"view": "Ver detalle"
+	},
+	"detail": {
+		"heading": "Detalle del análisis",
+		"loading": "Cargando detalle…",
+		"notFound": "Análisis no encontrado.",
+		"back": "Volver al historial",
+		"jobSnippet": "JD",
+		"createdAt": "Analizado el {date}"
+	},
+	"language": {
+		"toggle": "Cambiar idioma",
+		"es": "Español",
+		"en": "English"
+	}
+}
