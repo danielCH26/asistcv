@@ -56,8 +56,8 @@ async def seed_initial_data():
             experience=seed_data["experience"],
             skills=seed_data["skills"],
             preferences=seed_data["preferences"],
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(datetime.UTC),
+            updated_at=datetime.now(datetime.UTC),
         )
 
         session.add(profile)
