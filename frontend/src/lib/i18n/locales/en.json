@@ -214,6 +214,8 @@
 		"limitReached": "You reached your plan's match limit this month.",
 		"upgradeCta": "Upgrade my plan",
 		"noCustomer": "You don't have an active subscription to manage yet.",
+		"noPortal": "You don't have an active subscription yet.",
+		"chooseCta": "Choose a plan",
 		"emailRequired": "Verify your email before purchasing a plan.",
 		"checkoutError": "Could not start checkout. Please try again.",
 		"portalError": "Could not open the billing portal.",

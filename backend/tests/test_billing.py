@@ -496,6 +496,102 @@ async def test_plans_endpoint_recruiter_agency_unlimited(
     assert agency["limits"]["analyses_per_month"] is None
 
 
+async def test_plans_endpoint_is_public_without_auth(async_client, clean_db):
+    """GET /v1/billing/plans without any auth header -> 200 + non-empty list.
+
+    Regression guard: previously the billing router mounted with
+    `dependencies=[Depends(verify_api_key)]` at app/main.py, blocking the
+    pricing catalog from the conversion funnel (curl -i -> 401). The catalog
+    is the public pricing page visitors see before signing up, so /plans
+    must stay open; auth is enforced on /checkout, /portal, /subscription
+    at the endpoint level.
+    """
+    response = await async_client.get("/v1/billing/plans")
+
+    assert response.status_code == 200
+    plans = response.json()
+    assert isinstance(plans, list)
+    assert len(plans) > 0
+    assert {p["plan_id"] for p in plans} >= {
+        "free",
+        "job_seeker_monthly",
+        "recruiter_starter",
+    }
+
+
+async def test_subscription_has_portal_access_true_when_active(
+    async_client, clean_db, billing_user
+):
+    """Active sub with a stripe_customer_id -> has_portal_access is True."""
+    async with clean_db.session_factory() as session:
+        session.add(
+            Subscription(
+                user_id=billing_user.id,
+                plan="job_seeker_monthly",
+                status="active",
+                stripe_customer_id="cus_test_42",
+            )
+        )
+        await session.commit()
+
+    response = await async_client.get(
+        "/v1/billing/subscription", headers=_auth_header(billing_user)
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["stripe_customer_id"] == "cus_test_42"
+    assert data["has_portal_access"] is True
+
+
+async def test_subscription_has_portal_access_false_without_customer(
+    async_client, clean_db, billing_user
+):
+    """Free-tier user with no stripe_customer_id -> has_portal_access False.
+
+    The Portal CTA on the frontend must hide / disable itself in this case
+    to prevent the 400 NO_CUSTOMER response from /v1/billing/portal.
+    """
+    response = await async_client.get(
+        "/v1/billing/subscription", headers=_auth_header(billing_user)
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["stripe_customer_id"] is None
+    assert data["has_portal_access"] is False
+
+
+async def test_subscription_has_portal_access_false_for_canceled(
+    async_client, clean_db, billing_user
+):
+    """Canceled sub is filtered out by the endpoint's active-status query.
+
+    The endpoint only returns ``status == "active"`` rows, so a canceled sub
+    surfaces as no sub at all (free fallback) and ``has_portal_access`` must
+    be False — even if a stale ``stripe_customer_id`` lingers on disk.
+    """
+    async with clean_db.session_factory() as session:
+        session.add(
+            Subscription(
+                user_id=billing_user.id,
+                plan="job_seeker_monthly",
+                status="canceled",
+                stripe_customer_id="cus_stale_42",
+            )
+        )
+        await session.commit()
+
+    response = await async_client.get(
+        "/v1/billing/subscription", headers=_auth_header(billing_user)
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["stripe_customer_id"] is None
+    assert data["has_portal_access"] is False
+
+
 # === Portal endpoint tests ===
 
 

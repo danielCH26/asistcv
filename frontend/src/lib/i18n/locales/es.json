@@ -214,6 +214,8 @@
 		"limitReached": "Alcanzaste el límite de matches de tu plan este mes.",
 		"upgradeCta": "Mejorar mi plan",
 		"noCustomer": "Todavía no tenés una suscripción activa para administrar.",
+		"noPortal": "Todavía no tenés una suscripción activa.",
+		"chooseCta": "Elegir un plan",
 		"emailRequired": "Verificá tu email antes de comprar un plan.",
 		"checkoutError": "No se pudo iniciar el pago. Reintentá.",
 		"portalError": "No se pudo abrir el portal de facturación.",

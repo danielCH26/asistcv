@@ -17,6 +17,11 @@
 
 	let portalBusy = false;
 	let portalError = '';
+	let plansSection: HTMLElement | null = null;
+
+	function scrollToPlans() {
+		plansSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+	}
 
 	function priceLabel(plan: Plan): string {
 		if (plan.price_cents === 0) return $_('billing.free');
@@ -102,14 +107,21 @@
 				{#if subscription.overage > 0}
 					<p class="billing__usage">{$_('billing.overage', { values: { overage: subscription.overage } })}</p>
 				{/if}
-				<button type="button" disabled={portalBusy} on:click={openPortal}>
-					{$_('billing.manageCta')}
-				</button>
-				{#if portalError}<p class="billing__error">{portalError}</p>{/if}
+				{#if subscription.has_portal_access}
+					<button type="button" disabled={portalBusy} on:click={openPortal}>
+						{$_('billing.manageCta')}
+					</button>
+					{#if portalError}<p class="billing__error">{portalError}</p>{/if}
+				{:else}
+					<p class="billing__no-portal">{$_('billing.noPortal')}</p>
+					<button type="button" class="billing__choose-cta" on:click={scrollToPlans}>
+						{$_('billing.chooseCta')}
+					</button>
+				{/if}
 			</section>
 		{/if}
 
-		<section class="billing__plans">
+		<section class="billing__plans" bind:this={plansSection}>
 			<h2>{$_('billing.plansHeading')}</h2>
 			<div class="billing__method">
 				<span>{$_('billing.paymentMethod')}:</span>
@@ -199,6 +211,23 @@
 	.billing__current button:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+
+	.billing__no-portal {
+		margin: 0;
+		font-size: 0.9rem;
+		color: var(--text-muted);
+	}
+
+	.billing__choose-cta {
+		align-self: flex-start;
+		padding: 0.5rem 1rem;
+		border: none;
+		border-radius: 8px;
+		background: var(--accent);
+		color: var(--accent-contrast);
+		font-weight: 600;
+		cursor: pointer;
 	}
 
 	.billing__error {

@@ -48,6 +48,14 @@ class SubscriptionResponse(BaseModel):
     limits: dict[str, Any]
     usage: dict[str, Any]
     overage: int = 0
+    stripe_customer_id: str | None = None
+    has_portal_access: bool = False
+
+
+# Statuses that grant access to the Stripe Customer Portal. A canceled or
+# incomplete subscription has no Stripe customer (or a stale one), so the
+# portal CTA must be hidden to avoid a 400 NO_CUSTOMER from /v1/billing/portal.
+_PORTAL_STATUSES = frozenset({"active", "trialing", "past_due"})
 
 
 class PlanResponse(BaseModel):
@@ -267,4 +275,10 @@ async def get_subscription(current_user: User = Depends(get_current_user)):
             "analyses_used": limits.analyses_used,
         },
         overage=overage,
+        stripe_customer_id=sub.stripe_customer_id if sub else None,
+        has_portal_access=bool(
+            sub is not None
+            and sub.stripe_customer_id is not None
+            and sub.status in _PORTAL_STATUSES
+        ),
     )

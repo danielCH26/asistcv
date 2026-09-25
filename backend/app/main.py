@@ -198,13 +198,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         dependencies=[Depends(verify_api_key), Depends(check_recruiter_consent)],
     )
 
-    # Billing endpoints (require auth)
+    # Billing endpoints. /plans is public (conversion funnel — visitors must
+    # see pricing before signing up); the other endpoints enforce auth at the
+    # endpoint level via Depends(get_current_user).
     from app.api.v1 import billing
 
     app.include_router(
         billing.router,
         prefix=settings.api_prefix,
-        dependencies=[Depends(verify_api_key)],
     )
 
     # Stripe webhook endpoint (no auth - uses signature verification)

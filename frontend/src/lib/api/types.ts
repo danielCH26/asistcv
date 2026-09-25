@@ -182,6 +182,10 @@ export interface SubscriptionInfo {
 	limits: Record<string, unknown>;
 	usage: Record<string, unknown>;
 	overage: number;
+	/** Stripe customer id from the active subscription; null for free-tier users. */
+	stripe_customer_id?: string | null;
+	/** True when the user has an active Stripe subscription we can open the portal for. */
+	has_portal_access: boolean;
 }
 
 export interface AuditIssue {

@@ -9,7 +9,7 @@ UI con formulario que acepta texto libre de JD y lo envía a `POST /v1/match`.
 #### Scenario: Envío exitoso
 
 - GIVEN un JD pegado de ≥ 50 caracteres
-- AND la API key disponible en el bundle de build
+- AND la sesión de usuario autenticada (JWT)
 - WHEN el usuario envía el formulario
 - THEN la UI muestra indicador de carga
 - AND al recibir 200 navega a la vista de resultado con `score`, `strengths`, `gaps`, `energy_level`, `reasoning`
@@ -22,15 +22,55 @@ UI con formulario que acepta texto libre de JD y lo envía a `POST /v1/match`.
 
 #### Scenario: Error 401 mostrado con claridad
 
-- GIVEN la API key enviada no es válida
+- GIVEN la sesión expiró o es inválida
 - WHEN el backend responde 401
-- THEN la UI muestra mensaje accionable sobre credenciales
+- THEN la UI muestra mensaje accionable sobre credenciales y redirige a login
 
 #### Scenario: Error de red o 5xx con retry
 
 - GIVEN el backend retorna 5xx o hay error de red
 - WHEN la llamada falla
 - THEN la UI muestra error con opción de reintentar
+
+### Requirement: Sesión de usuario vía JWT (en lugar de API key de build)
+
+La UI mantiene una sesión de usuario: tras login/registro, guarda el `access_token` y `refresh_token` en almacenamiento seguro del cliente (cookie httpOnly si se sirve vía BFF, o `localStorage` con refresco proactivo si se mantiene estático) y envía `Authorization: Bearer <jwt>` en cada llamada. La API key de build-time deja de existir y nunca aparece en el bundle.
+
+(Previously: `PUBLIC_BACKEND_API_KEY` se inyectaba al bundle y se enviaba como Bearer en cada request.)
+
+#### Scenario: Login persiste tokens
+
+- GIVEN el usuario envía credenciales válidas en `POST /v1/auth/login`
+- WHEN el backend responde 200 con `access_token` y `refresh_token`
+- THEN la UI persiste ambos tokens de forma segura
+- AND todas las llamadas subsiguientes envían `Authorization: Bearer <access_token>`
+
+#### Scenario: Refresh automático antes de expirar
+
+- GIVEN el `access_token` está a < 60 s de expirar
+- WHEN la UI intenta una nueva llamada
+- THEN primero llama a `POST /v1/auth/refresh` con el `refresh_token`
+- AND renueva el `access_token` antes de enviar la llamada de negocio
+
+#### Scenario: Refresh falla y fuerza logout
+
+- GIVEN el `refresh_token` está revocado o expirado
+- WHEN la UI intenta refrescar
+- THEN recibe 401 y limpia los tokens
+- AND redirige a `/login`
+
+#### Scenario: Build sin variable de API key
+
+- GIVEN `PUBLIC_BACKEND_API_KEY` ya no se usa
+- WHEN se ejecuta el build de producción
+- THEN el build no falla por variables de API key ausentes
+- Y el bundle no contiene ninguna API key en texto plano
+
+#### Scenario: No hay credenciales hardcodeadas
+
+- GIVEN el código fuente de la UI
+- WHEN se hace grep por `BACKEND_API_KEY`, `Bearer ` literal o strings sospechosas
+- THEN no aparecen valores de credenciales reales
 
 ### Requirement: Vista de resultado del match
 
@@ -53,7 +93,7 @@ La UI lista análisis previos consumiendo `GET /v1/analyses`.
 
 - GIVEN el usuario abre la vista de historial
 - WHEN el componente se monta
-- THEN se llama a `GET /v1/analyses` con la API key
+- THEN se llama a `GET /v1/analyses` con el JWT del usuario
 - AND se renderiza una lista con score, fecha y referencia al JD
 
 #### Scenario: Historial vacío
@@ -88,7 +128,9 @@ UI en español e inglés, detección del idioma del navegador y toggle manual. L
 
 ### Requirement: API key vía build-time env
 
-La API key se inyecta desde `PUBLIC_BACKEND_API_KEY` al build. Nunca aparece en código fuente versionado.
+**DEPRECATED**: La API key de build-time fue reemplazada por JWT. Esta sección se mantiene por compatibilidad con el historial.
+
+La API key se inyectaba desde `PUBLIC_BACKEND_API_KEY` al build. Nunca aparecía en código fuente versionado.
 
 #### Scenario: Build falla sin la env var
 
