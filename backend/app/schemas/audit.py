@@ -79,6 +79,13 @@ class ClaimAuditResponse(BaseModel):
 
     success: bool = Field(..., description="Whether the claim was successful")
     message: str = Field(..., description="Status message")
+    analysis_id: int | None = Field(
+        default=None,
+        description=(
+            "ID of the persisted analysis row when the claim created one; "
+            "null when the audit was already claimed (idempotent retry)"
+        ),
+    )
 
 
 class AuditRetrieveResponse(BaseModel):

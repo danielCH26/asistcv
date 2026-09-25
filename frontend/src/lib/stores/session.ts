@@ -190,7 +190,13 @@ export async function login(email: string, password: string): Promise<SessionUse
 	return user;
 }
 
-export async function signup(payload: SignUpPayload): Promise<SessionUser> {
+export interface SignupResult {
+	user: SessionUser;
+	/** ID del análisis recién creado si había un audit pendiente. */
+	analysis_id?: number;
+}
+
+export async function signup(payload: SignUpPayload): Promise<SignupResult> {
 	const res = await fetch(`${API_BASE}/v1/auth/register`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -200,8 +206,8 @@ export async function signup(payload: SignUpPayload): Promise<SessionUser> {
 	const tokens = (await res.json()) as TokenResponse;
 	const user = await fetchMe(tokens.access_token);
 	session.set(toSession(tokens, user));
-	await claimPendingAudit(user.id);
-	return user;
+	const analysis_id = await claimPendingAudit(user.id);
+	return analysis_id !== undefined ? { user, analysis_id } : { user };
 }
 
 /** Audit token pendiente de vincular (funnel anónimo → cuenta). */
@@ -218,19 +224,24 @@ export function clearPendingAuditToken(): void {
 	if (browser) localStorage.removeItem(AUDIT_TOKEN_KEY);
 }
 
-async function claimPendingAudit(userId: number): Promise<void> {
+async function claimPendingAudit(userId: number): Promise<number | undefined> {
 	const token = getPendingAuditToken();
-	if (!token) return;
+	if (!token) return undefined;
 	try {
 		const res = await fetch(`${API_BASE}/v1/audit/${encodeURIComponent(token)}/claim`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
 			body: JSON.stringify({ audit_token: token, user_id: userId })
 		});
-		if (res.ok) clearPendingAuditToken();
+		if (res.ok) {
+			const body = (await res.json()) as { analysis_id?: number | null };
+			clearPendingAuditToken();
+			return typeof body.analysis_id === 'number' ? body.analysis_id : undefined;
+		}
 	} catch {
 		// Claim best-effort: no bloquea el registro.
 	}
+	return undefined;
 }
 
 export async function logout(): Promise<void> {

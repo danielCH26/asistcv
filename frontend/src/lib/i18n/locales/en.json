@@ -78,7 +78,9 @@
 		"notFound": "Analysis not found.",
 		"back": "Back to history",
 		"jobSnippet": "JD",
-		"createdAt": "Analyzed on {date}"
+		"createdAt": "Analyzed on {date}",
+		"invalidId": "Invalid analysis ID.",
+		"unexpectedError": "Unexpected error"
 	},
 	"language": {
 		"toggle": "Switch language",

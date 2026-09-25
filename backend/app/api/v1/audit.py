@@ -9,12 +9,15 @@ Provides:
 - POST /internal/audit/cleanup - Internal endpoint for retention cron
 """
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import col
 
 from app.core.logging import get_logger
-from app.db.models import AuditFunnelEvent, AuditUpload, User
+from app.db.models import Analysis, AuditFunnelEvent, AuditUpload, JobDescription, User
 from app.db.session import get_session_context
 from app.schemas.audit import (
     AuditAnonymousResponse,
@@ -337,7 +340,11 @@ async def claim_audit(
     """
     Claim an audit after user signup.
 
-    Links an anonymous audit to a user account so they can view it in their history.
+    Links an anonymous audit to a user account and materializes the audit
+    result into a persistent ``Analysis`` row so the user lands in their
+    history at ``/history/{analysis_id}`` (instead of a stale profile).
+    Idempotent: a second claim of the same audit returns the existing
+    analysis_id (or None if no result was ever materialized).
     """
     token_hash = compute_token_hash(token)
 
@@ -366,11 +373,15 @@ async def claim_audit(
                 detail={"code": "AUDIT_NOT_FOUND", "message": "Audit not found"},
             )
 
-        # Check if already linked
+        # Idempotent retry: the audit was already linked, return the
+        # existing analysis_id (best-effort lookup, None if it was
+        # claimed before the analysis materialization shipped).
         if audit.linked_user_id is not None:
+            existing_id = await _find_analysis_for_audit(session, audit.id)
             return ClaimAuditResponse(
                 success=True,
                 message="Audit already linked to an account",
+                analysis_id=existing_id,
             )
 
         # Link audit to user
@@ -383,6 +394,17 @@ async def claim_audit(
             pass
         else:
             audit.expires_at = calculate_expiry()
+
+        # Materialize the audit into a persistent Analysis row so the
+        # user lands in their history. Skip silently when the audit has
+        # no persisted result (e.g. capture-email-only without analysis).
+        analysis_id: int | None = None
+        if audit.audit_result_json is not None:
+            analysis_id = await _materialize_analysis_from_audit(
+                session=session,
+                audit=audit,
+                owner_user_id=body.user_id,
+            )
 
         # Log funnel event
         event = AuditFunnelEvent(
@@ -397,6 +419,7 @@ async def claim_audit(
     return ClaimAuditResponse(
         success=True,
         message="Audit linked to your account successfully",
+        analysis_id=analysis_id,
     )
 
 
@@ -496,3 +519,98 @@ async def cleanup_audits(
         "status": "success",
         "deleted_count": deleted_count,
     }
+
+
+async def _find_analysis_for_audit(
+    session: AsyncSession,
+    audit_id: int,
+) -> int | None:
+    """Return the analysis_id we previously materialized for an audit, if any.
+
+    The link between ``AuditUpload`` and ``Analysis`` is implicit: the
+    analysis row stores the audit result data but does not carry a foreign
+    key. We resolve it by matching score + reasoning against prior
+    analyses owned by the same user. Returns ``None`` when nothing matches
+    (no materialization yet, or the audit was a cv_only without a JD).
+    """
+    audit = await session.get(AuditUpload, audit_id)
+    if audit is None or audit.linked_user_id is None:
+        return None
+
+    result = await session.execute(
+        select(Analysis)
+        .where(Analysis.owner_user_id == audit.linked_user_id)
+        .order_by(col(Analysis.id).desc())
+    )
+    target_score = _audit_score(audit)
+    target_reasoning = _audit_reasoning(audit)
+    for row in result.scalars():
+        if row.score == target_score and row.reasoning == target_reasoning:
+            return cast(int, row.id)
+    return None
+
+
+def _audit_score(audit: AuditUpload) -> int | None:
+    """Best-effort score extraction from ``audit_result_json``."""
+    if audit.audit_result_json is None:
+        return None
+    raw = audit.audit_result_json.get("score")
+    return int(raw) if isinstance(raw, (int, float)) else None
+
+
+def _audit_reasoning(audit: AuditUpload) -> str | None:
+    """Best-effort reasoning extraction from ``audit_result_json``."""
+    if audit.audit_result_json is None:
+        return None
+    raw = audit.audit_result_json.get("reasoning")
+    return str(raw) if raw is not None else None
+
+
+async def _materialize_analysis_from_audit(
+    session: AsyncSession,
+    audit: AuditUpload,
+    owner_user_id: int,
+) -> int | None:
+    """Promote an anonymous ``AuditUpload`` into a persistent ``Analysis``.
+
+    Creates a matching ``JobDescription`` row (required FK) and an
+    ``Analysis`` row owned by ``owner_user_id`` that the user can view
+    under ``/v1/analyses/{id}``. Returns the new analysis id.
+
+    Returns ``None`` only when the audit's ``result_json`` is missing or
+    shaped wrong — callers must treat ``None`` as a soft skip.
+    """
+    result_json = audit.audit_result_json or {}
+    jd_text = audit.jd_text or "Anonymous CV-only audit"
+    score = result_json.get("score")
+    strengths = result_json.get("strengths") or result_json.get("fortalezas") or []
+    gaps = result_json.get("gaps") or []
+    energy_level = result_json.get("energy_level")
+    reasoning = result_json.get("reasoning")
+
+    if not isinstance(score, (int, float)):
+        return None
+
+    job_description = JobDescription(
+        raw_text=jd_text,
+        source="audit_claim",
+    )
+    session.add(job_description)
+    await session.flush()
+
+    analysis_row = Analysis(
+        job_description_id=cast(int, job_description.id),
+        profile_id=None,
+        profile_snapshot=None,
+        score=int(score),
+        strengths=list(strengths),
+        gaps=list(gaps),
+        energy_level=str(energy_level) if energy_level is not None else None,
+        reasoning=str(reasoning) if reasoning is not None else None,
+        embedding=None,
+        embedding_model=None,
+        owner_user_id=owner_user_id,
+    )
+    session.add(analysis_row)
+    await session.flush()
+    return cast(int, analysis_row.id)

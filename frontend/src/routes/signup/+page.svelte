@@ -31,7 +31,7 @@
 		status = 'loading';
 		errorMessage = '';
 		try {
-			const user = await signup({
+			const result = await signup({
 				email,
 				password,
 				role,
@@ -47,7 +47,11 @@
 				apiClient.clearAuditToken();
 			}
 			startOnboarding();
-			await goto(homeForRole(user.role));
+			if (result.analysis_id !== undefined) {
+				await goto(`/history/${result.analysis_id}`);
+				return;
+			}
+			await goto(homeForRole(result.user.role));
 		} catch (err) {
 			status = 'error';
 			if (err instanceof ApiError) {

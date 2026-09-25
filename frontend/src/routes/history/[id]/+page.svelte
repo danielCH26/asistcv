@@ -44,7 +44,7 @@
 		const parsed = Number.parseInt(data.id, 10);
 		if (!Number.isFinite(parsed) || parsed <= 0) {
 			status = 'error';
-			errorMessage = 'Invalid analysis id';
+			errorMessage = $_('detail.invalidId');
 			return;
 		}
 		try {
@@ -58,7 +58,7 @@
 			status = 'done';
 		} catch (err) {
 			status = 'error';
-			errorMessage = err instanceof ApiError ? err.message : 'Unexpected error';
+			errorMessage = err instanceof ApiError ? err.message : $_('detail.unexpectedError');
 		}
 	});
 
