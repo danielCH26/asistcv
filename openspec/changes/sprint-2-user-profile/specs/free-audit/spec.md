@@ -2,48 +2,68 @@
 
 ## Purpose
 
-Funnel de auditoría gratuita y anónima: un visitante sube un JD y
-un CV, recibe un análisis de match sin crear cuenta, y al final
-se le ofrece opcionalmente capturar el email para enviar el
-resultado. Limita el abuso por IP (3/día) y retiene los datos
-crudos 30 días como máximo.
+Funnel de auditoría gratuita y anónima: un visitante sube un CV
+(opcional y recomendado: una JD), recibe un análisis de calidad del
+CV —o de match contra la JD si la provee— sin crear cuenta, y al
+final se le ofrece opcionalmente capturar el email para enviar el
+resultado. El gancho de conversión es la auditoría del CV en sí
+(CV-only); el análisis dirigido por JD es un bonus. Limita el abuso
+por IP (3/día) y retiene los datos crudos 30 días como máximo.
 
 ## ADDED Requirements
 
 ### Requirement: Auditoría anónima
 
-`POST /v1/audit/anonymous` acepta `jd_text` (≥ 50 chars) y un CV
-por multipart sin requerir autenticación. El CV se envía por
-exactamente UNO de dos caminos: `cv_file` (PDF ≤ 10 MB, parseado
-en el servidor) o `cv_text` (texto pegado, ≥ 50 chars). Devuelve
-un `MatchAnalysis` idéntico al endpoint autenticado (más
-`audit_token`) pero sin persistir el análisis en `analyses` ni el
+`POST /v1/audit/anonymous` acepta un CV y un `jd_text` OPCIONAL por
+multipart sin requerir autenticación. El CV se envía por exactamente
+UNO de dos caminos: `cv_file` (PDF ≤ 10 MB, parseado en el servidor)
+o `cv_text` (texto pegado, ≥ 50 chars). Sin `jd_text` (o vacío) corre
+el modo CV-only (auditoría de calidad del CV); con `jd_text` (≥ 50
+chars) corre el modo jd_directed (match CV vs JD). La respuesta indica
+el modo con `mode: "cv_only" | "jd_directed"`. En cv_only incluye
+`score`, `problematicas` (con `seccion`, `problema`, `severidad`),
+`recomendaciones` y `fortalezas`; en jd_directed devuelve un
+`MatchAnalysis` idéntico al endpoint autenticado. En ambos casos se
+agrega `audit_token`, sin persistir el análisis en `analyses` ni el
 CV en `users_cvs`.
 
-#### Scenario: Auditoría exitosa con PDF (sin autenticación)
+#### Scenario: Auditoría CV-only con PDF (sin autenticación, sin JD)
 
 - GIVEN un visitante anónimo (sin JWT, sin API key)
-- AND un JD de ≥ 50 caracteres
 - AND un PDF ≤ 10 MB con texto extraíble
 - WHEN envía `POST /v1/audit/anonymous` (multipart) con `cv_file`
-  y `jd_text`
-- THEN el sistema responde 200 con `audit_token`, `score`,
-  `strengths`, `gaps`, `energy_level`, `reasoning`
-- AND el CV queda en `audit_uploads` con `expires_at = now() + 30d`
+  y SIN `jd_text`
+- THEN el sistema responde 200 con `mode = "cv_only"`, `audit_token`,
+  `score`, `problematicas` (cada una con `seccion`, `problema`,
+  `severidad`), `recomendaciones` y `fortalezas`
+- AND el CV queda en `audit_uploads` con `jd_text = NULL`,
+  `audit_result_json.mode = "cv_only"` y
+  `expires_at = now() + 30d`
 - Y el análisis NO se persiste en `analyses`
 
-#### Scenario: Auditoría exitosa con texto pegado
+#### Scenario: Auditoría CV-only con texto pegado
+
+- GIVEN un visitante anónimo sin JD
+- WHEN envía `POST /v1/audit/anonymous` (multipart) con `cv_text`
+  (≥ 50 chars) y sin `jd_text`
+- THEN el sistema responde 200 con `mode = "cv_only"` y el análisis
+  de calidad del CV
+
+#### Scenario: Auditoría exitosa dirigida por JD (jd_directed)
 
 - GIVEN un visitante anónimo y un JD de ≥ 50 caracteres
-- WHEN envía `POST /v1/audit/anonymous` (multipart) con `cv_text`
-  (≥ 50 chars) y `jd_text`
-- THEN el sistema responde 200 con `audit_token` y el análisis
+- WHEN envía `POST /v1/audit/anonymous` (multipart) con un CV
+  (por `cv_file` o `cv_text` ≥ 50 chars) y `jd_text`
+- THEN el sistema responde 200 con `mode = "jd_directed"`,
+  `audit_token`, `score`, `strengths`, `gaps`, `energy_level`,
+  `reasoning`
 
-#### Scenario: JD corto
+#### Scenario: JD corto (solo cuando se provee)
 
-- GIVEN un `jd_text` < 50 caracteres
-- WHEN el visitante envía `POST /v1/audit`
+- GIVEN un `jd_text` provisto con < 50 caracteres
+- WHEN el visitante envía `POST /v1/audit/anonymous` con `jd_text`
 - THEN el sistema responde 422 con código `JD_TOO_SHORT`
+- AND la ausencia de `jd_text` NUNCA dispara `JD_TOO_SHORT`
 
 #### Scenario: PDF escaneado (sin texto extraíble)
 
@@ -73,7 +93,7 @@ CV en `users_cvs`.
 
 #### Scenario: Sin CV (ni archivo ni texto)
 
-- GIVEN un JD de ≥ 50 caracteres
+- GIVEN cualquier request (con o sin `jd_text`)
 - WHEN el visitante envía `POST /v1/audit/anonymous` sin `cv_file`
   ni `cv_text`
 - THEN el sistema responde 422 con código `CV_REQUIRED`

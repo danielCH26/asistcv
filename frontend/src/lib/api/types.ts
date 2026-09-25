@@ -184,13 +184,22 @@ export interface SubscriptionInfo {
 	overage: number;
 }
 
+export interface AuditIssue {
+	seccion: string;
+	problema: string;
+	severidad: string;
+}
+
 export interface AuditAnonymousResult {
 	audit_token: string;
+	mode?: 'cv_only' | 'jd_directed';
 	score: number;
 	strengths: string[];
 	gaps: string[];
 	energy_level: string;
 	reasoning: string;
+	problematicas?: AuditIssue[];
+	recomendaciones?: string[];
 }
 
 export class ApiError extends Error {

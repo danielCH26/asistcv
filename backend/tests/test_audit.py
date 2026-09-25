@@ -3,7 +3,10 @@ Tests for audit endpoints.
 
 Covers:
 - Rate limiting (3/IP/day)
-- JD validation (min 50 chars)
+- JD validation (min 50 chars, optional since CV-only mode)
+- CV-only audit mode (no JD) via PDF or pasted text
+- JD-directed mode unchanged
+- LLM malformed JSON -> documented 503
 - PDF size limits (10MB)
 - PDF upload path (valid/scanned/oversized/non-PDF/garbage)
 - Email capture (valid/invalid/expired)
@@ -17,6 +20,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.db.session import get_session_context
+from app.llm.schemas import AuditIssue, CVAudit
 
 
 def _build_pdf(text: str) -> bytes:
@@ -64,6 +68,27 @@ VALID_CV_TEXT = (
 )
 PDF_TEXT = "John Doe. Experienced Python developer with six years of experience in Django FastAPI and AWS platforms."
 
+CV_AUDIT_RESPONSE = CVAudit(
+    score=68,
+    problematicas=[
+        AuditIssue(
+            seccion="Experiencia",
+            problema="Logros sin cuantificar",
+            severidad="high",
+        ),
+        AuditIssue(
+            seccion="Educación",
+            problema="Fechas inconsistentes",
+            severidad="medium",
+        ),
+    ],
+    recomendaciones=[
+        "Cuantificá logros con métricas",
+        "Unificá el formato de fechas",
+    ],
+    fortalezas=["Buena estructura general"],
+)
+
 
 # Mock the LLM provider for tests
 @pytest.fixture
@@ -83,6 +108,7 @@ def mock_llm_provider():
                 reasoning="Good match overall"
             )
         )
+        provider.generate_cv_audit = AsyncMock(return_value=CV_AUDIT_RESPONSE)
         mock.return_value = provider
         yield provider
 
@@ -253,6 +279,7 @@ class TestAuditEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert "audit_token" in data
+        assert data["mode"] == "jd_directed"
         assert "score" in data
         assert data["score"] == 75
         assert "Cache-Control" in response.headers
@@ -266,6 +293,128 @@ class TestAuditEndpoint:
         # This test would require setting up 3+ audits first
         # For now, we just verify the header structure exists
         pass
+
+
+class TestAuditCvOnly:
+    """Tests for the CV-only audit path (no Job Description provided)."""
+
+    @pytest.mark.asyncio
+    async def test_pdf_without_jd_returns_cv_only(
+        self, client, mock_llm_provider, mock_retrieval
+    ):
+        """PDF upload without jd_text runs the CV-only audit and returns 200."""
+        response = client.post(
+            "/v1/audit/anonymous",
+            files={
+                "cv_file": (
+                    "cv.pdf",
+                    _build_pdf(PDF_TEXT),
+                    "application/pdf",
+                )
+            },
+            headers={"X-Forwarded-For": "203.0.113.21"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["mode"] == "cv_only"
+        assert data["score"] == 68
+        assert len(data["problematicas"]) == 2
+        assert data["problematicas"][0]["seccion"] == "Experiencia"
+        assert data["problematicas"][0]["severidad"] == "high"
+        assert data["recomendaciones"] == [
+            "Cuantificá logros con métricas",
+            "Unificá el formato de fechas",
+        ]
+        assert data["strengths"] == ["Buena estructura general"]
+        assert response.headers["Cache-Control"] == "no-store"
+
+        mock_llm_provider.generate_cv_audit.assert_awaited_once()
+        mock_llm_provider.generate_match.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_pdf_without_jd_persists_mode_and_null_jd(
+        self, client, mock_llm_provider, mock_retrieval
+    ):
+        """The stored audit_result_json carries the cv_only discriminator; jd_text is NULL."""
+        from sqlalchemy import select
+
+        from app.db.models import AuditUpload
+        from app.services.audit_token import compute_token_hash
+
+        response = client.post(
+            "/v1/audit/anonymous",
+            files={"cv_file": ("cv.pdf", _build_pdf(PDF_TEXT), "application/pdf")},
+            headers={"X-Forwarded-For": "203.0.113.22"},
+        )
+        assert response.status_code == 200
+        token = response.json()["audit_token"]
+
+        async with get_session_context() as session:
+            result = await session.execute(
+                select(AuditUpload).where(
+                    AuditUpload.audit_token_hash == compute_token_hash(token)
+                )
+            )
+            audit = result.scalar_one()
+            assert audit.jd_text is None
+            assert audit.audit_result_json is not None
+            assert audit.audit_result_json["mode"] == "cv_only"
+
+    @pytest.mark.asyncio
+    async def test_cv_text_without_jd_returns_cv_only(
+        self, client, mock_llm_provider, mock_retrieval
+    ):
+        """Pasted cv_text without jd_text runs the CV-only audit and returns 200."""
+        response = client.post(
+            "/v1/audit/anonymous",
+            data={"cv_text": VALID_CV_TEXT},
+            headers={"X-Forwarded-For": "203.0.113.23"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["mode"] == "cv_only"
+        assert data["score"] == 68
+        assert data["energy_level"] == "medium"
+
+        mock_llm_provider.generate_cv_audit.assert_awaited_once()
+        mock_llm_provider.generate_match.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_short_jd_still_rejected_with_cv(self, client, mock_llm_provider, mock_retrieval):
+        """jd_text < 50 chars is rejected even when a CV is present."""
+        response = client.post(
+            "/v1/audit/anonymous",
+            data={"jd_text": "Too short", "cv_text": VALID_CV_TEXT},
+            headers={"X-Forwarded-For": "203.0.113.24"},
+        )
+        assert response.status_code == 422
+        assert response.json()["detail"]["code"] == "JD_TOO_SHORT"
+
+    @pytest.mark.asyncio
+    async def test_no_jd_and_no_cv_rejected(self, client, mock_llm_provider, mock_retrieval):
+        """Without jd_text the CV requirement still applies (422 CV_REQUIRED)."""
+        response = client.post(
+            "/v1/audit/anonymous",
+            headers={"X-Forwarded-For": "203.0.113.25"},
+        )
+        assert response.status_code == 422
+        assert response.json()["detail"]["code"] == "CV_REQUIRED"
+
+    @pytest.mark.asyncio
+    async def test_cv_only_llm_malformed_json_returns_503(
+        self, client, mock_llm_provider, mock_retrieval
+    ):
+        """LLM returning unparseable JSON surfaces as documented 503 SERVICE_ERROR."""
+        mock_llm_provider.generate_cv_audit = AsyncMock(
+            side_effect=ValueError("Failed to parse Groq response as JSON")
+        )
+        response = client.post(
+            "/v1/audit/anonymous",
+            data={"cv_text": VALID_CV_TEXT},
+            headers={"X-Forwarded-For": "203.0.113.26"},
+        )
+        assert response.status_code == 503
+        assert response.json()["detail"]["code"] == "SERVICE_ERROR"
 
 
 class TestCaptureEmail:
@@ -403,6 +552,7 @@ class TestAuditPdfUpload:
         assert response.status_code == 200
         data = response.json()
         assert "audit_token" in data
+        assert data["mode"] == "jd_directed"
         assert data["score"] == 75
         assert response.headers["Cache-Control"] == "no-store"
 

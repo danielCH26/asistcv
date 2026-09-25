@@ -2,7 +2,7 @@
 Audit API endpoints for anonymous CV analysis.
 
 Provides:
-- POST /v1/audit/anonymous - Submit JD + CV for analysis (rate limited)
+- POST /v1/audit/anonymous - Submit CV (+ optional JD) for analysis (rate limited)
 - POST /v1/audit/{token}/capture-email - Capture email for audit result
 - POST /v1/audit/{token}/claim - Claim audit after user signup
 - GET /v1/audit/{token} - Retrieve cached audit result
@@ -27,7 +27,7 @@ from app.schemas.audit import (
 from app.services import pdf_parser
 from app.services.audit_rate_limit import AUDIT_RATE_LIMIT, check_rate_limit
 from app.services.audit_retention import delete_expired_audits, verify_cleanup_token
-from app.services.audit_runner import run_audit
+from app.services.audit_runner import run_audit, run_cv_audit
 from app.services.audit_token import (
     compute_token_hash,
     hash_ip,
@@ -119,15 +119,16 @@ def _read_cv_pdf(cv_file: UploadFile) -> tuple[str, bytes]:
 async def create_audit(
     request: Request,
     response: Response,
-    jd_text: str = Form(...),
+    jd_text: str | None = Form(None),
     cv_text: str | None = Form(None),
     cv_file: UploadFile | None = File(None),
 ) -> AuditAnonymousResponse:
     """
-    Submit an anonymous audit request (JD + CV).
+    Submit an anonymous audit request (CV, optionally vs a JD).
 
     Accepts multipart form data only (single consumer is our frontend):
-    - jd_text: required, >= 50 chars
+    - jd_text: optional, >= 50 chars when provided (jd_directed mode);
+      absent/blank -> CV-only quality audit
     - CV via exactly one of: cv_file (PDF <= 10MB, parsed server-side)
       or cv_text (pasted text, >= 50 chars). Neither -> 422.
 
@@ -154,8 +155,10 @@ async def create_audit(
                 },
             )
 
-        # Validate JD length
-        if not jd_text or len(jd_text.strip()) < 50:
+        # Validate JD length: optional (CV-only mode when absent/blank),
+        # but must be >= 50 chars when provided
+        jd_clean = jd_text.strip() if jd_text else ""
+        if jd_clean and len(jd_clean) < 50:
             raise HTTPException(
                 status_code=422,
                 detail={"code": "JD_TOO_SHORT", "message": "JD must be at least 50 characters"},
@@ -172,14 +175,17 @@ async def create_audit(
                 detail={"code": code, "message": "CV must be provided as PDF or text (>= 50 chars)"},
             )
 
-        # Run the audit
+        # Run the audit: jd_directed when a JD was provided, CV-only otherwise
         try:
-            result = await run_audit(
-                session=session,
-                jd_text=jd_text,
-                cv_text=cv_text,
-                pdf_bytes=pdf_bytes,
-            )
+            if jd_clean:
+                result = await run_audit(
+                    session=session,
+                    jd_text=jd_clean,
+                    cv_text=cv_text,
+                    pdf_bytes=pdf_bytes,
+                )
+            else:
+                result = await run_cv_audit(cv_text)
         except ValueError as exc:
             if "JD_TOO_SHORT" in str(exc):
                 raise HTTPException(
@@ -203,7 +209,7 @@ async def create_audit(
         # Create audit upload record
         audit = AuditUpload(
             audit_token_hash=token_hash,
-            jd_text=jd_text,
+            jd_text=jd_clean or None,
             cv_text=cv_text,
             pdf_blob=pdf_bytes,
             audit_result_json=result.result_json,
@@ -230,11 +236,14 @@ async def create_audit(
 
     return AuditAnonymousResponse(
         audit_token=plain_token,
+        mode=result.mode,
         score=result.score,
         strengths=result.strengths,
         gaps=result.gaps,
         energy_level=result.energy_level,
         reasoning=result.reasoning,
+        problematicas=result.problematicas,
+        recomendaciones=result.recomendaciones,
     )
 
 

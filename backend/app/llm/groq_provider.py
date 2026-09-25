@@ -12,7 +12,7 @@ from typing import Any, cast
 
 import groq
 
-from app.llm.schemas import Embedding, MatchAnalysis
+from app.llm.schemas import CVAudit, Embedding, MatchAnalysis
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +50,41 @@ USER_PROMPT_TEMPLATE = """## Job Description:
 {profile_context}
 
 Evalúa el match y responde solo con JSON válido."""
+
+# System prompt for CV quality audit (no JD involved)
+CV_AUDIT_SYSTEM_PROMPT = """Eres un auditor profesional de hojas de vida (CVs).
+Tu tarea es evaluar la calidad de un CV por sí solo, sin compararlo con ninguna vacante.
+
+## Reglas estrictas:
+1. Basate ÚNICAMENTE en el texto del CV provisto
+2. Sé honesto - un score bajo es mejor que uno inflado falsamente
+3. El tono debe ser profesional y objetivo
+4. Responde ÚNICAMENTE con JSON válido, sin texto adicional
+
+## Formato de salida (JSON):
+{
+  "score": 0-100,
+  "problematicas": [
+    {"seccion": "sección del CV", "problema": "descripción del problema", "severidad": "low|medium|high"}
+  ],
+  "recomendaciones": ["acciones concretas para mejorar el CV"],
+  "fortalezas": ["puntos fuertes del CV"]
+}
+
+## Verificaciones:
+- Secciones faltantes (contacto, experiencia, educación, skills)
+- Logros sin cuantificar (sin números, porcentajes o métricas)
+- Verbos débiles o genéricos
+- Longitud inadecuada (muy corto o demasiado extenso)
+- Fechas inconsistentes o faltantes
+- Redundancia de contenido
+"""
+
+# User prompt template for CV quality audit
+CV_AUDIT_USER_PROMPT_TEMPLATE = """## CV del candidato:
+{cv_text}
+
+Evalúa la calidad del CV y responde solo con JSON válido."""
 
 
 class GroqProvider:
@@ -97,12 +132,44 @@ class GroqProvider:
         Returns:
             MatchAnalysis with score, strengths, gaps, energy level, and reasoning
         """
-        # Build the user prompt
         user_prompt = USER_PROMPT_TEMPLATE.format(
             jd_text=jd_text,
             profile_context=json.dumps(profile_context, indent=2),
         )
 
+        result = await self._complete_json(SYSTEM_PROMPT, user_prompt)
+        return MatchAnalysis(**result)
+
+    async def generate_cv_audit(self, cv_text: str) -> CVAudit:
+        """
+        Generate a CV quality audit using Groq API.
+
+        Args:
+            cv_text: The CV text to audit
+
+        Returns:
+            CVAudit with score, problematicas, recomendaciones, and fortalezas
+        """
+        user_prompt = CV_AUDIT_USER_PROMPT_TEMPLATE.format(cv_text=cv_text)
+
+        result = await self._complete_json(CV_AUDIT_SYSTEM_PROMPT, user_prompt)
+        return CVAudit(**result)
+
+    async def _complete_json(self, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+        """
+        Run a JSON-mode chat completion with retries and robust JSON parsing.
+
+        Shared by generate_match and generate_cv_audit: exponential backoff on
+        rate limit/connection errors, one explicit-JSON retry on parse failure,
+        ValueError when the response never becomes valid JSON.
+
+        Args:
+            system_prompt: System message content
+            user_prompt: User message content
+
+        Returns:
+            Parsed JSON response as a dictionary
+        """
         start_time = time.time()
         last_error: Exception | None = None
 
@@ -111,7 +178,7 @@ class GroqProvider:
                 response = await self._client.chat.completions.create(
                     model=self._model,
                     messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},
                     ],
                     temperature=self._temperature,
@@ -140,9 +207,7 @@ class GroqProvider:
                     raise ValueError("Empty response from Groq API")
 
                 # Try to parse as JSON
-                result = self._parse_json_response(content)
-
-                return MatchAnalysis(**result)
+                return self._parse_json_response(content)
 
             except groq.RateLimitError as e:
                 last_error = e

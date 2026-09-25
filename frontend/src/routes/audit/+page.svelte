@@ -8,6 +8,7 @@
 
 	let cvText = '';
 	let jdText = '';
+	let jdExpanded = false;
 	let mode: 'pdf' | 'text' = 'pdf';
 	let cvFile: File | null = null;
 	let fileError = '';
@@ -153,10 +154,22 @@
 			</label>
 		{/if}
 
-		<label>
-			{$_('audit.jdLabel')}
-			<textarea rows="8" bind:value={jdText} placeholder={$_('form.placeholder')} />
-		</label>
+		<section class="audit__jd">
+			<button
+				type="button"
+				class="audit__jd-toggle"
+				aria-expanded={jdExpanded}
+				on:click={() => (jdExpanded = !jdExpanded)}
+			>
+				{$_('audit.jdOptionalToggle')}
+			</button>
+			{#if jdExpanded}
+				<label>
+					{$_('audit.jdLabel')}
+					<textarea rows="8" bind:value={jdText} placeholder={$_('form.placeholder')} />
+				</label>
+			{/if}
+		</section>
 
 		{#if fileError}
 			<p class="audit__error" role="alert">{fileError}</p>
@@ -181,22 +194,55 @@
 				<strong>{audit.result.score}</strong>
 			</div>
 
-			<h2>{$_('result.strengths')}</h2>
-			<ul>
-				{#each audit.result.strengths as item}
-					<li>{item}</li>
-				{/each}
-			</ul>
+			{#if audit.result.mode === 'cv_only'}
+				<h2>{$_('result.problematicas')}</h2>
+				<ul class="audit__issues">
+					{#each audit.result.problematicas ?? [] as issue}
+						<li>
+							<header>
+								<strong>{issue.seccion}</strong>
+								<span class="audit__severity audit__severity--{issue.severidad}">
+									{issue.severidad}
+								</span>
+							</header>
+							<p>{issue.problema}</p>
+						</li>
+					{/each}
+				</ul>
 
-			<h2>{$_('result.gaps')}</h2>
-			<ul>
-				{#each audit.result.gaps as item}
-					<li>{item}</li>
-				{/each}
-			</ul>
+				<h2>{$_('result.recomendaciones')}</h2>
+				<ul>
+					{#each audit.result.recomendaciones ?? [] as item}
+						<li>{item}</li>
+					{/each}
+				</ul>
 
-			<h2>{$_('result.reasoning')}</h2>
-			<p class="audit__reasoning">{audit.result.reasoning}</p>
+				<h2>{$_('result.fortalezas')}</h2>
+				<ul>
+					{#each audit.result.strengths as item}
+						<li>{item}</li>
+					{/each}
+				</ul>
+
+				<p class="audit__reasoning">{audit.result.reasoning}</p>
+			{:else}
+				<h2>{$_('result.strengths')}</h2>
+				<ul>
+					{#each audit.result.strengths as item}
+						<li>{item}</li>
+					{/each}
+				</ul>
+
+				<h2>{$_('result.gaps')}</h2>
+				<ul>
+					{#each audit.result.gaps as item}
+						<li>{item}</li>
+					{/each}
+				</ul>
+
+				<h2>{$_('result.reasoning')}</h2>
+				<p class="audit__reasoning">{audit.result.reasoning}</p>
+			{/if}
 
 			<section class="audit__capture">
 				<h2>{$_('audit.captureHeading')}</h2>
@@ -360,6 +406,72 @@
 		background: transparent;
 		color: var(--error);
 		cursor: pointer;
+	}
+
+	.audit__jd {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+	}
+
+	.audit__jd-toggle {
+		align-self: flex-start;
+		padding: 0.45rem 0.9rem;
+		border: 1px dashed var(--border);
+		border-radius: 8px;
+		background: var(--surface);
+		color: var(--text-muted);
+		font-size: 0.9rem;
+		cursor: pointer;
+		text-align: left;
+	}
+
+	.audit__jd-toggle[aria-expanded='true'] {
+		border-style: solid;
+		border-color: var(--accent);
+		color: var(--text-strong);
+	}
+
+	.audit__issues {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	.audit__issues li {
+		padding: 0.75rem 1rem;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		background: var(--surface);
+	}
+
+	.audit__issues header {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.audit__issues p {
+		margin: 0.35rem 0 0;
+		color: var(--text);
+	}
+
+	.audit__severity {
+		padding: 0.1rem 0.5rem;
+		border-radius: 999px;
+		font-size: 0.75rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		border: 1px solid var(--border);
+		color: var(--text-muted);
+	}
+
+	.audit__severity--high {
+		border-color: var(--error);
+		color: var(--error);
 	}
 
 	.audit__result {

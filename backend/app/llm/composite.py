@@ -6,7 +6,7 @@ This allows using different providers for LLM (Groq) and embeddings (HuggingFace
 from typing import Any
 
 from app.llm.base import LLMProvider
-from app.llm.schemas import Embedding, MatchAnalysis
+from app.llm.schemas import CVAudit, Embedding, MatchAnalysis
 
 
 class CompositeProvider:
@@ -45,6 +45,18 @@ class CompositeProvider:
             MatchAnalysis with score, strengths, gaps, energy level, and reasoning
         """
         return await self._llm.generate_match(jd_text, profile_context)
+
+    async def generate_cv_audit(self, cv_text: str) -> CVAudit:
+        """
+        Generate CV quality audit using the LLM provider.
+
+        Args:
+            cv_text: The CV text to audit
+
+        Returns:
+            CVAudit with score, problematicas, recomendaciones, and fortalezas
+        """
+        return await self._llm.generate_cv_audit(cv_text)
 
     async def generate_embedding(self, text: str) -> Embedding:
         """

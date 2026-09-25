@@ -28,7 +28,13 @@ beforeEach(() => {
 	auditStore.reset();
 });
 
+async function expandJd() {
+	const toggle = screen.getByRole('button', { name: /vacante en mente|job opening/i });
+	await fireEvent.click(toggle);
+}
+
 async function fillJd() {
+	await expandJd();
 	const jd = screen.getByLabelText(/job description/i);
 	await fireEvent.input(jd, { target: { value: 'x'.repeat(60) } });
 }
@@ -74,5 +80,42 @@ describe('audit page — upload de PDF (default)', () => {
 
 		const alert = await screen.findByRole('alert');
 		expect(alert.textContent).toMatch(/texto extraíble/i);
+	});
+});
+
+describe('audit page — JD opcional', () => {
+	it('la sección de JD está colapsada por defecto', async () => {
+		render(AuditPage);
+
+		expect(screen.queryByLabelText(/job description/i)).toBeNull();
+
+		await expandJd();
+		expect(screen.getByLabelText(/job description/i)).toBeTruthy();
+	});
+
+	it('sin JD el submit es exitoso y no envía jd_text', async () => {
+		mockedAudit.mockResolvedValueOnce(RESULT);
+		render(AuditPage);
+
+		await selectPdf();
+		await fireEvent.click(screen.getByRole('button', { name: /auditar mi cv/i }));
+
+		await waitFor(() => expect(mockedAudit).toHaveBeenCalledTimes(1));
+		const payload = mockedAudit.mock.calls[0][0];
+		expect(payload.jd_text).toBeUndefined();
+		expect(payload.cv_file).toBeTruthy();
+	});
+
+	it('expandiendo y completando el JD se envía jd_text', async () => {
+		mockedAudit.mockResolvedValueOnce(RESULT);
+		render(AuditPage);
+
+		await fillJd();
+		await selectPdf();
+		await fireEvent.click(screen.getByRole('button', { name: /auditar mi cv/i }));
+
+		await waitFor(() => expect(mockedAudit).toHaveBeenCalledTimes(1));
+		const payload = mockedAudit.mock.calls[0][0];
+		expect(payload.jd_text).toBe('x'.repeat(60));
 	});
 });

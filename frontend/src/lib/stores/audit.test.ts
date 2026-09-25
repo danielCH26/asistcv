@@ -48,6 +48,30 @@ describe('auditStore', () => {
 		expect(state.result?.gaps).toEqual(['SQL']);
 	});
 
+	it('sin JD envía el payload sin jd_text', async () => {
+		mockedAudit.mockResolvedValueOnce(RESULT);
+
+		const result = await auditStore.submit('', 'mi cv de texto');
+
+		expect(result).toEqual(RESULT);
+		expect(mockedAudit).toHaveBeenCalledTimes(1);
+		const payload = mockedAudit.mock.calls[0][0];
+		expect(payload.jd_text).toBeUndefined();
+		expect(payload.cv_text).toBe('mi cv de texto');
+	});
+
+	it('sin JD envía multipart solo con cv_file', async () => {
+		mockedAudit.mockResolvedValueOnce(RESULT);
+		const file = new File(['%PDF-1.4 test'], 'cv.pdf', { type: 'application/pdf' });
+
+		await auditStore.submit('', '', file);
+
+		const payload = mockedAudit.mock.calls[0][0];
+		expect(payload.jd_text).toBeUndefined();
+		expect(payload.cv_file).toBe(file);
+		expect(payload.cv_text).toBeUndefined();
+	});
+
 	it('429 con Retry-After queda expuesto para la UI', async () => {
 		mockedAudit.mockRejectedValueOnce(
 			new (await import('$api/types')).ApiError('rate', 429, '', 'RATE_LIMITED', 300)

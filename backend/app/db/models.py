@@ -313,8 +313,10 @@ class AuditUpload(SQLModel, table=True):
     cv_text: str | None = Field(
         default=None, sa_column=Column(Text), description="Extracted CV text"
     )
-    jd_text: str = Field(
-        sa_column=Column(Text), description="Job description text"
+    jd_text: str | None = Field(
+        default=None,
+        sa_column=Column(Text, nullable=True),
+        description="Job description text (None for CV-only audits)",
     )
     pdf_blob: bytes | None = Field(
         default=None, description="Raw PDF binary data (max 10MB)"

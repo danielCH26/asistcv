@@ -8,6 +8,7 @@ This service reuses the existing match logic but:
 - Stores minimal data in audit_uploads for potential email capture
 """
 from dataclasses import dataclass
+from dataclasses import field as dataclasses_field
 from typing import Any
 
 import groq
@@ -23,6 +24,9 @@ logger = get_logger("app.services.audit_runner")
 # Minimum JD length (same as match endpoint)
 MIN_JD_LENGTH = 50
 
+# Minimum CV length for the CV-only audit (same as endpoint validation)
+MIN_CV_LENGTH = 50
+
 
 @dataclass
 class AuditResult:
@@ -34,6 +38,9 @@ class AuditResult:
     energy_level: str
     reasoning: str
     result_json: dict[str, Any]
+    mode: str = "jd_directed"
+    problematicas: list[dict[str, Any]] = dataclasses_field(default_factory=list)
+    recomendaciones: list[str] = dataclasses_field(default_factory=list)
 
 
 async def run_audit(
@@ -127,6 +134,7 @@ async def run_audit(
 
     # Build result JSON for storage
     result_json = {
+        "mode": "jd_directed",
         "score": analysis.score,
         "strengths": analysis.strengths,
         "gaps": analysis.gaps,
@@ -135,10 +143,74 @@ async def run_audit(
     }
 
     return AuditResult(
+        mode="jd_directed",
         score=analysis.score,
         strengths=analysis.strengths,
         gaps=analysis.gaps,
         energy_level=analysis.energy_level,
         reasoning=analysis.reasoning,
+        result_json=result_json,
+    )
+
+
+async def run_cv_audit(cv_text: str) -> AuditResult:
+    """
+    Run a CV quality audit WITHOUT a job description.
+
+    The free audit hook: finds problems in the CV itself (missing sections,
+    unquantified achievements, weak verbs, inconsistent dates, etc.).
+
+    Args:
+        cv_text: Extracted CV text (must be >= 50 chars)
+
+    Returns:
+        AuditResult with mode="cv_only" and the CV quality analysis
+
+    Raises:
+        ValueError: If CV text is too short (< 50 chars)
+    """
+    if not cv_text or len(cv_text.strip()) < MIN_CV_LENGTH:
+        raise ValueError(f"CV_TOO_SHORT: CV must be at least {MIN_CV_LENGTH} characters")
+
+    provider = get_llm_provider()
+
+    try:
+        audit = await provider.generate_cv_audit(cv_text)
+    except groq.RateLimitError as exc:
+        logger.error("audit_cv_llm_rate_limit", error=str(exc)[:200])
+        raise RuntimeError("LLM rate limit exceeded") from exc
+    except Exception as exc:
+        logger.error("audit_cv_llm_failed", error=str(exc)[:200])
+        raise RuntimeError(f"CV audit generation failed: {exc}") from exc
+
+    problematicas: list[dict[str, Any]] = [issue.model_dump() for issue in audit.problematicas]
+    high_severity = sum(1 for issue in audit.problematicas if issue.severidad == "high")
+    reasoning = (
+        f"Auditoría de calidad del CV: {len(problematicas)} problemáticas detectadas "
+        f"({high_severity} de severidad alta) y {len(audit.recomendaciones)} recomendaciones."
+    )
+    energy_level = "high" if audit.score >= 75 else ("medium" if audit.score >= 50 else "low")
+
+    result_json = {
+        "mode": "cv_only",
+        "score": audit.score,
+        "problematicas": problematicas,
+        "recomendaciones": audit.recomendaciones,
+        "fortalezas": audit.fortalezas,
+        "strengths": audit.fortalezas,
+        "gaps": [issue["problema"] for issue in problematicas],
+        "energy_level": energy_level,
+        "reasoning": reasoning,
+    }
+
+    return AuditResult(
+        mode="cv_only",
+        score=audit.score,
+        strengths=audit.fortalezas,
+        gaps=[issue["problema"] for issue in problematicas],
+        energy_level=energy_level,
+        reasoning=reasoning,
+        problematicas=problematicas,
+        recomendaciones=audit.recomendaciones,
         result_json=result_json,
     )

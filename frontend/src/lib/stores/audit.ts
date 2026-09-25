@@ -28,7 +28,8 @@ function createAuditStore() {
 		cvText: string,
 		cvFile?: File
 	): Promise<AuditAnonymousResult | null> {
-		if (jdText.trim().length < 50) {
+		const jd = jdText.trim();
+		if (jd !== '' && jd.length < 50) {
 			store.set({
 				status: 'error',
 				result: null,
@@ -40,9 +41,13 @@ function createAuditStore() {
 		}
 		store.set({ status: 'loading', result: null, error: null, errorCode: null, retryAfter: null });
 		try {
-			const payload = cvFile
-				? { jd_text: jdText.trim(), cv_file: cvFile }
-				: { jd_text: jdText.trim(), cv_text: cvText.trim() || undefined };
+			const payload: { jd_text?: string; cv_text?: string; cv_file?: File } = {};
+			if (jd !== '') payload.jd_text = jd;
+			if (cvFile) {
+				payload.cv_file = cvFile;
+			} else if (cvText.trim() !== '') {
+				payload.cv_text = cvText.trim();
+			}
 			const result = await apiClient.auditAnonymous(payload);
 			store.set({ status: 'done', result, error: null, errorCode: null, retryAfter: null });
 			return result;

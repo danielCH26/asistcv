@@ -3,7 +3,7 @@ LLM Provider interface definitions.
 """
 from typing import Any, Protocol
 
-from app.llm.schemas import Embedding, MatchAnalysis
+from app.llm.schemas import CVAudit, Embedding, MatchAnalysis
 
 
 class LLMProvider(Protocol):
@@ -28,6 +28,18 @@ class LLMProvider(Protocol):
 
         Returns:
             MatchAnalysis with score, strengths, gaps, energy level, and reasoning
+        """
+        ...
+
+    async def generate_cv_audit(self, cv_text: str) -> CVAudit:
+        """
+        Generate a CV quality audit without a job description.
+
+        Args:
+            cv_text: The CV text to audit
+
+        Returns:
+            CVAudit with score, problematicas, recomendaciones, and fortalezas
         """
         ...
 

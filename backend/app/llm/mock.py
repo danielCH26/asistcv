@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from app.llm.schemas import Embedding, MatchAnalysis
+from app.llm.schemas import AuditIssue, CVAudit, Embedding, MatchAnalysis
 
 # Default response when no fixture matches
 DEFAULT_RESPONSE = {
@@ -108,6 +108,40 @@ class MockProvider:
             response_data = DEFAULT_RESPONSE
 
         return MatchAnalysis(**response_data)
+
+    async def generate_cv_audit(self, cv_text: str) -> CVAudit:
+        """
+        Generate a deterministic CV quality audit.
+
+        Returns a fixed response so CV-only audits are reproducible in
+        development and testing without external credentials.
+
+        Args:
+            cv_text: The CV text to audit
+
+        Returns:
+            CVAudit with deterministic score, problematicas, recomendaciones, fortalezas
+        """
+        return CVAudit(
+            score=70,
+            problematicas=[
+                AuditIssue(
+                    seccion="Experiencia",
+                    problema="Logros sin cuantificar: no se detectan métricas ni resultados medibles",
+                    severidad="high",
+                ),
+                AuditIssue(
+                    seccion="Educación",
+                    problema="Fechas inconsistentes o faltantes en la formación",
+                    severidad="medium",
+                ),
+            ],
+            recomendaciones=[
+                "Cuantificá logros con números, porcentajes o alcance",
+                "Verificá que las fechas de experiencia y educación sean consistentes",
+            ],
+            fortalezas=["Estructura general clara y legible"],
+        )
 
     async def generate_embedding(self, text: str) -> Embedding:
         """
