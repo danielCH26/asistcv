@@ -18,7 +18,6 @@ declare global {
 // presente al ejecutar `svelte-kit sync`.
 declare module '$env/static/public' {
 	export const PUBLIC_API_URL: string;
-	export const PUBLIC_BACKEND_API_KEY: string;
 }
 
 export {};

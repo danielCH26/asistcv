@@ -1,15 +1,37 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { _ } from 'svelte-i18n';
 	import { get } from 'svelte/store';
 	import JdForm from '$components/JdForm.svelte';
 	import MatchResult from '$components/MatchResult.svelte';
 	import { analysisStore } from '$stores/analysis';
 	import { profileStore } from '$stores/profile';
-	import { assertBuildEnv } from '$api/env';
+	import { apiClient } from '$api/client';
+	import { isAuthenticated, refreshIfNeeded } from '$stores/session';
+	import type { SubscriptionInfo } from '$api/types';
 
-	// Guard de env vars: falla el build si falta PUBLIC_API_URL.
-	// La función corre en build time cuando el módulo se evalúa.
-	assertBuildEnv();
+	let subscription: SubscriptionInfo | null = null;
+
+	onMount(async () => {
+		if (!get(isAuthenticated)) return;
+		await refreshIfNeeded();
+		try {
+			subscription = await apiClient.subscription();
+		} catch {
+			subscription = null;
+		}
+	});
+
+	function usageLabel(): string {
+		if (!subscription) return '';
+		const matches = subscription.usage['matches_this_month'];
+		const limit = subscription.limits['matches_per_month'];
+		if (typeof matches !== 'number') return '';
+		if (typeof limit !== 'number' || limit <= 0) {
+			return $_('billing.usageUnlimited', { values: { used: matches } });
+		}
+		return $_('billing.usage', { values: { used: matches, limit } });
+	}
 
 	async function handleSubmit(event: CustomEvent<{ jdText: string }>) {
 		const profileId = get(profileStore);
@@ -32,6 +54,9 @@
 		<p class="home__profile">
 			{$_('home.profileLabel')}: <strong>#{$profileStore}</strong>
 		</p>
+		{#if $isAuthenticated && usageLabel()}
+			<p class="home__usage">{usageLabel()}</p>
+		{/if}
 	</header>
 
 	<JdForm on:submit={handleSubmit} loading={$analysisStore.status === 'loading'} />
@@ -78,6 +103,12 @@
 
 	.home__profile {
 		font-size: 0.9rem;
+	}
+
+	.home__usage {
+		margin: 0;
+		font-size: 0.85rem;
+		color: var(--text-muted);
 	}
 
 	.home__loading,

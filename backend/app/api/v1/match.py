@@ -11,15 +11,20 @@ Retrieval is gated by `RETRIEVAL_SIZE_THRESHOLD_CHARS`: profiles below
 the threshold go in as the full JSON (current behavior); above, the
 service returns the top-K fragments most similar to the JD embedding.
 Both paths share the same downstream behavior (LLM + transaction).
+
+Tier enforcement: Users on free/job_seeker plans have match limits enforced
+via check_limit before the match runs; increment_usage is called only after
+the match succeeds, so failed matches never consume credits.
 """
 import json
 
 import groq
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import select
 
+from app.api.deps import CurrentUser, optional_auth
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.db.models import Analysis, JobDescription, Profile
@@ -29,6 +34,8 @@ from app.services.retrieval import (
     profile_text_length,
     retrieve_profile_context,
 )
+from app.services.rls_context import bind_rls_context, set_rls_user
+from app.services.tier_limits import check_limit, increment_usage
 
 router = APIRouter(tags=["match"])
 logger = get_logger("app.api.match")
@@ -56,6 +63,7 @@ class MatchResponse(BaseModel):
 async def match(
     request: MatchRequest,
     http_request: Request,
+    current_user: CurrentUser | None = Depends(optional_auth),
 ) -> MatchResponse:
     """
     Analyze match between a job description and a profile.
@@ -70,7 +78,27 @@ async def match(
     below `RETRIEVAL_SIZE_THRESHOLD_CHARS`, top-K fragments above it. The
     retrieval result is JSON-serializable so it doubles as the
     `profile_snapshot` persisted on the analysis row.
+
+    Tier enforcement: for authenticated real users, checks the plan limit first
+    (read-only), runs the match, and increments usage ONLY on success. Returns
+    402 PLAN_LIMIT_REACHED if the user exceeds their plan's limit. Credits are
+    never consumed by failed matches. Anonymous users get open-mode access.
     """
+    # Tier enforcement: check limit first (read-only), increment only on success
+    # Only for authenticated real users (not service user id=0)
+    # This ensures credits are only consumed when the match actually succeeds
+    if current_user is not None and current_user.id != 0:
+        try:
+            async with get_session_context() as session:
+                await set_rls_user(session, current_user.id, current_user.role)
+                # First check: does user have available quota?
+                await check_limit(session, current_user.id, "match", current_user.role)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=402,
+                detail="PLAN_LIMIT_REACHED"
+            ) from e
+
     provider = get_llm_provider()
 
     # Paso 3: embedding del JD (I/O externo, antes de cualquier escritura).
@@ -87,6 +115,8 @@ async def match(
     # Paso 4: lookup del perfil en sesión corta (libera la conexión durante
     # las llamadas lentas al LLM).
     async with get_session_context() as session:
+        if current_user is not None:
+            await bind_rls_context(session, current_user.id, current_user.role)
         result = await session.execute(
             select(Profile).where(Profile.id == request.profile_id)
         )
@@ -192,6 +222,8 @@ async def match(
     # Paso 8: transacción única. Si el LLM falló, nunca se llega acá.
     try:
         async with get_session_context() as session:
+            if current_user is not None:
+                await bind_rls_context(session, current_user.id, current_user.role)
             jd_row = JobDescription(
                 raw_text=request.jd_text,
                 embedding=jd_embedding.vector,
@@ -211,6 +243,9 @@ async def match(
                 reasoning=analysis.reasoning,
                 embedding=jd_embedding.vector,
                 embedding_model=jd_embedding.model,
+                owner_user_id=(
+                    current_user.id if current_user is not None and current_user.id != 0 else None
+                ),
             )
             session.add(analysis_row)
 
@@ -228,6 +263,17 @@ async def match(
             status_code=503,
             detail="Database temporarily unavailable",
         ) from None
+
+    # Increment usage counter ONLY after successful match
+    # This ensures credits are consumed only for successful matches
+    if current_user is not None and current_user.id != 0:
+        try:
+            async with get_session_context() as session:
+                await set_rls_user(session, current_user.id, current_user.role)
+                await increment_usage(session, current_user.id, "match")
+        except Exception as e:
+            # Log but don't fail the request - usage tracking is best-effort
+            logger.warning("usage_increment_failed", user_id=current_user.id, error=str(e))
 
     return MatchResponse(
         score=analysis.score,

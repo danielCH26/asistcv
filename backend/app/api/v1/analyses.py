@@ -1,4 +1,10 @@
-"""Endpoints de historial de análisis (GET /v1/analyses)."""
+"""Endpoints de historial de análisis (GET /v1/analyses).
+
+Los endpoints usan ``get_db_optional``: en modo abierto corren con el
+contexto de servicio (visible para MCP/API key) y con JWT el contexto
+RLS del usuario — la isolación cross-user la aplica la base de datos
+(migración 011): el análisis de otro usuario devuelve 404, nunca 403.
+"""
 from datetime import datetime
 from typing import Any, cast
 
@@ -7,8 +13,8 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import col, select
 
+from app.api.deps import CurrentUser, get_db_optional, optional_auth
 from app.db.models import Analysis, JobDescription
-from app.db.session import get_session
 
 router = APIRouter(tags=["analyses"])
 
@@ -69,10 +75,18 @@ async def list_analyses(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     profile_id: int | None = Query(default=None),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_db_optional),
+    user: CurrentUser = Depends(optional_auth),
 ) -> list[AnalysisSummary]:
-    """Lista análisis en orden cronológico inverso, con paginación offset."""
+    """Lista análisis en orden cronológico inverso, con paginación offset.
+
+    Defense in depth: RLS (migración 011) filtra a nivel BD y, además,
+    el servicio agrega el filtro por owner para JWT (el usuario de
+    servicio id=0 ve todo, paridad con el modo legacy/MCP).
+    """
     query = select(Analysis)
+    if user.id != 0:
+        query = query.where(Analysis.owner_user_id == user.id)
     if profile_id is not None:
         query = query.where(Analysis.profile_id == profile_id)
     query = query.order_by(col(Analysis.created_at).desc(), col(Analysis.id).desc())
@@ -96,12 +110,18 @@ async def list_analyses(
 @router.get("/analyses/{analysis_id}", response_model=AnalysisDetail)
 async def get_analysis(
     analysis_id: int,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_db_optional),
+    user: CurrentUser = Depends(optional_auth),
 ) -> AnalysisDetail:
-    """Devuelve el detalle completo de un análisis con su JD embebido."""
-    result = await session.execute(
-        select(Analysis).where(Analysis.id == analysis_id)
-    )
+    """Devuelve el detalle completo de un análisis con su JD embebido.
+
+    El análisis de otro usuario devuelve 404 (nunca 403): la fila no
+    visible no revela su existencia (RLS + filtro de servicio).
+    """
+    query = select(Analysis).where(Analysis.id == analysis_id)
+    if user.id != 0:
+        query = query.where(Analysis.owner_user_id == user.id)
+    result = await session.execute(query)
     analysis = result.scalar_one_or_none()
     if analysis is None:
         raise HTTPException(

@@ -318,4 +318,5 @@ async def test_migration_002_downgrade_upgrade_reversible(setup_test_db):
         )
 
     hnsw_indexes = await _fetch_hnsw_indexes(engine)
-    assert len(hnsw_indexes) == 3, "3 HNSW indexes should exist after re-upgrade"
+    # Migration 002 creates 3 (profiles, job_descriptions, analyses), migration 004 adds 1 (users_cvs)
+    assert len(hnsw_indexes) == 4, f"4 HNSW indexes should exist after re-upgrade, got {hnsw_indexes}"

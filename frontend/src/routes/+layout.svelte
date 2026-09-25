@@ -4,8 +4,10 @@
 	import LanguageToggle from '$components/LanguageToggle.svelte';
 	import { page } from '$app/stores';
 	import { _ } from 'svelte-i18n';
+	import { isAuthenticated, isRecruiter, logout, session, startSessionRefresh } from '$stores/session';
 
 	setupI18n();
+	startSessionRefresh();
 
 	$: pathname = $page.url.pathname;
 </script>
@@ -22,14 +24,47 @@
 
 		<nav class="app-shell__nav">
 			<a class="app-shell__link" class:is-active={pathname === '/'} href="/">{$_('app.nav.home')}</a>
+			<a class="app-shell__link" class:is-active={pathname === '/audit'} href="/audit">{$_('app.nav.audit')}</a>
 			<a
 				class="app-shell__link"
 				class:is-active={pathname.startsWith('/history')}
 				href="/history">{$_('app.nav.history')}</a
 			>
+			{#if $isAuthenticated}
+				<a
+					class="app-shell__link"
+					class:is-active={pathname === '/profile'}
+					href="/profile">{$_('app.nav.profile')}</a
+				>
+				{#if $isRecruiter}
+					<a
+						class="app-shell__link"
+						class:is-active={pathname === '/recruiter'}
+						href="/recruiter">{$_('app.nav.recruiter')}</a
+					>
+				{/if}
+				<a
+					class="app-shell__link"
+					class:is-active={pathname === '/billing'}
+					href="/billing">{$_('app.nav.billing')}</a
+				>
+			{/if}
 		</nav>
 
-		<LanguageToggle />
+		<div class="app-shell__actions">
+			<LanguageToggle />
+			{#if $isAuthenticated}
+				<button
+					type="button"
+					class="app-shell__session"
+					title={$session?.user.email}
+					on:click={() => logout()}>{$_('app.nav.logout')}</button
+				>
+			{:else}
+				<a class="app-shell__link" href="/login">{$_('app.nav.login')}</a>
+				<a class="app-shell__link app-shell__signup" href="/signup">{$_('app.nav.signup')}</a>
+			{/if}
+		</div>
 	</header>
 
 	<main class="app-shell__main">
@@ -37,7 +72,7 @@
 	</main>
 
 	<footer class="app-shell__footer">
-		<small>AsistCV · Sprint 1 PR-D1</small>
+		<small>AsistCV · Sprint 2</small>
 	</footer>
 </div>
 
@@ -118,6 +153,28 @@
 	.app-shell__link.is-active {
 		background: var(--accent);
 		color: var(--accent-contrast);
+	}
+
+	.app-shell__actions {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.app-shell__signup {
+		background: var(--accent);
+		color: var(--accent-contrast);
+		font-weight: 600;
+	}
+
+	.app-shell__session {
+		padding: 0.4rem 0.75rem;
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		background: transparent;
+		color: var(--text);
+		font-size: 0.9rem;
+		cursor: pointer;
 	}
 
 	.app-shell__main {

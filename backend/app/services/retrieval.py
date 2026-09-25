@@ -208,7 +208,7 @@ def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     a_norm = a / (np.linalg.norm(a, axis=1, keepdims=True) + 1e-12)
     b_norm = b / (np.linalg.norm(b) + 1e-12)
     result = a_norm @ b_norm
-    return result  # type: ignore[no-any-return]
+    return result
 
 
 # ---------------------------------------------------------------------------

@@ -18,10 +18,23 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.api.deps import verify_api_key
-from app.api.v1 import analyses, health, match, ping, profiles
+from app.api.deps import require_role, verify_api_key
+from app.api.v1 import (
+    analyses,
+    audit,
+    auth,
+    cvs,
+    health,
+    match,
+    ping,
+    profiles,
+    recruiter_candidates,
+    recruiter_consent,
+    users,
+)
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging, get_logger
+from app.services.consent_gate import check_recruiter_consent
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -116,27 +129,91 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "docs": "/docs" if docs_enabled else "disabled",
         }
 
-    # Routers — /health y / exentos; el resto protegido.
+    # Routers — /health y / exentos; /auth/register y /auth/login públicos.
     app.include_router(health.router)
+    app.include_router(
+        auth.router,
+        prefix=settings.api_prefix,
+    )  # /auth/register and /auth/login are public, others need auth via deps
+
+    # Users endpoints require auth in both modes
+    app.include_router(
+        users.router,
+        prefix=settings.api_prefix,
+        dependencies=[Depends(verify_api_key)],
+    )
+
+    # These endpoints use optional_auth - they work without auth in open mode
+    # but require auth in protected mode (when BACKEND_API_KEY is set)
+    from app.api.deps import optional_auth
+
     app.include_router(
         ping.router,
         prefix=settings.api_prefix,
-        dependencies=[Depends(verify_api_key)],
+        dependencies=[Depends(optional_auth)],
     )
     app.include_router(
         match.router,
         prefix=settings.api_prefix,
-        dependencies=[Depends(verify_api_key)],
+        dependencies=[Depends(optional_auth)],
     )
     app.include_router(
         analyses.router,
         prefix=settings.api_prefix,
-        dependencies=[Depends(verify_api_key)],
+        dependencies=[Depends(optional_auth)],
     )
     app.include_router(
         profiles.router,
         prefix=settings.api_prefix,
+        dependencies=[Depends(optional_auth)],
+    )
+    app.include_router(
+        cvs.router,
+        prefix=settings.api_prefix,
+        dependencies=[Depends(optional_auth)],
+    )
+
+    # Audit endpoints are public (no auth required for anonymous funnel)
+    app.include_router(
+        audit.router,
+        prefix=settings.api_prefix,
+    )
+    # Internal cleanup endpoint (protected by token)
+    app.include_router(
+        audit.router,
+        prefix="",
+    )
+
+    # Recruiter consent endpoint (requires recruiter role)
+    app.include_router(
+        recruiter_consent.router,
+        prefix=settings.api_prefix,
+        dependencies=[Depends(verify_api_key), Depends(require_role("recruiter"))],
+    )
+
+    # Recruiter candidates endpoints (requires recruiter role + consent)
+    app.include_router(
+        recruiter_candidates.router,
+        prefix=settings.api_prefix,
+        dependencies=[Depends(verify_api_key), Depends(check_recruiter_consent)],
+    )
+
+    # Billing endpoints (require auth)
+    from app.api.v1 import billing
+
+    app.include_router(
+        billing.router,
+        prefix=settings.api_prefix,
         dependencies=[Depends(verify_api_key)],
+    )
+
+    # Stripe webhook endpoint (no auth - uses signature verification)
+    from app.api.v1.webhooks import stripe as stripe_webhook
+
+    app.include_router(
+        stripe_webhook.router,
+        prefix="/api/v1",
+        include_in_schema=False,
     )
 
     return app

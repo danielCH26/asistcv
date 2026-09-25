@@ -19,10 +19,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.api.deps import get_db_optional
 from app.core.config import get_settings  # noqa: F401  (kept for future thresholds)
 from app.core.logging import get_logger
 from app.db.models import Profile
-from app.db.session import get_session
 from app.llm.factory import get_llm_provider
 
 router = APIRouter(tags=["profiles"])
@@ -137,7 +137,7 @@ async def _compute_and_persist_embedding(
 @router.post("/profiles", response_model=ProfileOut, status_code=201)
 async def create_profile(
     payload: ProfileCreate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_db_optional),
 ) -> ProfileOut:
     """Crea un perfil y calcula su embedding inicial.
 
@@ -165,7 +165,7 @@ async def create_profile(
 @router.get("/profiles/{profile_id}", response_model=ProfileOut)
 async def get_profile(
     profile_id: int,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_db_optional),
 ) -> ProfileOut:
     """Detalle completo de un perfil. 404 si no existe."""
     profile = await _get_profile_or_404(session, profile_id)
@@ -176,7 +176,7 @@ async def get_profile(
 async def patch_profile(
     profile_id: int,
     payload: ProfilePatch,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_db_optional),
 ) -> ProfileOut:
     """Actualiza un perfil. Recalcula embedding si cambió experience/skills.
 
@@ -205,7 +205,7 @@ async def patch_profile(
 )
 async def get_embedding_status(
     profile_id: int,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_db_optional),
 ) -> EmbeddingStatus:
     """Inspección barata: ¿hay embedding persistido y bajo qué modelo?"""
     profile = await _get_profile_or_404(session, profile_id)

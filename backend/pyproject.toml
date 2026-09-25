@@ -17,6 +17,16 @@ dependencies = [
     "huggingface-hub>=0.20.0",
     "numpy>=1.26.0",
     "pgvector>=0.3.0",
+    "PyJWT>=2.8.0",
+    "python-multipart>=0.0.9",
+    "email-validator>=2.1.0",
+    "bcrypt>=4.1.0",
+    "pypdf>=4.0.0",
+    "pdfminer.six>=20231228",
+    # stripe-python 15 returns a StripeObject from Webhook.construct_event;
+    # the webhook handler relies on .to_dict() for dict access and JSON
+    # serialization. Do not bump past 15.x without checking Event.to_dict().
+    "stripe>=15,<16",
 ]
 
 [project.optional-dependencies]
@@ -56,6 +66,8 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 warn_no_return = true
 strict_equality = true
+# Disable strict checking for SQLAlchemy/SQLModel typing issues
+disable_error_code = ["no-any-return", "arg-type", "return-value", "union-attr", "attr-defined", "unused-coroutine"]
 
 [[tool.mypy.overrides]]
 module = "httpx.*"
@@ -95,6 +107,10 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "groq.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "jwt.*"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -16,6 +16,7 @@ const config = {
 			$components: 'src/lib/components',
 			$stores: 'src/lib/stores',
 			$api: 'src/lib/api',
+			$auth: 'src/lib/auth',
 			$i18n: 'src/lib/i18n'
 		}
 	}

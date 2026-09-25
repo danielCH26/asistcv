@@ -48,6 +48,34 @@ class Settings(BaseSettings):
         default=500, validation_alias="RETRIEVAL_FRAGMENT_TARGET_CHARS"
     )
 
+    # JWT configuration
+    jwt_secret: str = Field(default="dev-secret-change-in-production", validation_alias="JWT_SECRET")
+    jwt_algorithm: str = Field(default="HS256", validation_alias="JWT_ALGORITHM")
+    jwt_access_ttl: int = Field(default=900, validation_alias="JWT_ACCESS_TTL")  # 15 minutes
+    jwt_refresh_ttl: int = Field(default=2592000, validation_alias="JWT_REFRESH_TTL")  # 30 days
+
+    # Audit configuration (PR3)
+    audit_cleanup_token: str | None = Field(default=None, validation_alias="AUDIT_CLEANUP_TOKEN")
+
+    # Stripe billing configuration (PR5)
+    stripe_secret_key: str | None = Field(default=None, validation_alias="STRIPE_SECRET_KEY")
+    stripe_webhook_secret: str | None = Field(default=None, validation_alias="STRIPE_WEBHOOK_SECRET")
+    frontend_url: str = Field(default="http://localhost:5173", validation_alias="FRONTEND_URL")
+
+    # Stripe price IDs for plans
+    stripe_price_job_seeker_monthly: str = Field(
+        default="price_job_seeker_monthly", validation_alias="STRIPE_PRICE_JOB_SEEKER_MONTHLY"
+    )
+    stripe_price_recruiter_starter: str = Field(
+        default="price_recruiter_starter", validation_alias="STRIPE_PRICE_RECRUITER_STARTER"
+    )
+    stripe_price_recruiter_business: str = Field(
+        default="price_recruiter_business", validation_alias="STRIPE_PRICE_RECRUITER_BUSINESS"
+    )
+    stripe_price_recruiter_agency: str = Field(
+        default="price_recruiter_agency", validation_alias="STRIPE_PRICE_RECRUITER_AGENCY"
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

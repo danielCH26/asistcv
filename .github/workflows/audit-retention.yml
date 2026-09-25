@@ -1,0 +1,35 @@
+name: Audit Retention Cleanup
+
+on:
+  schedule:
+    # Run daily at 03:17 UTC
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    # Allow manual trigger
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call cleanup endpoint
+        env:
+          BACKEND_URL: ${{ vars.BACKEND_URL || 'https://asistcv-backend.onrender.com' }}
+          AUDIT_CLEANUP_TOKEN: ${{ secrets.AUDIT_CLEANUP_TOKEN }}
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X POST "$BACKEND_URL/internal/audit/cleanup" \
+            -H "Content-Type: application/json" \
+            -d "{\"token\": \"$AUDIT_CLEANUP_TOKEN\"}")
+          
+          body=$(echo "$response" | sed '$d')
+          status_code=$(echo "$response" | tail -n1)
+          
+          echo "Response status: $status_code"
+          echo "Response body: $body"
+          
+          if [ "$status_code" -eq 200 ]; then
+            echo "Cleanup completed successfully"
+            echo "$body" | jq -r '.deleted_count' | xargs -I {} echo "Deleted {} expired audits"
+          else
+            echo "Cleanup failed with status $status_code"
+            exit 1
+          fi

@@ -8,11 +8,10 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import text
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import Session as SyncSession
 from sqlalchemy.pool import NullPool
-
-from app.main import app
 
 # URL de la base de datos de test. Prioriza URLs con driver (+asyncpg) — las
 # sin driver (como la del CI: postgresql://) hay que normalizarlas.
@@ -27,11 +26,40 @@ TEST_DATABASE_URL = (
 if TEST_DATABASE_URL.startswith("postgresql://") and "+" not in TEST_DATABASE_URL.split("/", 1)[0]:
     TEST_DATABASE_URL = TEST_DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
+# Rol NO-superuser y NOBYPASSRLS para los tests de RLS. Los superusers
+# BYPASEAN Row Level Security siempre (incluso con FORCE), así que los
+# tests de aislamiento deben correr como un rol equivalente al usuario de
+# app en producción (Neon: owner sin superuser). Ver tests/test_rls.py.
+RLS_TEST_ROLE = "asistcv_rls"
+
+# CRITICAL: Set DATABASE_URL to test DB BEFORE importing app modules
+# This ensures the module-level engine cache in session.py uses the test DB
+os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+
+from app.main import app  # noqa: E402
+
 # Estado global: el setup de la DB de test corre una sola vez por sesión,
 # aunque pytest-asyncio re-instancie fixtures (loop scopes distintos).
 _alembic_ready = False
 _test_engine = None
 _test_factory = None
+
+
+@event.listens_for(SyncSession, "after_begin")
+def _bind_service_rls(session, transaction, connection):
+    """Contexto RLS de servicio ('0') en cada transacción de test.
+
+    La migración 011 activa FORCE ROW LEVEL SECURITY: sin GUC, cualquier
+    SELECT/INSERT sobre tablas protegidas no devuelve filas / falla. Los
+    tests que escriben directo vía session_factory (y los endpoints en
+    modo abierto) corren como servicio, igual que el MCP en producción.
+    ``SET LOCAL`` es transaccional: se re-aplica solo en cada BEGIN, así
+    que los re-reads posteriores a un commit siguen viendo filas. Los
+    tests de RLS (tests/test_rls.py) bindan contextos de usuario
+    explícitos con conexiones crudas, sin pasar por este listener.
+    """
+    connection.execute(text("SET LOCAL app.current_user_id = '0'"))
+    connection.execute(text("SET LOCAL app.user_role = 'service'"))
 
 
 def _to_sync_url(url: str) -> str:
@@ -91,6 +119,43 @@ def _run_alembic_upgrade() -> None:
     command.upgrade(Config("alembic.ini"), "head")
 
 
+def _ensure_rls_role_and_ownership() -> None:
+    """Crea el rol NOBYPASSRLS de test y le transfiere los objetos.
+
+    El usuario que levanta el docker local (y el de CI) suele ser
+    superuser: con RLS activo, un superuser bypasea las policies aunque
+    la tabla use FORCE. REASSIGN OWNED deja el esquema en manos de un rol
+    equivalente al usuario de app en producción (owner no-superuser), que
+    es exactamente el escenario que las policies de la migración 011
+    deben cubrir. Best-effort: si el usuario de test no puede reasignar,
+    cae a GRANTs explícitos (el rol igual queda sujeto a RLS por no ser
+    owner ni superuser).
+    """
+    import psycopg
+
+    conninfo = _to_sync_url(TEST_DATABASE_URL)
+    db_user = conninfo["user"] or "asistcv"
+
+    with psycopg.connect(**conninfo) as conn:
+        conn.autocommit = True
+        conn.execute(
+            f"DO $do$ BEGIN "
+            f"IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{RLS_TEST_ROLE}') THEN "
+            f"CREATE ROLE {RLS_TEST_ROLE} NOLOGIN NOSUPERUSER NOBYPASSRLS; "
+            f"END IF; END $do$"
+        )
+        conn.execute(f"GRANT USAGE ON SCHEMA public TO {RLS_TEST_ROLE}")
+        try:
+            conn.execute(f"REASSIGN OWNED BY {db_user} TO {RLS_TEST_ROLE}")
+        except psycopg.Error:
+            conn.execute(
+                f"GRANT ALL ON ALL TABLES IN SCHEMA public TO {RLS_TEST_ROLE}"
+            )
+            conn.execute(
+                f"GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO {RLS_TEST_ROLE}"
+            )
+
+
 @pytest.fixture
 async def test_db():
     """Base de datos de test aislada con migraciones aplicadas.
@@ -118,7 +183,6 @@ async def test_db():
         await probe.dispose()
 
     if needs_setup:
-        original_db_url = os.environ.get("DATABASE_URL")
         os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 
         _ensure_database_exists(TEST_DATABASE_URL)
@@ -130,11 +194,11 @@ async def test_db():
         await reset_engine.dispose()
 
         await asyncio.to_thread(_run_alembic_upgrade)
+        await asyncio.to_thread(_ensure_rls_role_and_ownership)
 
-        if original_db_url:
-            os.environ["DATABASE_URL"] = original_db_url
-        elif "DATABASE_URL" in os.environ:
-            del os.environ["DATABASE_URL"]
+        # Keep DATABASE_URL set to TEST_DATABASE_URL so that get_session_context() uses test DB
+        # The original_db_url is kept only for reference if needed later
+        # Don't restore DATABASE_URL - tests depend on it pointing to test DB
 
         _test_engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
         _test_factory = async_sessionmaker(
@@ -150,8 +214,12 @@ async def clean_db(test_db):
     """Trunca las tablas de test al terminar cada test (aislación de datos)."""
     yield test_db
     async with test_db.engine.begin() as conn:
+        # Truncate core tables that always exist plus user-related tables
+        # (incluye las tablas protegidas por RLS agregadas en Sprint 2;
+        # TRUNCATE no está sujeto a RLS, corre como el user de test).
+        # Use CASCADE to handle dependent tables
         await conn.execute(
-            text("TRUNCATE analyses, job_descriptions, profiles RESTART IDENTITY CASCADE")
+            text("TRUNCATE analyses, job_descriptions, profiles, audit_uploads, audit_funnel_events, users, users_refresh_tokens, token_revocation, auth_login_attempts, auth_security_events, subscriptions, payments, stripe_webhook_events, usage_counters, users_cvs, recruiter_candidates, recruiter_candidates_cvs, recruiter_analyses, recruiter_consents, recruiter_audit_log CASCADE")
         )
 
 

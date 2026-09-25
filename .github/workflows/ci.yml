@@ -139,7 +139,7 @@ jobs:
         run: docker build -t asistcv-backend:ci ./backend
 
   frontend-i18n-parity:
-    name: Frontend i18n parity
+    name: Frontend i18n parity + API key guard
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -157,3 +157,10 @@ jobs:
       - name: Check i18n key parity (es ↔ en)
         run: node scripts/check-i18n-keys.mjs
         working-directory: frontend
+
+      - name: Guard - no build-time API key in frontend source
+        run: |
+          if grep -R "PUBLIC_BACKEND_API_KEY" frontend/src; then
+            echo "::error::PUBLIC_BACKEND_API_KEY found in frontend/src — auth must be JWT session only"
+            exit 1
+          fi

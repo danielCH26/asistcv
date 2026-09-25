@@ -3,11 +3,17 @@
  * Se ejecuta antes de `vite build` para cumplir el scenario match-ui
  * "Build falla sin la env var".
  *
- * PUBLIC_BACKEND_API_KEY puede quedar vacía (modo abierto del backend).
+ * Además, falla si `PUBLIC_BACKEND_API_KEY` reaparece en `src/`:
+ * la autenticación es por sesión JWT desde el sprint 2 y la API key
+ * de build-time no debe volver al bundle (spec match-ui — guard G10).
  */
-import { spawnSync } from 'node:child_process';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const REQUIRED = ['PUBLIC_API_URL'];
+const FORBIDDEN_KEY = 'PUBLIC_BACKEND_API_KEY';
+const SRC_DIR = fileURLToPath(new URL('../src', import.meta.url));
 
 function fail(missing) {
 	console.error(`[AsistCV] Faltan variables de entorno requeridas para build: ${missing.join(', ')}`);
@@ -24,10 +30,24 @@ if (missing.length > 0) {
 	fail(missing);
 }
 
-console.log('[AsistCV] env guard OK — PUBLIC_API_URL definido.');
+function walk(dir, files = []) {
+	for (const entry of readdirSync(dir)) {
+		const full = join(dir, entry);
+		if (statSync(full).isDirectory()) {
+			walk(full, files);
+		} else if (/\.(ts|js|svelte|json)$/.test(entry)) {
+			files.push(full);
+		}
+	}
+	return files;
+}
 
-// No continuar — sólo es guard; vite build se ejecuta después por npm.
+const offenders = walk(SRC_DIR).filter((file) => readFileSync(file, 'utf8').includes(FORBIDDEN_KEY));
+if (offenders.length > 0) {
+	console.error(`[AsistCV] ${FORBIDDEN_KEY} reapareció en el código del frontend (sesión JWT es la única auth):`);
+	for (const file of offenders) console.error(`  - ${file}`);
+	process.exit(1);
+}
+
+console.log('[AsistCV] env guard OK — PUBLIC_API_URL definido, sin API key en el código.');
 process.exit(0);
-
-// Referencia a spawnSync para que Vite/Node no marquen unused.
-void spawnSync;

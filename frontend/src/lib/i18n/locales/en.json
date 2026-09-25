@@ -1,15 +1,27 @@
 {
 	"app": {
 		"title": "AsistCV",
-		"tagline": "JD ↔ Profile Match",
+		"tagline": "JD ↔ Profile match",
 		"nav": {
 			"home": "Home",
-			"history": "History"
+			"history": "History",
+			"audit": "Free audit",
+			"profile": "My profile",
+			"recruiter": "Recruiter",
+			"billing": "Plan",
+			"login": "Log in",
+			"signup": "Sign up",
+			"logout": "Log out"
 		}
+	},
+	"session": {
+		"expired": "Your session expired. Please log in again.",
+		"required": "You need an account to access this section.",
+		"tokenReused": "Your session was invalidated for security reasons. Please log in again."
 	},
 	"home": {
 		"heading": "Paste a Job Description",
-		"intro": "Paste the JD text (at least 50 characters) and get an honest match against your profile.",
+		"intro": "Paste the JD text (minimum 50 characters) and get an honest match against your profile.",
 		"profileLabel": "Active profile",
 		"profileDefault": "Default profile (#1)"
 	},
@@ -18,18 +30,18 @@
 		"submit": "Analyze",
 		"submitting": "Analyzing…",
 		"charsHint": "{count} characters",
-		"validationShort": "The JD must be at least 50 characters before you can submit it.",
+		"validationShort": "The JD must have at least 50 characters to be submitted.",
 		"validationEmpty": "Paste the JD text before submitting."
 	},
 	"loading": {
 		"title": "Analyzing…",
-		"subtitle": "It can take up to a minute if the instance is waking up from cold start.",
-		"detail": "When Render hibernates the container, the first request after inactivity wakes it up."
+		"subtitle": "It may take up to 1 minute if the server is cold-starting.",
+		"detail": "When Render hibernates the container, the first request wakes the instance."
 	},
 	"error": {
-		"title": "We couldn't analyze the match",
+		"title": "Could not analyze the match",
 		"retry": "Retry",
-		"401Hint": "Invalid credentials. Check PUBLIC_BACKEND_API_KEY in the frontend build."
+		"401Hint": "Your session expired. Please log in again to continue."
 	},
 	"result": {
 		"scoreLabel": "Score",
@@ -41,14 +53,14 @@
 		"energyHigh": "High energy",
 		"modeComplete": "Full profile",
 		"modeRetrieved": "Semantic retrieval",
-		"chunksUsed": "{count} chunks"
+		"chunksUsed": "{count} fragments"
 	},
 	"history": {
 		"heading": "Analysis history",
 		"intro": "Previous analyses, newest first.",
 		"loading": "Loading history…",
 		"empty": "No analyses yet.",
-		"errorLoad": "Couldn't load the history.",
+		"errorLoad": "Could not load the history.",
 		"retry": "Retry",
 		"prev": "Previous",
 		"next": "Next",
@@ -62,12 +74,171 @@
 		"loading": "Loading detail…",
 		"notFound": "Analysis not found.",
 		"back": "Back to history",
-		"jobSnippet": "Job Description",
+		"jobSnippet": "JD",
 		"createdAt": "Analyzed on {date}"
 	},
 	"language": {
-		"toggle": "Toggle language",
+		"toggle": "Switch language",
 		"es": "Español",
 		"en": "English"
+	},
+	"signup": {
+		"title": "Sign up",
+		"heading": "Create your account",
+		"fullName": "Full name",
+		"email": "Email",
+		"password": "Password",
+		"roleLabel": "Account type",
+		"roleSeeker": "I'm looking for a job",
+		"roleRecruiter": "I'm a recruiter",
+		"acceptTos": "I accept the recruiter terms of service.",
+		"goodFaith": "I declare in good faith that the candidate data I upload is truthful and provided with their consent.",
+		"submit": "Create account",
+		"submitting": "Creating account…",
+		"passwordInvalid": "The password must be at least 10 characters, with uppercase, lowercase and a number.",
+		"emailTaken": "That email is already registered. Please log in.",
+		"consentRejected": "Required data is missing or consent was not accepted.",
+		"genericError": "Could not create the account. Please try again.",
+		"haveAccount": "Already have an account?",
+		"loginLink": "Log in"
+	},
+	"login": {
+		"title": "Log in",
+		"heading": "Log in",
+		"email": "Email",
+		"password": "Password",
+		"submit": "Log in",
+		"submitting": "Logging in…",
+		"invalidCredentials": "Incorrect email or password.",
+		"rateLimited": "Too many attempts. Wait a few minutes and try again.",
+		"noAccount": "No account yet?",
+		"signupLink": "Create one"
+	},
+	"profile": {
+		"title": "My profile",
+		"heading": "My profile",
+		"userInfo": "{name} · {email}",
+		"matchHeading": "Analyze against a JD",
+		"matchWithCv": "The selected CV will be used: {name}",
+		"matchNoCv": "Upload or select a CV to give context to your analyses."
+	},
+	"onboarding": {
+		"heading": "Welcome to AsistCV",
+		"stepOf": "Step {step} of 3",
+		"roleConfirm": "Your account type is: {role}. You can continue to upload your CV.",
+		"next": "Continue",
+		"matchCta": "Last step: paste a JD below and run your first match.",
+		"skip": "Do it later"
+	},
+	"cv": {
+		"heading": "My CVs",
+		"uploadPdf": "Upload CV as PDF (max. 10 MB)",
+		"createStructured": "Create CV with the structured editor",
+		"useEditor": "I'd rather fill in the structured editor",
+		"empty": "You have no CVs uploaded yet.",
+		"edit": "Edit",
+		"delete": "Delete",
+		"listError": "Could not load the CV list.",
+		"uploadError": "Could not upload the CV.",
+		"fileTooLarge": "The PDF exceeds the 10 MB limit.",
+		"notPdf": "The file must be a PDF.",
+		"noText": "The PDF contains no extractable text.",
+		"parseFailed": "The PDF could not be processed. Try another file.",
+		"form": {
+			"fullName": "Full name",
+			"email": "Email",
+			"phone": "Phone",
+			"location": "Location",
+			"skills": "Skills",
+			"skillsHint": "Separated by commas.",
+			"experience": "Experience",
+			"experienceHint": "One entry per line, format: Role | Company | Years",
+			"education": "Education",
+			"educationHint": "One entry per line, format: Degree | Institution | Year",
+			"save": "Save CV",
+			"saving": "Saving…"
+		}
+	},
+	"recruiter": {
+		"title": "Recruiter",
+		"heading": "Candidate roster",
+		"jdHeading": "Reference Job Description",
+		"rankCta": "Rank candidates",
+		"ranking": "Ranking…",
+		"rankedHeading": "Roster ranking",
+		"rankedTruncated": "Showing top {shown} of {total} candidates, weighted by score and recency.",
+		"rankedFull": "Ranking over {total} candidates, weighted by score and recency.",
+		"rosterHeading": "Candidates",
+		"rosterCount": "{total} candidates in your roster.",
+		"empty": "Your roster is empty. Add your first candidate below.",
+		"addHeading": "Add candidate",
+		"fullName": "Full name",
+		"email": "Email",
+		"phone": "Phone",
+		"notes": "Notes",
+		"addCta": "Add to roster",
+		"saving": "Adding…",
+		"matchCta": "Analyze",
+		"matching": "Analyzing…",
+		"duplicated": "A candidate with that email already exists in your roster.",
+		"consentRequired": "You need to accept the terms to use the roster.",
+		"consentHeading": "Recruiter terms",
+		"consentIntro": "To manage external candidates you must accept the terms of service and declare in good faith that the data is truthful and provided with consent.",
+		"consentCta": "Accept and continue",
+		"consentError": "Could not record consent. Please try again.",
+		"listError": "Could not load the roster.",
+		"createError": "Could not add the candidate.",
+		"matchError": "Could not analyze the candidate."
+	},
+	"billing": {
+		"title": "Plan",
+		"heading": "Plan and billing",
+		"currentHeading": "Your current plan",
+		"plan": "Plan",
+		"status": "Status",
+		"manageCta": "Manage subscription",
+		"plansHeading": "Available plans",
+		"paymentMethod": "Payment method",
+		"card": "Card",
+		"pse": "PSE (Colombia)",
+		"free": "Free",
+		"currencyPrefix": "{currency}",
+		"subscribeCta": "Subscribe",
+		"redirecting": "Redirecting…",
+		"usage": "This month's usage: {used} of {limit} matches.",
+		"usageUnlimited": "This month's usage: {used} matches (unlimited).",
+		"overage": "Overage: {overage} matches.",
+		"limitReached": "You reached your plan's match limit this month.",
+		"upgradeCta": "Upgrade my plan",
+		"noCustomer": "You don't have an active subscription to manage yet.",
+		"emailRequired": "Verify your email before purchasing a plan.",
+		"checkoutError": "Could not start checkout. Please try again.",
+		"portalError": "Could not open the billing portal.",
+		"loadError": "Could not load the plan catalog."
+	},
+	"audit": {
+		"title": "Free audit",
+		"heading": "Anonymous CV audit",
+		"intro": "Paste your CV and a job description. No sign-up needed: get an honest analysis in seconds (up to 3 per day).",
+		"cvLabel": "Your CV (text)",
+		"cvPlaceholder": "Paste your CV text here…",
+		"jdLabel": "Job Description",
+		"submit": "Audit my CV",
+		"submitting": "Auditing…",
+		"rateLimited": "You reached the limit of 3 audits per day. Try again in {minutes} minutes.",
+		"genericError": "Could not complete the audit. Please try again.",
+		"captureHeading": "Want us to email you the report?",
+		"emailPlaceholder": "you@email.com",
+		"captureCta": "Email me the report",
+		"captureDone": "Done. We will send the report to your email.",
+		"captureError": "Could not record the email. Please try again.",
+		"expired": "This audit has expired. You can run a new one.",
+		"emailInvalid": "The email address is not valid.",
+		"signupCta": "Want to save this analysis and manage your CVs?",
+		"signupLink": "Create your account to save it"
+	},
+	"plan": {
+		"limitReached": "You reached your plan's match limit this month. Upgrade your plan to keep analyzing.",
+		"upgradeCta": "View plans"
 	}
 }
