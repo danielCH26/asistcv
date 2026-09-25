@@ -10,7 +10,6 @@ between subscriptions.user_id and users.id.
 from collections.abc import Sequence
 
 from alembic import op
-import sqlalchemy as sa
 
 revision: str = "010_subscriptions_user_fk"
 down_revision: str = "009_subscriptions_payments"

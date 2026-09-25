@@ -9,11 +9,11 @@ Revision ID: 007
 Revises: 006
 Create Date: 2024-01-15
 """
-from datetime import datetime
-from typing import Sequence
+from collections.abc import Sequence
+
+import sqlalchemy as sa
 
 from alembic import op
-import sqlalchemy as sa
 
 revision: str = "007"
 down_revision: str = "006"

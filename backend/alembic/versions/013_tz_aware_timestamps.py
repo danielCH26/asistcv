@@ -32,9 +32,10 @@ offset; existing values are left as their UTC wall-clock representation).
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.engine import Connection
 from sqlalchemy.engine.mock import MockConnection
+
+from alembic import op
 
 revision: str = "013_tz_aware_timestamps"
 down_revision: str | Sequence[str] | None = "012_audit_jd_optional"

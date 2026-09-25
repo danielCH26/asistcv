@@ -11,11 +11,11 @@ This migration adds:
 - usage_counters: monthly usage tracking for plan limits
 """
 from collections.abc import Sequence
-from datetime import datetime
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "009_subscriptions_payments"
 down_revision: str = "008"

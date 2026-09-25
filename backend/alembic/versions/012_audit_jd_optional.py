@@ -8,16 +8,17 @@ Revision ID: 012_audit_jd_optional
 Revises: 011_rls_policies
 Create Date: 2026-09-24
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "012_audit_jd_optional"
 down_revision: str = "011_rls_policies"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

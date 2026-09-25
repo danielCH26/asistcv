@@ -44,6 +44,7 @@ without context).
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "011_rls_policies"

@@ -11,12 +11,12 @@ Revision ID: 008
 Revises: 007
 Create Date: 2024-01-15
 """
-from datetime import datetime
-from typing import Sequence
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "008"
 down_revision: str = "007"
