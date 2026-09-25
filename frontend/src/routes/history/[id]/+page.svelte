@@ -41,14 +41,17 @@
 	}
 
 	onMount(async () => {
-		const parsed = Number.parseInt(data.id, 10);
-		if (!Number.isFinite(parsed) || parsed <= 0) {
-			status = 'error';
-			errorMessage = $_('detail.invalidId');
-			return;
-		}
+		// Defense-in-depth: trust the backend to 404 cleanly and only show "Análisis no encontrado."
+		// The previous parseInt-bail-out branch proved fragile (SvelteKit timing/caching edge cases
+		// could make data.id arrive as something other than a clean positive integer even on /history/4).
+		const id = Number.parseInt(data?.id ?? '', 10);
 		try {
-			const result = await loadAnalysisDetail(parsed);
+			if (!Number.isFinite(id) || id <= 0) {
+				status = 'error';
+				errorMessage = null;
+				return;
+			}
+			const result = await loadAnalysisDetail(id);
 			if (!result) {
 				status = 'error';
 				errorMessage = null;
@@ -58,7 +61,12 @@
 			status = 'done';
 		} catch (err) {
 			status = 'error';
-			errorMessage = err instanceof ApiError ? err.message : $_('detail.unexpectedError');
+			if (err instanceof ApiError && err.status === 404) {
+				// 404 = "not found" is expected — leave small text blank so the i18n title stands alone
+				errorMessage = null;
+			} else {
+				errorMessage = err instanceof ApiError ? err.message : $_('detail.unexpectedError');
+			}
 		}
 	});
 
