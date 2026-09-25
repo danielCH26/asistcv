@@ -8,6 +8,14 @@ remain valid until on-demand re-embedding fills them.
 User accounts and auth tables added in migration 003 (Sprint 2, PR1):
 - User, RefreshToken, TokenRevocation, LoginAttempt, SecurityEvent
 - owner_user_id added to Profile and Analysis
+
+Timestamps: every ``DateTime`` column in this file is ``timezone=True``
+(``TIMESTAMP WITH TIME ZONE`` in Postgres, all values UTC). Service code
+binds ``datetime.now(UTC)``; asyncpg refuses tz-aware values against
+``TIMESTAMP WITHOUT TIME ZONE`` columns, so the model side has to opt in
+explicitly via ``sa_column=Column(DateTime(timezone=True))`` even when
+the DB already stores ``timestamptz``. Migration 013 is the canonical
+remediation for schemas that were created before this convention.
 """
 from datetime import datetime
 from typing import ClassVar
@@ -168,10 +176,22 @@ class User(SQLModel, table=True):
     full_name: str = Field(max_length=255, description="User's full name")
     locale: str = Field(default="es", max_length=10, description="Preferred locale")
     avatar_url: str | None = Field(default=None, description="URL to avatar image")
-    email_verified_at: datetime | None = Field(default=None, description="Timestamp when email was verified")
+    email_verified_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+        description="Timestamp when email was verified",
+    )
     email_verification_token_hash: str | None = Field(default=None, description="Hash of email verification token")
-    email_verification_expires_at: datetime | None = Field(default=None, description="Expiration of verification token")
-    last_login_at: datetime | None = Field(default=None, description="Last successful login timestamp")
+    email_verification_expires_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+        description="Expiration of verification token",
+    )
+    last_login_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+        description="Last successful login timestamp",
+    )
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
         sa_column=Column(DateTime(timezone=True), server_default="NOW()"),
@@ -193,9 +213,20 @@ class RefreshToken(SQLModel, table=True):
         description="Owner of the token"
     )
     token_hash: str = Field(unique=True, description="SHA256 hash of the token")
-    consumed_at: datetime | None = Field(default=None, description="When token was used (for rotation)")
-    revoked_at: datetime | None = Field(default=None, description="When token was revoked")
-    expires_at: datetime = Field(description="When token expires")
+    consumed_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+        description="When token was used (for rotation)",
+    )
+    revoked_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+        description="When token was revoked",
+    )
+    expires_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+        description="When token expires",
+    )
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
         sa_column=Column(DateTime(timezone=True), server_default="NOW()"),
@@ -211,7 +242,10 @@ class TokenRevocation(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     jti: str = Field(max_length=64, unique=True, description="JWT ID of revoked token")
-    exp: datetime = Field(description="Expiration time of the token")
+    exp: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+        description="Expiration time of the token",
+    )
     revoked_at: datetime = Field(
         default_factory=datetime.utcnow,
         sa_column=Column(DateTime(timezone=True), server_default="NOW()"),
@@ -383,10 +417,11 @@ class RecruiterConsent(SQLModel, table=True):
         sa_column=Column(Integer, ForeignKey("users.id"), nullable=False, unique=True),
         description="User who gave consent"
     )
-    accepted_at: datetime = Field(
-        description="When consent was given"
-    )
     tos_version: str = Field(max_length=50, description="Version of ToS accepted")
+    accepted_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+        description="When consent was given",
+    )
     ip: str | None = Field(default=None, max_length=45, description="Client IP at consent time")
     user_agent: str | None = Field(
         default=None, max_length=500, description="Client user agent at consent time"
@@ -446,7 +481,9 @@ class RecruiterCandidate(SQLModel, table=True):
         description="CV document for this candidate"
     )
     last_analysed_at: datetime | None = Field(
-        default=None, description="Last time a match analysis was run"
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+        description="Last time a match analysis was run",
     )
     created_at: datetime = Field(
         default_factory=datetime.utcnow,

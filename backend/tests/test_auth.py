@@ -8,7 +8,7 @@ Matriz cubierta:
 - Modo protegido + header con key correcta → 200.
 - Modo protegido: prefijo Bearer case-insensitive (bearer/BEARER).
 - Modo protegido: /health y / exentos (200 sin header).
-- Modo protegido: /docs, /redoc, /openapi.json → 404.
+- Modo protegido: /docs, /redoc y /openapi.json → 404.
 - Endpoints v1 protegidos (/v1/ping, /v1/analyses, /v1/match).
 
 Los tests de modo protegido construyen una app fresh con `create_app()`
@@ -321,3 +321,76 @@ async def test_401_does_not_invoke_llm_provider(
     )
     assert response.status_code == 401
     assert called["value"] is False
+
+
+# --- Regresión TZ-mismatch: signup no debe dejar orphan user ---
+
+
+async def test_full_signup_flow_writes_refresh_token(
+    async_client: AsyncClient,
+    clean_db,
+) -> None:
+    """Regression for the TZ-mismatch 500 on POST /v1/auth/register.
+
+    Before migration 013 + the model-side ``DateTime(timezone=True)`` fix,
+    asyncpg rejected ``datetime.now(UTC)`` against the naive
+    ``users_refresh_tokens.expires_at`` column with::
+
+        TypeError: can't subtract offset-naive and offset-aware datetimes
+
+    The INSERT for the refresh token failed after the user row had been
+    committed, leaving an orphan ``users`` row with no corresponding
+    ``users_refresh_tokens`` row. The endpoint returned 500.
+
+    This test exercises the full signup flow end-to-end and asserts:
+      1. The HTTP response is 201 with valid tokens.
+      2. Exactly one ``users_refresh_tokens`` row exists for the new user.
+      3. ``expires_at`` is timezone-aware and strictly greater than now.
+    """
+    from datetime import UTC, datetime
+
+    from sqlalchemy import select
+
+    from app.db.models import RefreshToken, User
+    from app.db.session import get_session_factory
+
+    payload = {
+        "email": "tz.regression@example.com",
+        "password": "StrongPass123",
+        "role": "job_seeker",
+        "full_name": "TZ Regression",
+        "locale": "es",
+    }
+
+    response = await async_client.post("/v1/auth/register", json=payload)
+
+    assert response.status_code == 201, (
+        f"signup failed: {response.status_code} {response.text}"
+    )
+    body = response.json()
+    assert body["access_token"]
+    assert body["refresh_token"]
+    assert body["token_type"] == "bearer"
+
+    # Direct DB check: a refresh-token row exists and is tz-aware.
+    factory = get_session_factory()
+    async with factory() as session:
+        user_result = await session.execute(
+            select(User).where(User.email == payload["email"])
+        )
+        user = user_result.scalar_one_or_none()
+        assert user is not None, "user row should exist after signup"
+
+        rt_result = await session.execute(
+            select(RefreshToken).where(RefreshToken.user_id == user.id)
+        )
+        refresh = rt_result.scalar_one_or_none()
+        assert refresh is not None, (
+            "users_refresh_tokens row must be written for the new user"
+        )
+        assert refresh.expires_at is not None
+        assert refresh.expires_at.tzinfo is not None, (
+            "expires_at must be timezone-aware; service code binds datetime.now(UTC)"
+        )
+        now = datetime.now(UTC)
+        assert refresh.expires_at > now, "expires_at must be in the future"

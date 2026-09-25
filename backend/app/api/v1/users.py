@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser
+from app.api.deps import CurrentUser, get_current_user
 from app.core.security import hash_password, verify_password
 from app.db.models import RefreshToken, User
 from app.db.session import get_session
@@ -24,7 +24,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(
-    current_user: CurrentUser,
+    current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ):
     """Get current user's profile."""
@@ -51,7 +51,7 @@ async def get_me(
 @router.patch("/me", response_model=UserResponse)
 async def update_me(
     request: UpdateUserRequest,
-    current_user: CurrentUser,
+    current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ):
     """Update current user's profile."""
@@ -95,7 +95,7 @@ async def update_me(
 @router.post("/me/password", status_code=status.HTTP_200_OK)
 async def change_password(
     request: ChangePasswordRequest,
-    current_user: CurrentUser,
+    current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ):
     """Change current user's password."""
