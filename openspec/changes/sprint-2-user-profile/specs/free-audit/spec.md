@@ -12,21 +12,32 @@ crudos 30 días como máximo.
 
 ### Requirement: Auditoría anónima
 
-`POST /v1/audit` acepta `jd_text` (≥ 50 chars) y un CV (PDF ≤ 10
-MB) sin requerir autenticación. Devuelve un `MatchAnalysis`
-idéntico al endpoint autenticado pero sin persistir el análisis en
-`analyses` ni el CV en `users_cvs`.
+`POST /v1/audit/anonymous` acepta `jd_text` (≥ 50 chars) y un CV
+por multipart sin requerir autenticación. El CV se envía por
+exactamente UNO de dos caminos: `cv_file` (PDF ≤ 10 MB, parseado
+en el servidor) o `cv_text` (texto pegado, ≥ 50 chars). Devuelve
+un `MatchAnalysis` idéntico al endpoint autenticado (más
+`audit_token`) pero sin persistir el análisis en `analyses` ni el
+CV en `users_cvs`.
 
-#### Scenario: Auditoría exitosa sin autenticación
+#### Scenario: Auditoría exitosa con PDF (sin autenticación)
 
 - GIVEN un visitante anónimo (sin JWT, sin API key)
 - AND un JD de ≥ 50 caracteres
 - AND un PDF ≤ 10 MB con texto extraíble
-- WHEN envía `POST /v1/audit` (multipart) con `file` y `jd_text`
-- THEN el sistema responde 200 con `score`, `strengths`, `gaps`,
-  `energy_level`, `reasoning`
+- WHEN envía `POST /v1/audit/anonymous` (multipart) con `cv_file`
+  y `jd_text`
+- THEN el sistema responde 200 con `audit_token`, `score`,
+  `strengths`, `gaps`, `energy_level`, `reasoning`
 - AND el CV queda en `audit_uploads` con `expires_at = now() + 30d`
 - Y el análisis NO se persiste en `analyses`
+
+#### Scenario: Auditoría exitosa con texto pegado
+
+- GIVEN un visitante anónimo y un JD de ≥ 50 caracteres
+- WHEN envía `POST /v1/audit/anonymous` (multipart) con `cv_text`
+  (≥ 50 chars) y `jd_text`
+- THEN el sistema responde 200 con `audit_token` y el análisis
 
 #### Scenario: JD corto
 
@@ -34,11 +45,44 @@ idéntico al endpoint autenticado pero sin persistir el análisis en
 - WHEN el visitante envía `POST /v1/audit`
 - THEN el sistema responde 422 con código `JD_TOO_SHORT`
 
-#### Scenario: PDF no procesable
+#### Scenario: PDF escaneado (sin texto extraíble)
 
-- GIVEN un PDF sin texto extraíble o de tipo incorrecto
-- WHEN el visitante envía `POST /v1/audit`
-- THEN el sistema responde 422 con código `PDF_INVALID`
+- GIVEN un PDF válido estructuralmente pero sin texto extraíble
+  (escaneado / image-only)
+- WHEN el visitante envía `POST /v1/audit/anonymous` con `cv_file`
+- THEN el sistema responde 422 con código `PDF_NO_TEXT`
+
+#### Scenario: PDF que supera el límite de tamaño
+
+- GIVEN un archivo de 12 MB (> 10 MB)
+- WHEN el visitante envía `POST /v1/audit/anonymous` con `cv_file`
+- THEN el sistema responde 413 con código `FILE_TOO_LARGE`
+
+#### Scenario: Archivo que no es PDF
+
+- GIVEN un archivo `.txt` (content type `text/plain`)
+- WHEN el visitante envía `POST /v1/audit/anonymous` con `cv_file`
+- THEN el sistema responde 415 con código `UNSUPPORTED_MEDIA_TYPE`
+
+#### Scenario: Fallo de parseo del PDF
+
+- GIVEN un archivo con content type PDF cuyo contenido no puede
+  ser parseado por pypdf ni pdfminer
+- WHEN el visitante envía `POST /v1/audit/anonymous` con `cv_file`
+- THEN el sistema responde 503 con código `PDF_PARSE_FAILED`
+
+#### Scenario: Sin CV (ni archivo ni texto)
+
+- GIVEN un JD de ≥ 50 caracteres
+- WHEN el visitante envía `POST /v1/audit/anonymous` sin `cv_file`
+  ni `cv_text`
+- THEN el sistema responde 422 con código `CV_REQUIRED`
+
+#### Scenario: Texto de CV demasiado corto
+
+- GIVEN un `cv_text` < 50 caracteres
+- WHEN el visitante envía `POST /v1/audit/anonymous` con `cv_text`
+- THEN el sistema responde 422 con código `CV_TOO_SHORT`
 
 ### Requirement: Captura opcional de email
 

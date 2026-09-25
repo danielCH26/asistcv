@@ -10,7 +10,7 @@ Provides:
 """
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
 from sqlalchemy import select
 
 from app.core.logging import get_logger
@@ -24,6 +24,7 @@ from app.schemas.audit import (
     ClaimAuditRequest,
     ClaimAuditResponse,
 )
+from app.services import pdf_parser
 from app.services.audit_rate_limit import AUDIT_RATE_LIMIT, check_rate_limit
 from app.services.audit_retention import delete_expired_audits, verify_cleanup_token
 from app.services.audit_runner import run_audit
@@ -39,6 +40,9 @@ logger = get_logger("app.api.audit")
 # Maximum PDF size (10MB)
 MAX_PDF_SIZE = 10 * 1024 * 1024
 
+# Minimum CV text length (mirrors JD requirement)
+MIN_CV_TEXT_LENGTH = 50
+
 
 def _get_client_ip(request: Request) -> str | None:
     """Extract client IP from request, handling X-Forwarded-For."""
@@ -46,6 +50,58 @@ def _get_client_ip(request: Request) -> str | None:
     if forwarded_for:
         return forwarded_for.split(",")[0].strip()
     return request.client.host if request.client else None
+
+
+def _read_cv_pdf(cv_file: UploadFile) -> tuple[str, bytes]:
+    """Validate and parse an uploaded PDF into CV text.
+
+    Semantics mirror POST /v1/cvs (consistency across upload surfaces):
+    - Content type/extension must be PDF -> 415
+    - Size must be <= 10MB -> 413
+    - No extractable text (scanned) -> 422 PDF_NO_TEXT
+    - Parser failure -> 503 PDF_PARSE_FAILED
+
+    Returns (extracted_text, raw_bytes).
+    """
+    filename = cv_file.filename or ""
+    if cv_file.content_type != "application/pdf" and not filename.lower().endswith(".pdf"):
+        raise HTTPException(
+            status_code=415,
+            detail={"code": "UNSUPPORTED_MEDIA_TYPE", "message": "Only PDF files are accepted"},
+        )
+
+    try:
+        pdf_bytes = cv_file.file.read()
+    except Exception as exc:
+        logger.error("audit_pdf_read_failed", error=str(exc)[:200])
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "BAD_REQUEST", "message": "Failed to read uploaded file"},
+        )
+    if len(pdf_bytes) > MAX_PDF_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail={"code": "FILE_TOO_LARGE", "message": "PDF exceeds 10MB limit"},
+        )
+
+    try:
+        parsed = pdf_parser.parse_pdf(pdf_bytes)
+    except pdf_parser.PDFNoTextError:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "PDF_NO_TEXT",
+                "message": "PDF has no extractable text (scanned document?)",
+            },
+        )
+    except pdf_parser.PDFParseError as exc:
+        logger.error("audit_pdf_parse_failed", error=str(exc)[:200])
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "PDF_PARSE_FAILED", "message": "Failed to parse PDF"},
+        )
+
+    return parsed.raw_text, pdf_bytes
 
 
 @router.post(
@@ -63,9 +119,17 @@ def _get_client_ip(request: Request) -> str | None:
 async def create_audit(
     request: Request,
     response: Response,
+    jd_text: str = Form(...),
+    cv_text: str | None = Form(None),
+    cv_file: UploadFile | None = File(None),
 ) -> AuditAnonymousResponse:
     """
     Submit an anonymous audit request (JD + CV).
+
+    Accepts multipart form data only (single consumer is our frontend):
+    - jd_text: required, >= 50 chars
+    - CV via exactly one of: cv_file (PDF <= 10MB, parsed server-side)
+      or cv_text (pasted text, >= 50 chars). Neither -> 422.
 
     Rate limited to 3 successful audits per IP per 24 hours.
     Returns the analysis result directly without persisting to analyses table.
@@ -90,12 +154,6 @@ async def create_audit(
                 },
             )
 
-        # Handle multipart form data
-        form = await request.form()
-        jd_text = form.get("jd_text", "")
-        cv_text = form.get("cv_text", None)
-        pdf_file = form.get("file")
-
         # Validate JD length
         if not jd_text or len(jd_text.strip()) < 50:
             raise HTTPException(
@@ -103,15 +161,16 @@ async def create_audit(
                 detail={"code": "JD_TOO_SHORT", "message": "JD must be at least 50 characters"},
             )
 
-        # Handle PDF file if provided
-        pdf_bytes = None
-        if pdf_file is not None:
-            pdf_bytes = await pdf_file.read()
-            if len(pdf_bytes) > MAX_PDF_SIZE:
-                raise HTTPException(
-                    status_code=413,
-                    detail={"code": "FILE_TOO_LARGE", "message": "PDF exceeds 10MB limit"},
-                )
+        # Resolve CV input: uploaded PDF wins over pasted text; one is required
+        pdf_bytes: bytes | None = None
+        if cv_file is not None:
+            cv_text, pdf_bytes = _read_cv_pdf(cv_file)
+        elif cv_text is None or len(cv_text.strip()) < MIN_CV_TEXT_LENGTH:
+            code = "CV_TOO_SHORT" if cv_text is not None else "CV_REQUIRED"
+            raise HTTPException(
+                status_code=422,
+                detail={"code": code, "message": "CV must be provided as PDF or text (>= 50 chars)"},
+            )
 
         # Run the audit
         try:

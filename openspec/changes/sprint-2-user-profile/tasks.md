@@ -157,6 +157,10 @@ Chain strategy: stacked-to-main
   - AC: `cron: '17 3 * * *'` + `workflow_dispatch`; curl con bearer desde secrets (`AUDIT_CLEANUP_TOKEN`); job loguea resultado.
 - [ ] C6. Tests PR3 (`backend/tests/test_audit.py`, `test_audit_rate_limit.py`)
   - AC: rate limit con `freezegun` (3×200 + 429 con Retry-After), capture-email (410, 422, 202), PDF inválido → 422 PDF_INVALID, retención (sólo borra no vinculadas), funnel events, cookie audit_link; piso: **≥162 tests**.
+- [x] C7. Extensión de scope por el owner (post-commit): upload de PDF en la auditoría anónima — `POST /v1/audit/anonymous` pasa a multipart con `cv_file` (PDF ≤ 10 MB → 415/413/422 PDF_NO_TEXT/503 PDF_PARSE_FAILED, semántica igual a `POST /v1/cvs`) o `cv_text` (exactamente uno requerido → 422 CV_REQUIRED / CV_TOO_SHORT); respuesta, audit_token, rate limit, retención y RLS sin cambios
+  - AC: tests en `tests/test_audit.py` (PDF válido 200+token, escaneado 422, oversized 413, .txt 415, basura 503, sin CV 422, cv_text corto 422, rate limit 429 en file path).
+- [x] C8. Extensión de scope por el owner (post-commit): UI `/audit` con modo "Subir PDF" (default) / "Pegar texto", input `accept=".pdf"` con nombre+tamaño y pre-check 10MB client-side, mapeo de errores 413/415/422/503 vía i18n (es+en); resto del funnel (Retry-After, email capture, CTA signup) sin cambios
+  - AC: tests de store (`audit.test.ts`: envía `cv_file`, no `cv_text`; 422 expone `errorCode`) y de página (`audit-page.test.ts`: multipart con file, render de error PDF_NO_TEXT); paridad i18n OK.
 
 **Tests requeridos (PR3)**: rate limit 3/IP/día + Retry-After, JD_TOO_SHORT, 415, 413, parse fail → 503 sin persistir, capture-email (202/410/422), cleanup sólo expiradas no vinculadas, emisión de funnel events.
 

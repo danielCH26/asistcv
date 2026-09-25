@@ -237,10 +237,12 @@ export const apiClient = {
 
 	// === Audit anónimo (público) ===
 
-	auditAnonymous(payload: { jd_text: string; cv_text?: string }): Promise<AuditAnonymousResult> {
+	auditAnonymous(payload: { jd_text: string; cv_text?: string; cv_file?: File }): Promise<AuditAnonymousResult> {
 		const form = new FormData();
 		form.append('jd_text', payload.jd_text);
-		if (payload.cv_text && payload.cv_text.trim() !== '') {
+		if (payload.cv_file) {
+			form.append('cv_file', payload.cv_file);
+		} else if (payload.cv_text && payload.cv_text.trim() !== '') {
 			form.append('cv_text', payload.cv_text);
 		}
 		return request<AuditAnonymousResult>('/v1/audit/anonymous', {

@@ -4,8 +4,13 @@
 	import { auditStore } from '$stores/audit';
 	import { setPendingAuditToken } from '$stores/session';
 
+	const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
 	let cvText = '';
 	let jdText = '';
+	let mode: 'pdf' | 'text' = 'pdf';
+	let cvFile: File | null = null;
+	let fileError = '';
 
 	let email = '';
 	let captureStatus: 'idle' | 'loading' | 'error' | 'done' = 'idle';
@@ -13,8 +18,45 @@
 
 	$: audit = $auditStore;
 
+	function formatSize(bytes: number): string {
+		if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+		return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+	}
+
+	function setMode(next: 'pdf' | 'text') {
+		mode = next;
+		fileError = '';
+	}
+
+	function handleFileChange(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0] ?? null;
+		fileError = '';
+		if (file && file.size > MAX_FILE_SIZE) {
+			cvFile = null;
+			input.value = '';
+			fileError = $_('audit.fileTooLarge');
+			return;
+		}
+		cvFile = file;
+	}
+
+	function clearFile() {
+		cvFile = null;
+		fileError = '';
+		const input = document.getElementById('audit-cv-file') as HTMLInputElement | null;
+		if (input) input.value = '';
+	}
+
 	function messageForError(): string {
-		if (audit.error === 'JD_TOO_SHORT') return $_('form.validationShort');
+		const code = audit.errorCode;
+		if (code === 'PDF_NO_TEXT') return $_('audit.pdfNoText');
+		if (code === 'PDF_PARSE_FAILED') return $_('audit.pdfParseFailed');
+		if (code === 'FILE_TOO_LARGE') return $_('audit.fileTooLarge');
+		if (code === 'UNSUPPORTED_MEDIA_TYPE') return $_('audit.wrongFileType');
+		if (code === 'CV_TOO_SHORT') return $_('audit.cvTooShort');
+		if (code === 'CV_REQUIRED') return $_('audit.cvRequired');
+		if (audit.error === 'JD_TOO_SHORT' || code === 'JD_TOO_SHORT') return $_('form.validationShort');
 		if (audit.retryAfter !== null) {
 			return $_('audit.rateLimited', { values: { minutes: Math.ceil(audit.retryAfter / 60) } });
 		}
@@ -22,7 +64,20 @@
 	}
 
 	async function handleSubmit() {
-		const result = await auditStore.submit(jdText, cvText);
+		fileError = '';
+		if (mode === 'pdf' && !cvFile) {
+			fileError = $_('audit.cvRequired');
+			return;
+		}
+		if (mode === 'text' && !cvText.trim()) {
+			fileError = $_('audit.cvRequired');
+			return;
+		}
+		const result = await auditStore.submit(
+			jdText,
+			mode === 'text' ? cvText : '',
+			mode === 'pdf' ? (cvFile ?? undefined) : undefined
+		);
 		if (result) setPendingAuditToken(result.audit_token);
 	}
 
@@ -50,17 +105,63 @@
 	</header>
 
 	{#if audit.status !== 'done'}
-		<form class="audit__form" on:submit|preventDefault={handleSubmit}>
+	<form class="audit__form" on:submit|preventDefault={handleSubmit}>
+		<div class="audit__modes" role="tablist" aria-label={$_('audit.cvLabel')}>
+			<button
+				type="button"
+				role="tab"
+				aria-selected={mode === 'pdf'}
+				class:active={mode === 'pdf'}
+				on:click={() => setMode('pdf')}
+			>
+				{$_('audit.modePdf')}
+			</button>
+			<button
+				type="button"
+				role="tab"
+				aria-selected={mode === 'text'}
+				class:active={mode === 'text'}
+				on:click={() => setMode('text')}
+			>
+				{$_('audit.modeText')}
+			</button>
+		</div>
+
+		{#if mode === 'pdf'}
+			<div class="audit__file">
+				<label class="audit__file-button" for="audit-cv-file">{$_('audit.fileLabel')}</label>
+				<input
+					id="audit-cv-file"
+					class="audit__file-input"
+					type="file"
+					accept=".pdf,application/pdf"
+					on:change={handleFileChange}
+				/>
+				{#if cvFile}
+					<p class="audit__file-meta">
+						{cvFile.name} · {formatSize(cvFile.size)}
+						<button type="button" class="audit__file-clear" on:click={clearFile}>
+							{$_('audit.fileClear')}
+						</button>
+					</p>
+				{/if}
+			</div>
+		{:else}
 			<label>
 				{$_('audit.cvLabel')}
 				<textarea rows="8" bind:value={cvText} placeholder={$_('audit.cvPlaceholder')} />
 			</label>
-			<label>
-				{$_('audit.jdLabel')}
-				<textarea rows="8" bind:value={jdText} placeholder={$_('form.placeholder')} />
-			</label>
+		{/if}
 
-			{#if audit.status === 'error' && audit.error}
+		<label>
+			{$_('audit.jdLabel')}
+			<textarea rows="8" bind:value={jdText} placeholder={$_('form.placeholder')} />
+		</label>
+
+		{#if fileError}
+			<p class="audit__error" role="alert">{fileError}</p>
+		{/if}
+		{#if audit.status === 'error' && audit.error}
 				<p class="audit__error" role="alert">
 					{messageForError()}
 					{#if audit.retryAfter !== null}
@@ -149,6 +250,64 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.9rem;
+	}
+
+	.audit__modes {
+		display: flex;
+		gap: 0.4rem;
+	}
+
+	.audit__form .audit__modes button {
+		padding: 0.45rem 0.9rem;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		background: var(--surface);
+		color: var(--text);
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.audit__form .audit__modes button.active {
+		border-color: var(--accent);
+		background: var(--accent);
+		color: var(--accent-contrast);
+	}
+
+	.audit__file {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+	}
+
+	.audit__file-input {
+		display: none;
+	}
+
+	.audit__file-button {
+		align-self: flex-start;
+		padding: 0.55rem 1.1rem;
+		border: 1px dashed var(--border);
+		border-radius: 8px;
+		background: var(--surface);
+		color: var(--text-strong);
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.audit__file-meta {
+		margin: 0;
+		font-size: 0.9rem;
+		color: var(--text);
+	}
+
+	.audit__form .audit__file-clear {
+		margin-left: 0.6rem;
+		padding: 0.15rem 0.5rem;
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		background: transparent;
+		color: var(--text-muted);
+		cursor: pointer;
 	}
 
 	.audit__form label {

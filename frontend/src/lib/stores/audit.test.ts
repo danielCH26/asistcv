@@ -78,4 +78,29 @@ describe('auditStore', () => {
 		const sent = await auditStore.captureEmail('ana@mail.com');
 		expect(sent).toBe(false);
 	});
+
+	it('archivo seleccionado envía cv_file, no cv_text', async () => {
+		mockedAudit.mockResolvedValueOnce(RESULT);
+		const file = new File(['%PDF-1.4 test'], 'cv.pdf', { type: 'application/pdf' });
+
+		const result = await auditStore.submit('x'.repeat(60), '', file);
+
+		expect(result).toEqual(RESULT);
+		expect(mockedAudit).toHaveBeenCalledTimes(1);
+		const payload = mockedAudit.mock.calls[0][0];
+		expect(payload.cv_file).toBe(file);
+		expect(payload.cv_text).toBeUndefined();
+	});
+
+	it('422 PDF_NO_TEXT expone errorCode para mapear la clave i18n', async () => {
+		mockedAudit.mockRejectedValueOnce(
+			new (await import('$api/types')).ApiError('scan', 422, '', 'PDF_NO_TEXT')
+		);
+
+		await auditStore.submit('x'.repeat(60), 'cv '.repeat(20));
+		const state = get(auditStore);
+
+		expect(state.status).toBe('error');
+		expect(state.errorCode).toBe('PDF_NO_TEXT');
+	});
 });
