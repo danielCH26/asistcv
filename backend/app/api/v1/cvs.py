@@ -260,6 +260,14 @@ async def update_cv(
     cv.structured = request.structured.model_dump()
     cv.last_edited_at = datetime.now(UTC)
 
+    # Bump content_version in the same transaction as the structured-data
+    # update (Slice A design D2). The adaptation cache (PR2) reads this
+    # counter so an edit invalidates cached entries keyed on the previous
+    # version. Lazy-initialise to 1 for rows created before migration 014
+    # (server default is the source of truth, but we read-then-write to
+    # stay explicit when the cached model instance predates the column).
+    cv.content_version = (cv.content_version or 0) + 1
+
     # Recalculate embedding when CV content changes (R3)
     await recalc_embedding(cv, db)
 

@@ -156,7 +156,123 @@ def test_models_registered_with_metadata():
     assert "analyses" in tables, "Analysis table should be registered"
 
 
-# --- Tests de la migración 002 (vectores + HNSW + FK profile_id) ---
+# --- Migration ordering test for Sprint 3 Slice A (PR1: 014-017) ---
+
+
+@pytest.mark.asyncio
+async def test_slice_a_migrations_chain_ordering(setup_test_db):
+    """Slice A migrations 014-017 apply and revert in order.
+
+    Asserts the SPRINT-3 chain:
+
+    * 014 — users_cvs.content_version
+    * 015 — cv_adaptations table + indexes + partial UNIQUE
+    * 016 — cv_adaptations RLS policies
+    * 017 — usage_counters.adaptations_used
+
+    Reusable behavior pattern: alembic upgrade head reaches the new head
+    (017), and alembic downgrade -1 (×4) walks back through 017 -> 016
+    -> 015 -> 014 with the corresponding columns and indexes disappearing
+    at each step.
+    """
+    import asyncio
+
+    from alembic.config import Config
+
+    from alembic import command
+
+    alembic_cfg = Config("alembic.ini")
+    engine = setup_test_db
+
+    async def _column_exists(conn, table: str, column: str) -> bool:
+        result = await conn.execute(
+            text(
+                """
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = :t
+                  AND column_name = :c
+                """
+            ),
+            {"t": table, "c": column},
+        )
+        return result.fetchone() is not None
+
+    async def _table_exists(conn, table: str) -> bool:
+        result = await conn.execute(
+            text(
+                """
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = :t
+                """
+            ),
+            {"t": table},
+        )
+        return result.fetchone() is not None
+
+    async def _index_exists(conn, index: str) -> bool:
+        result = await conn.execute(
+            text(
+                "SELECT 1 FROM pg_indexes "
+                "WHERE schemaname='public' AND indexname=:i"
+            ),
+            {"i": index},
+        )
+        return result.fetchone() is not None
+
+    # --- upgrade head (014-017 already applied in the module fixture) ---
+    # The module fixture calls command.upgrade(..., "head"); confirm
+    # both new columns, the new table and the partial UNIQUE are
+    # present post-upgrade.
+    async with engine.connect() as conn:
+        assert await _column_exists(conn, "users_cvs", "content_version")
+        assert await _column_exists(conn, "usage_counters", "adaptations_used")
+        assert await _table_exists(conn, "cv_adaptations")
+        # PR1 partial UNIQUE index on completed adaptations.
+        assert await _index_exists(conn, "uq_cv_adapt_parent_jd_hash_completed")
+
+    # --- downgrade 017: drops adaptations_used ---
+    await asyncio.to_thread(command.downgrade, alembic_cfg, "016_rls_cv_adaptations")
+    async with engine.connect() as conn:
+        assert not await _column_exists(
+            conn, "usage_counters", "adaptations_used"
+        ), "017 downgrade should drop adaptations_used"
+
+    # --- downgrade 016: drops RLS policies + DISABLE/FORCE ---
+    await asyncio.to_thread(command.downgrade, alembic_cfg, "015_cv_adaptations")
+    async with engine.connect() as conn:
+        result = await conn.execute(
+            text(
+                "SELECT count(*) FROM pg_policies "
+                "WHERE schemaname='public' AND tablename='cv_adaptations'"
+            )
+        )
+        row = result.fetchone()
+        assert row is not None and row[0] == 0, (
+            f"016 downgrade should drop all cv_adaptations policies, got {row[0]}"
+        )
+
+    # --- downgrade 015: drops cv_adaptations table + indexes ---
+    await asyncio.to_thread(command.downgrade, alembic_cfg, "014_users_cvs_content_version")
+    async with engine.connect() as conn:
+        assert not await _table_exists(
+            conn, "cv_adaptations"
+        ), "015 downgrade should drop cv_adaptations"
+        # content_version (migration 014) must still be in place after 015
+        # downgrade — the chain is 017 -> 014, not "everything from 014".
+        assert await _column_exists(
+            conn, "users_cvs", "content_version"
+        ), "015 downgrade should NOT drop content_version (still at 014)"
+
+    # --- downgrade 014: drops content_version ---
+    await asyncio.to_thread(command.downgrade, alembic_cfg, "013_tz_aware_timestamps")
+    async with engine.connect() as conn:
+        assert not await _column_exists(
+            conn, "users_cvs", "content_version"
+        ), "014 downgrade should drop content_version"
+
+    # Re-apply to leave the module fixture in the same state it started in.
+    await asyncio.to_thread(command.upgrade, alembic_cfg, "head")
 
 
 async def _fetch_vector_columns(engine) -> dict[str, set[str]]:

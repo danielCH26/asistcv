@@ -323,6 +323,15 @@ class UserCV(SQLModel, table=True):
         default=None, max_length=100,
         description="Model that generated the embedding"
     )
+    content_version: int = Field(
+        default=1,
+        sa_column=Column(Integer, nullable=False, server_default="1"),
+        description=(
+            "Monotonic edit counter; bumped in PATCH /v1/cvs/{id}. "
+            "Read by the adaptation cache (Slice A, PR2) to invalidate "
+            "cache entries whose source CV has changed."
+        ),
+    )
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
         sa_column=Column(DateTime(timezone=True), server_default="NOW()"),
@@ -651,6 +660,15 @@ class UsageCounter(SQLModel, table=True):
     )
     matches_used: int = Field(default=0, description="Number of matches used this period")
     analyses_used: int = Field(default=0, description="Number of analyses used this period")
+    adaptations_used: int = Field(
+        default=0,
+        sa_column=Column(Integer, nullable=False, server_default="0"),
+        description=(
+            "Adaptations consumed this billing period. "
+            "Slice A (sprint-adapt-cv-outreach, PR1) introduces the "
+            "column; PR2 adds enforcement and increment on completion."
+        ),
+    )
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
         sa_column=Column(DateTime(timezone=True), server_default="NOW()"),
@@ -658,4 +676,96 @@ class UsageCounter(SQLModel, table=True):
     updated_at: datetime = Field(
         default_factory=datetime.utcnow,
         sa_column=Column(DateTime(timezone=True), server_default="NOW()"),
+    )
+
+
+# === Sprint 3: CV -> JD Adaptation (Slice A foundation, PR1) ===
+
+
+class CVAdaptation(SQLModel, table=True):
+    """Asynchronous CV-to-JD adaptation job (Slice A, cv-adaptation spec).
+
+    Persists every adaptation request: pending while the background runner
+    is working, completed once the LLM output has been validated and
+    persisted, or failed when the runner / validator could not produce a
+    valid result.
+
+    A row is a DERIVATIVE of the source CV; the original ``users_cvs``
+    record stays untouched. ``parent_cv_id`` uses ``ON DELETE SET NULL``
+    (cv-management spec R2) so deleting the source CV orphans the
+    adaptation but preserves the audit trail.
+
+    PR1 fields are the minimal slice required by migration 015. PR2 adds
+    ``content_version`` snapshot, ``score_estimated``, ``retry_attempts``,
+    ``started_at``, ``failed_at`` and the ``jd_text`` retention field.
+    """
+
+    __tablename__ = "cv_adaptations"
+
+    id: int | None = Field(default=None, primary_key=True)
+    parent_cv_id: int | None = Field(
+        default=None,
+        sa_column=Column(
+            Integer,
+            ForeignKey("users_cvs.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        description=(
+            "Source CV. Nullable because deleting the CV orphans the "
+            "adaptation row (FK ON DELETE SET NULL) for audit retention."
+        ),
+    )
+    owner_user_id: int = Field(
+        sa_column=Column(
+            Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        ),
+        description="User who requested the adaptation.",
+    )
+    jd_text_hash: str = Field(
+        max_length=64,
+        description="SHA256 hex digest of the first 500 chars of the JD text.",
+    )
+    jd_text_encrypted: bytes | None = Field(
+        default=None,
+        description=(
+            "Encrypted JD text (optional). NULL when the source has "
+            "expired past the retention window."
+        ),
+    )
+    adapted_cv_json: dict = Field(
+        sa_column=Column(JSON),
+        description=(
+            "Structured adapted CV output. Always present from row "
+            "creation onward; populated by the runner when the job "
+            "reaches status=completed."
+        ),
+    )
+    status: str = Field(
+        default="pending",
+        max_length=20,
+        sa_column=Column(String(20), nullable=False, server_default="pending"),
+        description="Job lifecycle: pending | completed | failed.",
+    )
+    error_code: str | None = Field(
+        default=None,
+        max_length=50,
+        description=(
+            "Machine-readable failure tag, e.g. INVALID_HONESTY, "
+            "LLM_UNAVAILABLE, LLM_RATE_LIMITED, TIMEOUT."
+        ),
+    )
+    error_message: str | None = Field(
+        default=None,
+        description="Human-readable explanation of the failure (audit log).",
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column=Column(
+            DateTime(timezone=True), server_default="NOW()", nullable=False
+        ),
+    )
+    completed_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+        description="Set when status transitions to completed.",
     )

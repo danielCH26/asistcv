@@ -223,6 +223,25 @@ def require_role(*allowed_roles: str):
     return role_checker
 
 
+def require_adaptation_enabled() -> bool:
+    """Dependency factory returned as a plain bool for endpoint-level gating.
+
+    Wired to ``POST /v1/adaptations`` in PR2 once the adapter endpoint
+    ships. While the feature is in development (PR1 only adds the flag)
+    the value defaults to ``False`` so a stray endpoint can never leak
+    into staging: the dependency returns 503 ``FEATURE_DISABLED`` instead.
+
+    Usage (PR2):
+        @router.post("/adaptations", dependencies=[Depends(require_adaptation_enabled)])
+    """
+    if not get_settings().adaptation_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="FEATURE_DISABLED",
+        )
+    return True
+
+
 # Keep the old verify_api_key for backward compatibility with specific routes
 async def verify_api_key(
     api_key_header: str | None = Depends(_security),

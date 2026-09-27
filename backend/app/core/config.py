@@ -57,6 +57,12 @@ class Settings(BaseSettings):
     # Audit configuration (PR3)
     audit_cleanup_token: str | None = Field(default=None, validation_alias="AUDIT_CLEANUP_TOKEN")
 
+    # CV -> JD adaptation kill-switch (Sprint 3, Slice A PR1).
+    # PR2 will wire ``require_adaptation_enabled`` to POST /v1/adaptations
+    # so flipping this env var to ``False`` short-circuits the endpoint
+    # with a 503 ``FEATURE_DISABLED`` response without redeploying.
+    adaptation_enabled: bool = Field(default=False, validation_alias="ADAPTATION_ENABLED")
+
     # Stripe billing configuration (PR5)
     stripe_secret_key: str | None = Field(default=None, validation_alias="STRIPE_SECRET_KEY")
     stripe_webhook_secret: str | None = Field(default=None, validation_alias="STRIPE_WEBHOOK_SECRET")
