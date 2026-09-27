@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { _ } from 'svelte-i18n';
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
 	import HistoryList from '$components/HistoryList.svelte';
 	import { historyStore } from '$stores/history';
 	import { profileStore } from '$stores/profile';
@@ -30,10 +29,6 @@
 			pageIndex -= 1;
 			void refresh();
 		}
-	}
-
-	function viewDetail(id: number) {
-		void goto(`/history/${id}`);
 	}
 
 	onMount(refresh);
@@ -65,7 +60,7 @@
 	{/if}
 
 	{#if $historyStore.items.length > 0}
-		<HistoryList items={$historyStore.items} onSelect={viewDetail} />
+		<HistoryList items={$historyStore.items} />
 
 		<nav class="history__pagination">
 			<button type="button" on:click={prevPage} disabled={pageIndex === 0}>
