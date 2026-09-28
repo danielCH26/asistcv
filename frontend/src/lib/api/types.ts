@@ -206,6 +206,43 @@ export interface AuditAnonymousResult {
 	recomendaciones?: string[];
 }
 
+// === Sprint 3: CV -> JD Adaptation (Slice A) ===
+
+export interface AdaptedExperienceItem {
+	title: string;
+	company: string;
+	dates: string;
+	description: string;
+}
+
+export interface AdaptedCV {
+	full_name: string;
+	experience: AdaptedExperienceItem[];
+	skills: string[];
+	education?: Record<string, unknown>[];
+	languages?: string[];
+}
+
+export interface AdaptationRequest {
+	cv_id: number;
+	jd_text: string;
+}
+
+export interface AdaptationSummary {
+	id: number;
+	cv_id: number;
+	jd_text_hash: string;
+	status: 'pending' | 'completed' | 'failed';
+	error_code: string | null;
+	created_at: string;
+	completed_at: string | null;
+}
+
+export interface AdaptationDetail extends AdaptationSummary {
+	adapted_cv: AdaptedCV | null;
+	error_message: string | null;
+}
+
 export class ApiError extends Error {
 	readonly status: number;
 	readonly cause?: string;

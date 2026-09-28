@@ -19,7 +19,10 @@ import {
 	type MatchRequest,
 	type Plan,
 	type RankedCandidates,
-	type SubscriptionInfo
+	type SubscriptionInfo,
+	type AdaptationDetail,
+	type AdaptationRequest,
+	type AdaptationSummary
 } from './types';
 import {
 	refreshIfNeeded,
@@ -233,6 +236,23 @@ export const apiClient = {
 
 	deleteCv(id: number): Promise<void> {
 		return request<void>(`/v1/cvs/${id}`, { method: 'DELETE' });
+	},
+
+	// === Adaptaciones (Sprint 3, Slice A) ===
+
+	createAdaptation(req: AdaptationRequest): Promise<{ adaptation_id: number; status: string }> {
+		return request<{ adaptation_id: number; status: string }>('/v1/adaptations', {
+			method: 'POST',
+			body: JSON.stringify(req)
+		});
+	},
+
+	getAdaptation(id: number): Promise<AdaptationDetail> {
+		return request<AdaptationDetail>(`/v1/adaptations/${id}`);
+	},
+
+	listAdaptationsForCv(cvId: number): Promise<AdaptationSummary[]> {
+		return request<AdaptationSummary[]>(`/v1/adaptations/by-cv/${cvId}`);
 	},
 
 	// === Audit anónimo (público) ===

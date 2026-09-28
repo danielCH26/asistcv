@@ -258,5 +258,52 @@
 	"plan": {
 		"limitReached": "You reached your plan's match limit this month. Upgrade your plan to keep analyzing.",
 		"upgradeCta": "View plans"
+	},
+	"adapt": {
+		"title": "Adapt your CV",
+		"subtitle": "We rewrite your experience descriptions to match the job better, without inventing anything.",
+		"heading": "Adapt your CV",
+		"cta": {
+			"submit": "Adapt my CV",
+			"retry": "Retry"
+		},
+		"form": {
+			"cvLabel": "CV to adapt",
+			"cvPlaceholder": "Upload a CV first",
+			"jdLabel": "Job description",
+			"jdPlaceholder": "Paste the full job description here…"
+		},
+		"status": {
+			"pending": "Adapting your CV…",
+			"running": "Adapting your CV…",
+			"completed": "Adaptation ready",
+			"failed": "Could not adapt the CV"
+		},
+		"errors": {
+			"LLM_ERROR": "The model had an error while adapting your CV. Please retry.",
+			"INVALID_HONESTY": "The proposed adaptation failed the honesty check. Retry with a shorter JD or edit your CV.",
+			"PLAN_LIMIT_REACHED": "You reached your plan's adaptation limit this month.",
+			"NO_CV_FOUND": "The selected CV was not found.",
+			"FEATURE_DISABLED": "The adaptation feature is temporarily disabled.",
+			"POLL_TIMEOUT": "The adaptation took too long. Retry in a few minutes.",
+			"GENERIC": "Could not adapt the CV. Please retry."
+		},
+		"result": {
+			"heading": "Adapted CV",
+			"skillsHeading": "Highlighted skills",
+			"experienceHeading": "Rewritten experience"
+		},
+		"upsell": {
+			"text": "Need more? Pick a plan with unlimited adaptations.",
+			"cta": "View plans"
+		},
+		"previous": {
+			"heading": "Previous adaptations",
+			"empty": "You have no adaptations for this CV yet.",
+			"errorLoad": "Could not load the adaptation history.",
+			"statusPending": "In progress",
+			"statusCompleted": "Completed",
+			"statusFailed": "Failed"
+		}
 	}
 }

@@ -258,5 +258,52 @@
 	"plan": {
 		"limitReached": "Alcanzaste el límite de matches de tu plan este mes. Mejorá tu plan para seguir analizando.",
 		"upgradeCta": "Ver planes"
+	},
+	"adapt": {
+		"title": "Adaptá tu CV",
+		"subtitle": "Reescribimos las descripciones de tu experiencia para que matcheen mejor con la vacante, sin inventar nada.",
+		"heading": "Adaptá tu CV",
+		"cta": {
+			"submit": "Adaptar mi CV",
+			"retry": "Reintentar"
+		},
+		"form": {
+			"cvLabel": "CV a adaptar",
+			"cvPlaceholder": "Subí un CV primero",
+			"jdLabel": "Descripción de la vacante",
+			"jdPlaceholder": "Pegá acá la descripción completa de la vacante…"
+		},
+		"status": {
+			"pending": "Adaptando tu CV…",
+			"running": "Adaptando tu CV…",
+			"completed": "Adaptación lista",
+			"failed": "No se pudo adaptar el CV"
+		},
+		"errors": {
+			"LLM_ERROR": "El modelo tuvo un error al adaptar tu CV. Reintentá.",
+			"INVALID_HONESTY": "La adaptación propuesta no pasó el control de honestidad. Reintentá con un JD más corto o editá el CV.",
+			"PLAN_LIMIT_REACHED": "Alcanzaste el límite de adaptaciones de tu plan este mes.",
+			"NO_CV_FOUND": "No se encontró el CV seleccionado.",
+			"FEATURE_DISABLED": "La función de adaptación está deshabilitada temporalmente.",
+			"POLL_TIMEOUT": "La adaptación tardó demasiado. Reintentá en unos minutos.",
+			"GENERIC": "No se pudo adaptar el CV. Reintentá."
+		},
+		"result": {
+			"heading": "CV adaptado",
+			"skillsHeading": "Habilidades destacadas",
+			"experienceHeading": "Experiencia reescrita"
+		},
+		"upsell": {
+			"text": "¿Sin límite? Elegí un plan con más adaptaciones.",
+			"cta": "Ver planes"
+		},
+		"previous": {
+			"heading": "Adaptaciones previas",
+			"empty": "Todavía no hiciste adaptaciones de este CV.",
+			"errorLoad": "No se pudo cargar el historial de adaptaciones.",
+			"statusPending": "En curso",
+			"statusCompleted": "Completada",
+			"statusFailed": "Fallida"
+		}
 	}
 }
