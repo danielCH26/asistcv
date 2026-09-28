@@ -11,7 +11,7 @@ from typing import Any
 
 from huggingface_hub import InferenceClient
 
-from app.llm.schemas import CVAudit, Embedding, MatchAnalysis
+from app.llm.schemas import AdaptedCV, CVAudit, Embedding, MatchAnalysis
 
 logger = logging.getLogger(__name__)
 
@@ -155,6 +155,23 @@ class HuggingFaceProvider:
     async def generate_cv_audit(self, cv_text: str) -> CVAudit:
         """
         Generate CV quality audit is not supported by HuggingFace provider.
+
+        Raises:
+            NotImplementedError: Always, use GroqProvider for LLM operations
+        """
+        raise NotImplementedError(
+            "HuggingFaceProvider only supports embeddings. Use GroqProvider for LLM operations."
+        )
+
+    async def generate_adaptation(
+        self,
+        cv_structured: dict[str, Any],
+        jd_text: str,
+        *,
+        max_tokens: int = 4000,
+    ) -> AdaptedCV:
+        """
+        Generate CV adaptation is not supported by HuggingFace provider.
 
         Raises:
             NotImplementedError: Always, use GroqProvider for LLM operations

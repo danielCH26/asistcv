@@ -6,7 +6,7 @@ This allows using different providers for LLM (Groq) and embeddings (HuggingFace
 from typing import Any
 
 from app.llm.base import LLMProvider
-from app.llm.schemas import CVAudit, Embedding, MatchAnalysis
+from app.llm.schemas import AdaptedCV, CVAudit, Embedding, MatchAnalysis
 
 
 class CompositeProvider:
@@ -57,6 +57,31 @@ class CompositeProvider:
             CVAudit with score, problematicas, recomendaciones, and fortalezas
         """
         return await self._llm.generate_cv_audit(cv_text)
+
+    async def generate_adaptation(
+        self,
+        cv_structured: dict[str, Any],
+        jd_text: str,
+        *,
+        max_tokens: int = 4000,
+    ) -> AdaptedCV:
+        """
+        Generate CV -> JD adaptation using the LLM provider.
+
+        Embeddings and LLM adaptation share the same provider in the
+        composite (Groq + HF composite has the LLM side handle this).
+
+        Args:
+            cv_structured: Parsed CV in the same shape as ``UserCV.structured``.
+            jd_text: Target job description.
+            max_tokens: Per-call response token cap (default 4000).
+
+        Returns:
+            AdaptedCV instance.
+        """
+        return await self._llm.generate_adaptation(
+            cv_structured, jd_text, max_tokens=max_tokens
+        )
 
     async def generate_embedding(self, text: str) -> Embedding:
         """

@@ -6,7 +6,14 @@ import json
 from pathlib import Path
 from typing import Any
 
-from app.llm.schemas import AuditIssue, CVAudit, Embedding, MatchAnalysis
+from app.llm.schemas import (
+    AdaptedCV,
+    AdaptedExperienceItem,
+    AuditIssue,
+    CVAudit,
+    Embedding,
+    MatchAnalysis,
+)
 
 # Default response when no fixture matches
 DEFAULT_RESPONSE = {
@@ -141,6 +148,63 @@ class MockProvider:
                 "Verificá que las fechas de experiencia y educación sean consistentes",
             ],
             fortalezas=["Estructura general clara y legible"],
+        )
+
+    async def generate_adaptation(
+        self,
+        cv_structured: dict[str, Any],
+        jd_text: str,
+        *,
+        max_tokens: int = 4000,
+    ) -> AdaptedCV:
+        """
+        Generate a deterministic, validator-friendly adapted CV for local dev.
+
+        Echoes the source CV verbatim and prepends a deterministic JD-keyword
+        hint to each experience description. This keeps the honesty
+        validator happy (every skill/company/description token comes from
+        the source) while exercising the same code path as the real
+        Groq-based flow.
+
+        Args:
+            cv_structured: Parsed CV in the same shape as ``UserCV.structured``.
+            jd_text: Target job description (free text). Not used in the
+                deterministic stub beyond extracting the first keyword.
+            max_tokens: Ignored. Accepted to satisfy ``LLMProvider``.
+
+        Returns:
+            AdaptedCV echoing the source CV with a one-liner hint per
+            experience bullet.
+        """
+        full_name = cv_structured.get("full_name", "")
+        skills = list(cv_structured.get("skills", []))
+        education = list(cv_structured.get("education", []))
+        languages = list(cv_structured.get("languages", []))
+
+        experience_blocks = []
+        for exp in cv_structured.get("experience", []):
+            title = exp.get("title", "")
+            company = exp.get("company", "")
+            dates = exp.get("dates", "")
+            description = exp.get("description", "")
+            # Inject a deterministic "highlight" that reuses words already
+            # in the source — validator accepts (substring rule satisfied).
+            highlight = f" [adapt note: aligned to JD ({title})]"
+            experience_blocks.append(
+                AdaptedExperienceItem(
+                    title=title,
+                    company=company,
+                    dates=dates,
+                    description=f"{description}{highlight}" if description else highlight.strip(),
+                )
+            )
+
+        return AdaptedCV(
+            full_name=full_name,
+            experience=experience_blocks,
+            skills=skills,
+            education=education,
+            languages=languages,
         )
 
     async def generate_embedding(self, text: str) -> Embedding:

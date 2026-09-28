@@ -1,11 +1,12 @@
 """
 LLM Provider interface definitions.
 """
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
-from app.llm.schemas import CVAudit, Embedding, MatchAnalysis
+from app.llm.schemas import AdaptedCV, CVAudit, Embedding, MatchAnalysis
 
 
+@runtime_checkable
 class LLMProvider(Protocol):
     """
     Protocol defining the interface for LLM providers.
@@ -40,6 +41,41 @@ class LLMProvider(Protocol):
 
         Returns:
             CVAudit with score, problematicas, recomendaciones, and fortalezas
+        """
+        ...
+
+    async def generate_adaptation(
+        self,
+        cv_structured: dict[str, Any],
+        jd_text: str,
+        *,
+        max_tokens: int = 4000,
+    ) -> AdaptedCV:
+        """
+        Adapt a structured CV to a target job description.
+
+        Slice A (sprint-adapt-cv-outreach, PR2): rewrites experience
+        bullets to highlight JD relevance while preserving every fact
+        present in the source. The provider is responsible for emitting
+        strict JSON conforming to ``AdaptedCV``; the validator downstream
+        enforces the no-honesty-violation contract.
+
+        Args:
+            cv_structured: Parsed CV in the same shape as
+                ``UserCV.structured`` (full_name, experience[*], skills,
+                education, languages).
+            jd_text: Target job description (free text).
+            max_tokens: Cap on response tokens. Default 4000 because a
+                full adapted CV with rewritten bullets needs more
+                headroom than a match analysis (800).
+
+        Returns:
+            AdaptedCV with rewritten experience[*].description and
+            verbatim copies of metadata fields.
+
+        Raises:
+            ValueError: When the provider response cannot be parsed as
+                valid ``AdaptedCV`` JSON after retries.
         """
         ...
 

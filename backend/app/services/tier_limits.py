@@ -5,7 +5,7 @@ Defines plan limits and provides usage checking functionality.
 """
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,27 +13,43 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import Subscription, UsageCounter
 from app.services.rls_context import set_rls_user
 
-# Plan limits configuration
+# Plan limits configuration.
+#
+# ``None`` means "unlimited" (the user is on a paid plan and the system
+# is not metering that resource — for recruiter_agency all quotas are
+# uncapped so the runner never blocks them).
+#
+# Slice A (sprint-adapt-cv-outreach) adds ``adaptations_per_month`` as
+# the third metered resource. Free users get zero (the funnel is the
+# audit); paid users get a monthly cap that we increment on each
+# successful adaptation.
+ResourceName = Literal["match", "analysis", "adaptation"]
+
 PLAN_LIMITS: dict[str, dict[str, Any]] = {
     "free": {
         "matches_per_month": 3,
         "analyses_per_month": 1,
+        "adaptations_per_month": 0,  # Funnel is the audit; no adaptations on free.
     },
     "job_seeker_monthly": {
         "matches_per_month": 50,
         "analyses_per_month": 10,
+        "adaptations_per_month": 5,
     },
     "recruiter_starter": {
         "matches_per_month": 50,
         "analyses_per_month": None,  # Unlimited
+        "adaptations_per_month": 10,
     },
     "recruiter_business": {
         "matches_per_month": 200,
         "analyses_per_month": None,  # Unlimited
+        "adaptations_per_month": 20,
     },
     "recruiter_agency": {
         "matches_per_month": None,  # Unlimited
         "analyses_per_month": None,  # Unlimited
+        "adaptations_per_month": None,  # Unlimited
     },
 }
 
@@ -45,8 +61,10 @@ class PlanLimit:
     plan: str
     matches_per_month: int | None
     analyses_per_month: int | None
+    adaptations_per_month: int | None
     matches_used: int
     analyses_used: int
+    adaptations_used: int
 
     @property
     def matches_remaining(self) -> int | None:
@@ -62,6 +80,13 @@ class PlanLimit:
             return None
         return max(0, self.analyses_per_month - self.analyses_used)
 
+    @property
+    def adaptations_remaining(self) -> int | None:
+        """Returns remaining adaptations, or None if unlimited."""
+        if self.adaptations_per_month is None:
+            return None
+        return max(0, self.adaptations_per_month - self.adaptations_used)
+
     def can_use_match(self) -> bool:
         """Check if user can perform a match."""
         if self.matches_per_month is None:
@@ -73,6 +98,12 @@ class PlanLimit:
         if self.analyses_per_month is None:
             return True
         return self.analyses_used < self.analyses_per_month
+
+    def can_use_adaptation(self) -> bool:
+        """Check if user can request an adaptation."""
+        if self.adaptations_per_month is None:
+            return True
+        return self.adaptations_used < self.adaptations_per_month
 
 
 async def get_user_plan(session: AsyncSession, user_id: int) -> str:
@@ -102,8 +133,10 @@ async def get_plan_limits(session: AsyncSession, user_id: int, user_role: str = 
             plan=plan,
             matches_per_month=0,
             analyses_per_month=0,
+            adaptations_per_month=0,
             matches_used=0,
             analyses_used=0,
+            adaptations_used=0,
         )
 
     # Get current period usage
@@ -122,18 +155,24 @@ async def get_plan_limits(session: AsyncSession, user_id: int, user_role: str = 
 
     matches_used = counter.matches_used if counter else 0
     analyses_used = counter.analyses_used if counter else 0
+    adaptations_used = counter.adaptations_used if counter else 0
 
     return PlanLimit(
         plan=plan,
         matches_per_month=limits["matches_per_month"],
         analyses_per_month=limits["analyses_per_month"],
+        adaptations_per_month=limits["adaptations_per_month"],
         matches_used=matches_used,
         analyses_used=analyses_used,
+        adaptations_used=adaptations_used,
     )
 
 
 async def check_limit(
-    session: AsyncSession, user_id: int, resource: str, user_role: str = "job_seeker"
+    session: AsyncSession,
+    user_id: int,
+    resource: ResourceName,
+    user_role: str = "job_seeker",
 ) -> PlanLimit:
     """Check if user can use resource without incrementing.
 
@@ -143,7 +182,7 @@ async def check_limit(
     Args:
         session: Database session
         user_id: User ID
-        resource: "match" or "analysis"
+        resource: ``"match" | "analysis" | "adaptation"``
         user_role: User role (job_seeker or recruiter)
 
     Returns:
@@ -160,12 +199,14 @@ async def check_limit(
         raise ValueError("PLAN_LIMIT_REACHED")
     if resource == "analysis" and not limits.can_use_analysis():
         raise ValueError("PLAN_LIMIT_REACHED")
+    if resource == "adaptation" and not limits.can_use_adaptation():
+        raise ValueError("PLAN_LIMIT_REACHED")
 
     return limits
 
 
 async def increment_usage(
-    session: AsyncSession, user_id: int, resource: str
+    session: AsyncSession, user_id: int, resource: ResourceName
 ) -> PlanLimit:
     """Increment usage counter for a resource.
 
@@ -180,7 +221,7 @@ async def increment_usage(
     Args:
         session: Database session
         user_id: User ID
-        resource: "match" or "analysis"
+        resource: ``"match" | "analysis" | "adaptation"``
 
     Returns:
         Updated PlanLimit after incrementing
@@ -207,8 +248,12 @@ async def increment_usage(
     # Increment the counter
     if resource == "match":
         counter.matches_used += 1
-    else:
+    elif resource == "analysis":
         counter.analyses_used += 1
+    elif resource == "adaptation":
+        counter.adaptations_used += 1
+    else:
+        raise ValueError(f"Unknown resource: {resource!r}")
 
     await session.commit()
 

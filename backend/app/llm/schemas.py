@@ -37,6 +37,53 @@ class CVAudit(BaseModel):
     fortalezas: list[str] = Field(default_factory=list, description="CV strengths")
 
 
+# === Sprint 3: CV -> JD Adaptation (Slice A, PR2) ===
+
+
+class AdaptedExperienceItem(BaseModel):
+    """Single experience block in an adapted CV.
+
+    Mirrors the shape of ``UserCV.structured.experience[*]``; only
+    ``description`` is rewritten by the LLM (the other fields are preserved
+    verbatim from the source CV).
+    """
+
+    title: str = Field(..., description="Job title as it appears in the source CV")
+    company: str = Field(..., description="Company name as it appears in the source CV")
+    dates: str = Field(..., description="Date range (verbatim from source CV)")
+    description: str = Field(
+        ...,
+        description="Rewritten bullet block. Honesty validator checks substrings against the source.",
+    )
+
+
+class AdaptedCV(BaseModel):
+    """Structured output of a CV -> JD adaptation.
+
+    Same shape as ``UserCV.structured`` so the runner can persist the LLM
+    output directly to ``CVAdaptation.adapted_cv_json`` without reshaping.
+    Only ``experience[*].description`` is rewritten; everything else
+    (full_name, skills, education, languages, experience metadata) is
+    expected to be a subset/verbatim copy of the source.
+    """
+
+    full_name: str = Field(..., description="Candidate's full name (verbatim from source)")
+    experience: list[AdaptedExperienceItem] = Field(
+        default_factory=list, description="Experience blocks; only description is rewritten"
+    )
+    skills: list[str] = Field(
+        default_factory=list,
+        description="Skills list. Honesty validator requires each to be a normalized substring of the source skills.",
+    )
+    education: list[dict] = Field(
+        default_factory=list,
+        description="Education blocks (verbatim from source)",
+    )
+    languages: list[str] = Field(
+        default_factory=list, description="Languages (verbatim from source)"
+    )
+
+
 class Embedding(BaseModel):
     """Text embedding vector."""
 

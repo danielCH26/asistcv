@@ -12,9 +12,13 @@ from typing import Any, cast
 
 import groq
 
-from app.llm.schemas import CVAudit, Embedding, MatchAnalysis
+from app.llm.schemas import AdaptedCV, CVAudit, Embedding, MatchAnalysis
 
 logger = logging.getLogger(__name__)
+
+# Default token budget for adaptation calls (a full CV rewrite needs more
+# headroom than the 800-token match/audit flow).
+ADAPTATION_DEFAULT_MAX_TOKENS = 4000
 
 # System prompt for match analysis
 SYSTEM_PROMPT = """Eres un evaluador profesional de简历 vs descripciones de trabajo (JD).
@@ -86,6 +90,26 @@ CV_AUDIT_USER_PROMPT_TEMPLATE = """## CV del candidato:
 
 Evalúa la calidad del CV y responde solo con JSON válido."""
 
+# System prompt for CV -> JD adaptation (Slice A, PR2).
+# Honesty contract: the model may REWRITE bullets but may not INVENT
+# facts. The validator downstream enforces the substring rule; this
+# prompt makes the contract explicit so the model self-rejects drift.
+CV_ADAPTATION_SYSTEM_PROMPT = """Eres un asistente que adapta CVs a ofertas de trabajo. REGLAS ESTRICTAS:
+1. SOLO puedes usar contenido presente en el CV fuente. NO inventes habilidades, trabajos, fechas, ni logros.
+2. Reescribe los bullets de experiencia para resaltar relevancia al JD. NO agregues experiencia nueva.
+3. Output JSON estricto con la estructura: {"full_name": str, "experience": [{"title": str, "company": str, "dates": str, "description": str}], "skills": list[str], "education": list[dict], "languages": list[str]}.
+4. La lista de skills DEBE ser un subset del CV fuente. NO agregues skills nuevas.
+5. Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional."""
+
+# User prompt template for CV -> JD adaptation.
+CV_ADAPTATION_USER_PROMPT_TEMPLATE = """CV fuente (JSON):
+{cv_json}
+
+JD objetivo:
+{jd_text}
+
+Genera el CV adaptado. Solo JSON válido, sin texto adicional."""
+
 
 class GroqProvider:
     """
@@ -155,7 +179,51 @@ class GroqProvider:
         result = await self._complete_json(CV_AUDIT_SYSTEM_PROMPT, user_prompt)
         return CVAudit(**result)
 
-    async def _complete_json(self, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    async def generate_adaptation(
+        self,
+        cv_structured: dict[str, Any],
+        jd_text: str,
+        *,
+        max_tokens: int = ADAPTATION_DEFAULT_MAX_TOKENS,
+    ) -> AdaptedCV:
+        """
+        Adapt a structured CV to a target job description.
+
+        Implements the Slice A contract: rewrite ``experience[*].description``
+        bullets to highlight JD relevance while keeping every fact verbatim
+        from the source. The honesty guarantee is enforced downstream by
+        ``adaptation_validator``; this provider just emits the JSON shape.
+
+        Args:
+            cv_structured: Parsed CV in the same shape as
+                ``UserCV.structured``.
+            jd_text: Target job description (free text).
+            max_tokens: Per-call response token cap. Defaults to
+                ``ADAPTATION_DEFAULT_MAX_TOKENS`` (4000); raised above
+                the match/audit default because adapted CVs are longer.
+
+        Returns:
+            AdaptedCV instance matching the LLM-emitted JSON.
+        """
+        user_prompt = CV_ADAPTATION_USER_PROMPT_TEMPLATE.format(
+            cv_json=json.dumps(cv_structured, indent=2, ensure_ascii=False),
+            jd_text=jd_text,
+        )
+
+        result = await self._complete_json(
+            CV_ADAPTATION_SYSTEM_PROMPT,
+            user_prompt,
+            max_tokens=max_tokens,
+        )
+        return AdaptedCV(**result)
+
+    async def _complete_json(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        max_tokens: int | None = None,
+    ) -> dict[str, Any]:
         """
         Run a JSON-mode chat completion with retries and robust JSON parsing.
 
@@ -166,12 +234,16 @@ class GroqProvider:
         Args:
             system_prompt: System message content
             user_prompt: User message content
+            max_tokens: Per-call override for the response token cap. When
+                ``None`` (default), falls back to ``self._max_tokens`` set
+                in the constructor (matches prior behavior for match/audit).
 
         Returns:
             Parsed JSON response as a dictionary
         """
         start_time = time.time()
         last_error: Exception | None = None
+        effective_max_tokens = self._max_tokens if max_tokens is None else max_tokens
 
         for attempt in range(self._max_retries + 1):
             try:
@@ -182,7 +254,7 @@ class GroqProvider:
                         {"role": "user", "content": user_prompt},
                     ],
                     temperature=self._temperature,
-                    max_tokens=self._max_tokens,
+                    max_tokens=effective_max_tokens,
                     response_format={"type": "json_object"},
                 )
 
