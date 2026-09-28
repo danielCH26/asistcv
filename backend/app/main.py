@@ -20,6 +20,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.deps import require_role, verify_api_key
 from app.api.v1 import (
+    adaptations,
     analyses,
     audit,
     auth,
@@ -172,6 +173,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         prefix=settings.api_prefix,
         dependencies=[Depends(optional_auth)],
     )
+    # Adaptation endpoints require auth at the endpoint level
+    # (``get_current_user``); the router itself has no router-level
+    # gate so the require_adaptation_enabled dependency can still raise
+    # 503 in front of any other 401/403.
+    app.include_router(
+        adaptations.router,
+        prefix=settings.api_prefix,
+    )
 
     # Audit endpoints are public (no auth required for anonymous funnel)
     app.include_router(
@@ -215,6 +224,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         stripe_webhook.router,
         prefix="/api/v1",
         include_in_schema=False,
+    )
+
+    # Internal cleanup endpoint for the adaptation sweeper cron. No
+    # router-level auth; per-endpoint BACKEND_API_KEY check inside the
+    # handler. Mounted at /internal (no /v1 prefix) to match the
+    # audit-retention cron wiring.
+    from app.api.v1.internal import adaptations as internal_adaptations
+
+    app.include_router(
+        internal_adaptations.router,
+        prefix="/internal",
     )
 
     return app

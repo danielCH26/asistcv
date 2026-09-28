@@ -242,6 +242,26 @@ def require_adaptation_enabled() -> bool:
     return True
 
 
+def get_runner():
+    """FastAPI dependency returning a process-local ``AdaptationRunner``.
+
+    Lazy-imports ``build_runner`` to avoid pulling the LLM provider at
+    module load. Tests override this dependency to inject a runner
+    with a mocked LLM provider and the test DB session factory.
+
+    Usage:
+        @router.post("/adaptations")
+        async def create_adaptation(
+            runner: AdaptationRunner = Depends(get_runner),
+            ...
+        ):
+            ...
+    """
+    from app.services.adaptation_runner import build_runner
+
+    return build_runner()
+
+
 # Keep the old verify_api_key for backward compatibility with specific routes
 async def verify_api_key(
     api_key_header: str | None = Depends(_security),

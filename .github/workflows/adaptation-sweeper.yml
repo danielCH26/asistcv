@@ -1,0 +1,36 @@
+name: adaptation-sweeper
+
+on:
+  # Run every 15 minutes. Tight cadence so orphaned pending rows don't
+  # linger in the DB after a Render restart; the sweeper is cheap.
+  schedule:
+    - cron: '*/15 * * * *'
+  # Allow manual trigger for incident debugging.
+  workflow_dispatch:
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST cleanup
+        env:
+          BACKEND_URL: ${{ vars.RENDER_BACKEND_URL || 'https://asistcv-backend.onrender.com' }}
+          BACKEND_API_KEY: ${{ secrets.BACKEND_API_KEY }}
+        run: |
+          response=$(curl -fsS -w "\n%{http_code}" -X POST "$BACKEND_URL/internal/adaptations/cleanup" \
+            -H "X-Backend-API-Key: $BACKEND_API_KEY" \
+            -H "Content-Type: application/json")
+
+          body=$(echo "$response" | sed '$d')
+          status_code=$(echo "$response" | tail -n1)
+
+          echo "Response status: $status_code"
+          echo "Response body: $body"
+
+          if [ "$status_code" -eq 200 ]; then
+            deleted=$(echo "$body" | python -c 'import sys, json; print(json.load(sys.stdin).get("deleted", 0))')
+            echo "Sweep completed successfully — deleted $deleted adaptation row(s)"
+          else
+            echo "Sweep failed with status $status_code"
+            exit 1
+          fi
