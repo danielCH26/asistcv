@@ -67,13 +67,6 @@ class CaptureEmailResponse(BaseModel):
     message: str = Field(..., description="Status message")
 
 
-class ClaimAuditRequest(BaseModel):
-    """Request body for claiming an audit after user signup."""
-
-    audit_token: str = Field(..., description="Token from the anonymous audit")
-    user_id: int = Field(..., description="ID of the user claiming this audit")
-
-
 class ClaimAuditResponse(BaseModel):
     """Response body for audit claim."""
 

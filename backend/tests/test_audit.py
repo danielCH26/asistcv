@@ -70,6 +70,17 @@ VALID_CV_TEXT = (
 )
 PDF_TEXT = "John Doe. Experienced Python developer with six years of experience in Django FastAPI and AWS platforms."
 
+CLAIM_JD = "Looking for a senior backend engineer with strong Postgres and Python skills."
+CLAIM_CV = "Senior backend engineer with 6 years of Python and Postgres experience."
+CLAIM_RESULT = {
+    "mode": "jd_directed",
+    "score": 80,
+    "strengths": ["Strong Python skills"],
+    "gaps": ["Limited leadership"],
+    "energy_level": "high",
+    "reasoning": "Solid match overall.",
+}
+
 CV_AUDIT_RESPONSE = CVAudit(
     score=68,
     problematicas=[
@@ -90,6 +101,51 @@ CV_AUDIT_RESPONSE = CVAudit(
     ],
     fortalezas=["Buena estructura general"],
 )
+
+
+async def _seed_claimable_audit(email: str) -> tuple[int, str, str]:
+    """Seed a job_seeker plus an unlinked audit that carries a result.
+
+    Returns ``(user_id, plain_token, token_hash)``: the id a JWT must be
+    minted for, the capability sent in the claim URL, and the hash the
+    audit is looked up by in the DB.
+    """
+    from app.db.models import AuditUpload, User
+    from app.services.audit_token import generate_audit_token
+
+    plain_token, token_hash = generate_audit_token()
+
+    async with get_session_context() as session:
+        user = User(
+            email=email,
+            password_hash="hash",
+            role="job_seeker",
+            full_name=email.split("@")[0],
+        )
+        session.add(user)
+        await session.flush()
+        user_id = cast(int, user.id)
+
+        session.add(
+            AuditUpload(
+                audit_token_hash=token_hash,
+                jd_text=CLAIM_JD,
+                cv_text=CLAIM_CV,
+                audit_result_json=dict(CLAIM_RESULT),
+                expires_at=datetime.now(UTC) + timedelta(days=30),
+            )
+        )
+        await session.commit()
+
+    return user_id, plain_token, token_hash
+
+
+def _bearer(user_id: int) -> dict[str, str]:
+    """Authorization header for a real JWT principal (see tests/test_rls.py)."""
+    from app.core.security import create_access_token
+
+    token = create_access_token({"sub": str(user_id), "role": "job_seeker"})
+    return {"Authorization": f"Bearer {token}"}
 
 
 # Mock the LLM provider for tests
@@ -496,7 +552,7 @@ class TestClaimAudit:
         tc = TestClient(app)
         response = tc.post(
             f"/v1/audit/{plain_token}/claim",
-            json={"audit_token": plain_token, "user_id": user_id},
+            headers=_bearer(user_id),
         )
 
         assert response.status_code == 200, response.text
@@ -575,15 +631,273 @@ class TestClaimAudit:
         tc = TestClient(app)
         first = tc.post(
             f"/v1/audit/{plain_token}/claim",
-            json={"audit_token": plain_token, "user_id": user_id},
+            headers=_bearer(user_id),
         ).json()
         second = tc.post(
             f"/v1/audit/{plain_token}/claim",
-            json={"audit_token": plain_token, "user_id": user_id},
+            headers=_bearer(user_id),
         ).json()
 
         assert first["analysis_id"] == second["analysis_id"]
         assert first["analysis_id"] is not None
+
+
+class TestClaimAuditAuth:
+    """POST /v1/audit/{token}/claim — S3: the claim binds to the JWT principal.
+
+    The endpoint used to take ``user_id`` from an unauthenticated body and
+    write it under the SERVICE RLS context, so any holder of an audit token
+    could attach it to any account (and enumerate users through the
+    USER_NOT_FOUND branch).
+    """
+
+    @pytest.mark.asyncio
+    async def test_claim_requires_authentication(self, client, clean_db):
+        """A claim without credentials is rejected before touching the audit."""
+        from app.db.models import AuditUpload
+
+        _, plain_token, token_hash = await _seed_claimable_audit("noauth@example.com")
+
+        response = client.post(f"/v1/audit/{plain_token}/claim")
+
+        assert response.status_code == 401
+        # The audit stays unlinked: no state change on the unauthenticated path.
+        async with get_session_context() as session:
+            stored = (
+                await session.execute(
+                    select(AuditUpload).where(AuditUpload.audit_token_hash == token_hash)
+                )
+            ).scalar_one()
+            assert stored.linked_user_id is None
+
+    @pytest.mark.asyncio
+    async def test_claim_invalid_bearer_is_rejected(self, client, clean_db):
+        """A malformed Authorization header is a 401, not a silent anonymous claim."""
+        _, plain_token, _ = await _seed_claimable_audit("badbearer@example.com")
+
+        response = client.post(
+            f"/v1/audit/{plain_token}/claim",
+            headers={"Authorization": "Bearer not-a-jwt"},
+        )
+
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_claim_links_audit_to_the_authenticated_user(self, client, clean_db):
+        """A JWT principal claims the audit; link and Analysis land on them."""
+        from app.db.models import Analysis, AuditUpload
+
+        user_id, plain_token, token_hash = await _seed_claimable_audit("claim-a@example.com")
+
+        response = client.post(
+            f"/v1/audit/{plain_token}/claim",
+            headers=_bearer(user_id),
+        )
+
+        assert response.status_code == 200, response.text
+        analysis_id = response.json()["analysis_id"]
+        assert isinstance(analysis_id, int)
+
+        async with get_session_context() as session:
+            stored = (
+                await session.execute(
+                    select(AuditUpload).where(AuditUpload.audit_token_hash == token_hash)
+                )
+            ).scalar_one()
+            assert stored.linked_user_id == user_id
+
+            analysis = await session.get(Analysis, analysis_id)
+            assert analysis is not None
+            assert analysis.owner_user_id == user_id
+            assert analysis.score == 80
+
+    @pytest.mark.asyncio
+    async def test_claim_ignores_user_id_in_body(self, client, clean_db):
+        """A body carrying another user_id cannot move the link off the caller."""
+        from app.db.models import Analysis, AuditUpload
+
+        attacker_id, _, _ = await _seed_claimable_audit("attacker@example.com")
+        victim_id, plain_token, token_hash = await _seed_claimable_audit("victim@example.com")
+
+        response = client.post(
+            f"/v1/audit/{plain_token}/claim",
+            headers=_bearer(attacker_id),
+            json={"audit_token": plain_token, "user_id": victim_id},
+        )
+
+        assert response.status_code == 200, response.text
+        analysis_id = response.json()["analysis_id"]
+
+        async with get_session_context() as session:
+            stored = (
+                await session.execute(
+                    select(AuditUpload).where(AuditUpload.audit_token_hash == token_hash)
+                )
+            ).scalar_one()
+            assert stored.linked_user_id == attacker_id
+
+            analysis = await session.get(Analysis, analysis_id)
+            assert analysis is not None
+            assert analysis.owner_user_id == attacker_id
+
+            victim_rows = (
+                await session.execute(
+                    select(Analysis).where(Analysis.owner_user_id == victim_id)
+                )
+            ).scalars().all()
+            assert victim_rows == []
+
+    @pytest.mark.asyncio
+    async def test_claim_does_not_leak_user_existence(self, client, clean_db):
+        """The unauthenticated path is a flat 401, never a USER_NOT_FOUND oracle."""
+        _, plain_token, _ = await _seed_claimable_audit("oracle@example.com")
+
+        responses = [
+            client.post(f"/v1/audit/{plain_token}/claim"),
+            client.post(
+                f"/v1/audit/{plain_token}/claim",
+                json={"audit_token": plain_token, "user_id": 1},
+            ),
+            client.post(
+                f"/v1/audit/{plain_token}/claim",
+                json={"audit_token": plain_token, "user_id": 999_999},
+            ),
+        ]
+
+        for response in responses:
+            assert response.status_code == 401
+            assert "USER_NOT_FOUND" not in response.text
+
+    @pytest.mark.asyncio
+    async def test_claim_unknown_token_returns_404(self, client, clean_db):
+        """An authenticated claim of an unknown token keeps the 404 contract."""
+        user_id, _, _ = await _seed_claimable_audit("unknown-token@example.com")
+
+        response = client.post(
+            "/v1/audit/does-not-exist/claim",
+            headers=_bearer(user_id),
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"]["code"] == "AUDIT_NOT_FOUND"
+
+    @pytest.mark.asyncio
+    async def test_claim_idempotent_retry_keeps_analysis_id(self, client, clean_db):
+        """Re-claiming under the same principal is idempotent, not a second link."""
+        from app.db.models import Analysis, AuditUpload
+
+        user_id, plain_token, token_hash = await _seed_claimable_audit("retry@example.com")
+        headers = _bearer(user_id)
+
+        first = client.post(f"/v1/audit/{plain_token}/claim", headers=headers)
+        second = client.post(f"/v1/audit/{plain_token}/claim", headers=headers)
+
+        assert first.status_code == 200, first.text
+        assert second.status_code == 200, second.text
+        assert first.json()["analysis_id"] == second.json()["analysis_id"]
+
+        async with get_session_context() as session:
+            stored = (
+                await session.execute(
+                    select(AuditUpload).where(AuditUpload.audit_token_hash == token_hash)
+                )
+            ).scalar_one()
+            assert stored.linked_user_id == user_id
+            owned = (
+                await session.execute(
+                    select(Analysis).where(Analysis.owner_user_id == user_id)
+                )
+            ).scalars().all()
+            assert len(owned) == 1
+
+    @pytest.mark.asyncio
+    async def test_claim_rejects_api_key_principal(self, client, clean_db, monkeypatch):
+        """The service API key is not a valid principal for a user-scoped claim.
+
+        The API key resolves to ``CurrentUser(id=0, role="service")``, the
+        RLS bypass principal. Accepting it here would attempt to link the
+        audit to user 0, which violates the ``users.id`` foreign key and
+        surfaces as a 500. The claim must reject it with 403 instead.
+        """
+        from app.core.config import get_settings
+        from app.db.models import AuditUpload
+
+        user_id, plain_token, _ = await _seed_claimable_audit("apikey@example.com")
+
+        settings = get_settings()
+        monkeypatch.setattr(settings, "backend_api_key", "test-service-key", raising=False)
+        monkeypatch.setattr(
+            "app.api.deps.is_auth_required", lambda: True, raising=False
+        )
+
+        response = client.post(
+            f"/v1/audit/{plain_token}/claim",
+            headers={"Authorization": "Bearer test-service-key"},
+        )
+
+        assert response.status_code == 403, response.text
+
+        # The seed user must be untouched: no audit linked, no analysis created.
+        async with get_session_context() as session:
+            linked = (
+                await session.execute(
+                    select(AuditUpload).where(
+                        AuditUpload.linked_user_id.is_not(None)
+                    )
+                )
+            ).scalars().all()
+            assert linked == []
+
+
+class TestAuditRouteTable:
+    """The audit surface must be reachable at exactly one path per endpoint."""
+
+    @staticmethod
+    def _paths() -> list[str]:
+        """Flat list of every mounted path, prefixes included.
+
+        FastAPI >= 0.140 keeps ``include_router`` results lazy
+        (``app.routes`` holds ``_IncludedRouter`` wrappers), so the routes
+        are flattened through ``iter_route_contexts`` when available and
+        read straight off ``app.routes`` on older versions.
+        """
+        from app.main import app
+
+        try:
+            from fastapi.routing import iter_route_contexts
+        except ImportError:  # pragma: no cover - older FastAPI
+            contexts = list(app.routes)
+        else:
+            contexts = list(iter_route_contexts(app.routes))
+        return [getattr(context, "path", None) for context in contexts]
+
+    def test_public_audit_paths_mounted_exactly_once(self):
+        """Each public funnel path is registered once, under /v1."""
+        paths = self._paths()
+        for expected in (
+            "/v1/audit/anonymous",
+            "/v1/audit/{token}/capture-email",
+            "/v1/audit/{token}/claim",
+            "/v1/audit/{token}",
+        ):
+            assert paths.count(expected) == 1, expected
+
+    def test_public_funnel_not_exposed_at_the_root(self):
+        """The duplicate root mount of the funnel is gone."""
+        paths = self._paths()
+        for leaked in (
+            "/audit/anonymous",
+            "/audit/{token}/capture-email",
+            "/audit/{token}/claim",
+            "/audit/{token}",
+        ):
+            assert leaked not in paths, leaked
+
+    def test_internal_cleanup_still_mounted_at_the_root(self):
+        """The retention cron path survives the single-mount cleanup."""
+        paths = self._paths()
+        assert paths.count("/internal/audit/cleanup") == 1
+        assert "/v1/internal/audit/cleanup" not in paths
 
 
 class TestAuditRetention:

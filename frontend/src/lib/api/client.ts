@@ -281,11 +281,15 @@ export const apiClient = {
 		);
 	},
 
-	linkAudit(token: string, userId: number): Promise<{ success: boolean; message: string }> {
-		return request<{ success: boolean; message: string }>(
+	/**
+	 * Reclama un audit anónimo para la sesión actual. El backend toma el
+	 * usuario del JWT, así que el body va vacío y `request` adjunta el
+	 * bearer (con refresh silencioso si el access token venció).
+	 */
+	linkAudit(token: string): Promise<{ success: boolean; message: string; analysis_id?: number | null }> {
+		return request<{ success: boolean; message: string; analysis_id?: number | null }>(
 			`/v1/audit/${encodeURIComponent(token)}/claim`,
-			{ method: 'POST', body: JSON.stringify({ audit_token: token, user_id: userId }) },
-			{ auth: false }
+			{ method: 'POST' }
 		);
 	},
 
