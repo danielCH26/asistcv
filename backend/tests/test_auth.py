@@ -20,6 +20,7 @@ from collections.abc import AsyncIterator
 import pytest
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 
 API_KEY = "test-secret-key-abc123"
 AUTH_HEADER = {"Authorization": f"Bearer {API_KEY}"}
@@ -394,3 +395,257 @@ async def test_full_signup_flow_writes_refresh_token(
         )
         now = datetime.now(UTC)
         assert refresh.expires_at > now, "expires_at must be in the future"
+
+
+# --- Verify-email flow (C3 / issue #46) ---
+
+
+async def test_verify_email_request_persists_token_and_returns_202(
+    async_client, clean_db, monkeypatch
+):
+    """POST /v1/auth/verify-email/request returns 202 and writes a token row.
+
+    Regression guard for the original stub: the handler used to do
+    nothing — no token row, no email — and just returned 200/202. This
+    test asserts the row is actually written with the expected hash,
+    expiry in the future, and ``used_at`` null. ``send_email_async`` is
+    monkeypatched so the test runs without a real Resend key (the
+    service-level graceful fallback is exercised in test_email_service).
+    """
+    from datetime import UTC, datetime
+
+    from app.core.security import create_access_token
+    from app.db.models import EmailVerificationToken, User
+
+    # Seed a user we can auth as; the JWT below references its id.
+    async with clean_db.session_factory() as session:
+        existing = await session.execute(select(User).where(User.id == 42))
+        if existing.scalar_one_or_none() is None:
+            session.add(
+                User(
+                    id=42,
+                    email="verify-req@example.com",
+                    password_hash="hashed",
+                    role="job_seeker",
+                    full_name="Verify Req",
+                )
+            )
+            await session.commit()
+
+    token_header = {
+        "Authorization": f"Bearer {create_access_token({'sub': '42', 'role': 'job_seeker'})}"
+    }
+
+    sent: dict[str, bool] = {"called": False}
+
+    async def _spy_send(*args, **kwargs):  # noqa: ANN001
+        sent["called"] = True
+        return False  # pretend the key is missing — endpoint still 202
+
+    monkeypatch.setattr(
+        "app.api.v1.auth.email_service.send_email_async", _spy_send
+    )
+
+    response = await async_client.post(
+        "/v1/auth/verify-email/request", headers=token_header
+    )
+    assert response.status_code == 202
+    body = response.json()
+    assert body["detail"] == "Verification email sent"
+    assert isinstance(body["token_id"], int)
+
+    # A row with the right hash exists, not expired, and not used.
+    async with clean_db.session_factory() as session:
+        result = await session.execute(
+            select(EmailVerificationToken).where(
+                EmailVerificationToken.user_id == 42
+            )
+        )
+        rows = result.scalars().all()
+        assert len(rows) == 1, "request must persist exactly one token row"
+        row = rows[0]
+        assert row.token_hash  # sha256 hex
+        assert len(row.token_hash) == 64
+        assert row.used_at is None
+        assert row.expires_at.tzinfo is not None, (
+            "expires_at must be timezone-aware (TIMESTAMPTZ)"
+        )
+        assert row.expires_at > datetime.now(UTC), "token must not be expired on creation"
+
+    # Send was attempted (even though we returned False from the spy).
+    assert sent["called"] is True
+
+
+async def test_verify_email_confirm_marks_user_verified(
+    async_client, clean_db, monkeypatch
+):
+    """Confirm with a valid token stamps email_verified_at on the user.
+
+    Walks the full happy path: insert a User row, mint a token row by
+    hand (so the test owns the plaintext), POST /verify-email/confirm,
+    then read back the user to assert the column is populated and the
+    token row has ``used_at`` set.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from app.core.security import hash_token
+    from app.db.models import EmailVerificationToken, User
+
+    # Seed: a user and a fresh token row.
+    plain_token = "valid-plaintext-token-for-confirm"
+    token_hash = hash_token(plain_token)
+    async with clean_db.session_factory() as session:
+        user = User(
+            email="confirm@example.com",
+            password_hash="hashed",
+            role="job_seeker",
+            full_name="Confirm Tester",
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+        session.add(
+            EmailVerificationToken(
+                user_id=user.id,
+                token_hash=token_hash,
+                expires_at=datetime.now(UTC) + timedelta(hours=24),
+            )
+        )
+        await session.commit()
+        user_id = user.id
+
+    response = await async_client.post(
+        "/v1/auth/verify-email/confirm",
+        json={"token": plain_token},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"detail": "Email verified"}
+
+    async with clean_db.session_factory() as session:
+        user_result = await session.execute(select(User).where(User.id == user_id))
+        user = user_result.scalar_one()
+        assert user.email_verified_at is not None, (
+            "user.email_verified_at must be stamped on successful confirm"
+        )
+        assert user.email_verified_at.tzinfo is not None, (
+            "email_verified_at must be tz-aware (TIMESTAMPTZ)"
+        )
+
+        token_result = await session.execute(
+            select(EmailVerificationToken).where(EmailVerificationToken.user_id == user_id)
+        )
+        token_row = token_result.scalar_one()
+        assert token_row.used_at is not None, (
+            "token row must be marked used_at after confirm"
+        )
+
+
+async def test_verify_email_confirm_expired_token_returns_400(
+    async_client, clean_db
+):
+    """Expired token → 400 TOKEN_EXPIRED, no user mutation."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.core.security import hash_token
+    from app.db.models import EmailVerificationToken, User
+
+    plain_token = "expired-plaintext-token"
+    async with clean_db.session_factory() as session:
+        user = User(
+            email="expired@example.com",
+            password_hash="hashed",
+            role="job_seeker",
+            full_name="Expired Tester",
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+        session.add(
+            EmailVerificationToken(
+                user_id=user.id,
+                token_hash=hash_token(plain_token),
+                # Already past its TTL.
+                expires_at=datetime.now(UTC) - timedelta(seconds=1),
+            )
+        )
+        await session.commit()
+        user_id = user.id
+
+    response = await async_client.post(
+        "/v1/auth/verify-email/confirm",
+        json={"token": plain_token},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "TOKEN_EXPIRED"
+
+    # No mutation on the user row.
+    async with clean_db.session_factory() as session:
+        user_result = await session.execute(select(User).where(User.id == user_id))
+        user = user_result.scalar_one()
+        assert user.email_verified_at is None
+
+
+async def test_verify_email_confirm_used_token_returns_400(
+    async_client, clean_db
+):
+    """Replaying a used token → 400 TOKEN_USED, second attempt fails.
+
+    The first confirm consumes the token; the second one with the same
+    plaintext must be rejected even if the row is still inside its TTL.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from app.core.security import hash_token
+    from app.db.models import EmailVerificationToken, User
+
+    plain_token = "replay-attempt-token"
+    async with clean_db.session_factory() as session:
+        user = User(
+            email="used@example.com",
+            password_hash="hashed",
+            role="job_seeker",
+            full_name="Used Tester",
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+        session.add(
+            EmailVerificationToken(
+                user_id=user.id,
+                token_hash=hash_token(plain_token),
+                expires_at=datetime.now(UTC) + timedelta(hours=24),
+            )
+        )
+        await session.commit()
+        user_id = user.id
+
+    first = await async_client.post(
+        "/v1/auth/verify-email/confirm",
+        json={"token": plain_token},
+    )
+    assert first.status_code == 200
+
+    second = await async_client.post(
+        "/v1/auth/verify-email/confirm",
+        json={"token": plain_token},
+    )
+    assert second.status_code == 400
+    assert second.json()["detail"] == "TOKEN_USED"
+
+    # User is verified exactly once — verify email_verified_at doesn't get re-stamped.
+    async with clean_db.session_factory() as session:
+        user_result = await session.execute(select(User).where(User.id == user_id))
+        user = user_result.scalar_one()
+        assert user.email_verified_at is not None
+
+
+async def test_verify_email_confirm_unknown_token_returns_400(
+    async_client, clean_db
+):
+    """Token that doesn't exist in the table → 400 INVALID_TOKEN."""
+    response = await async_client.post(
+        "/v1/auth/verify-email/confirm",
+        json={"token": "no-such-token-anywhere"},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "INVALID_TOKEN"
