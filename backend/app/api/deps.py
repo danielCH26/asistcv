@@ -154,6 +154,28 @@ async def get_current_user(
     )
 
 
+async def get_current_user_required(
+    current_user: CurrentUser = Depends(get_current_user),
+) -> CurrentUser:
+    """Require an authenticated JWT principal, rejecting the API key.
+
+    The service API key resolves to ``CurrentUser(id=0, role="service")``,
+    which is the RLS bypass principal. Endpoints that act on behalf of a
+    specific account must not accept it, otherwise they would operate on
+    user 0 (or fail on a foreign key). Machine-to-machine callers use the
+    API key on the endpoints that explicitly want it instead.
+
+    Must be declared after ``get_current_user``: FastAPI resolves the
+    dependency expression at import time.
+    """
+    if current_user.auth_method == "api_key":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="ROLE_FORBIDDEN",
+        )
+    return current_user
+
+
 async def optional_auth(
     api_key_header: str | None = Depends(_security),
 ) -> CurrentUser:

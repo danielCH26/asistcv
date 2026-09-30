@@ -9,7 +9,11 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser, get_current_user, get_db
+from app.api.deps import (
+    CurrentUser,
+    get_current_user_required,
+    get_db,
+)
 from app.core.logging import get_logger
 from app.db.models import UserCV
 from app.llm.factory import get_llm_provider
@@ -27,18 +31,6 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/cvs", tags=["cvs"])
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
-
-
-async def get_current_user_required(
-    current_user: CurrentUser = Depends(get_current_user),
-) -> CurrentUser:
-    """Ensure user is authenticated with JWT, not API key."""
-    if current_user.auth_method == "api_key":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="ROLE_FORBIDDEN"
-        )
-    return current_user
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=CVUploadResponse)

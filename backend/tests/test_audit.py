@@ -810,6 +810,44 @@ class TestClaimAuditAuth:
             ).scalars().all()
             assert len(owned) == 1
 
+    @pytest.mark.asyncio
+    async def test_claim_rejects_api_key_principal(self, client, clean_db, monkeypatch):
+        """The service API key is not a valid principal for a user-scoped claim.
+
+        The API key resolves to ``CurrentUser(id=0, role="service")``, the
+        RLS bypass principal. Accepting it here would attempt to link the
+        audit to user 0, which violates the ``users.id`` foreign key and
+        surfaces as a 500. The claim must reject it with 403 instead.
+        """
+        from app.core.config import get_settings
+        from app.db.models import AuditUpload
+
+        user_id, plain_token, _ = await _seed_claimable_audit("apikey@example.com")
+
+        settings = get_settings()
+        monkeypatch.setattr(settings, "backend_api_key", "test-service-key", raising=False)
+        monkeypatch.setattr(
+            "app.api.deps.is_auth_required", lambda: True, raising=False
+        )
+
+        response = client.post(
+            f"/v1/audit/{plain_token}/claim",
+            headers={"Authorization": "Bearer test-service-key"},
+        )
+
+        assert response.status_code == 403, response.text
+
+        # The seed user must be untouched: no audit linked, no analysis created.
+        async with get_session_context() as session:
+            linked = (
+                await session.execute(
+                    select(AuditUpload).where(
+                        AuditUpload.linked_user_id.is_not(None)
+                    )
+                )
+            ).scalars().all()
+            assert linked == []
+
 
 class TestAuditRouteTable:
     """The audit surface must be reachable at exactly one path per endpoint."""

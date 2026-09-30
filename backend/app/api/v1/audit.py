@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import col
 
-from app.api.deps import CurrentUser, get_current_user
+from app.api.deps import CurrentUser, get_current_user_required
 from app.core.logging import get_logger
 from app.db.models import Analysis, AuditFunnelEvent, AuditUpload, JobDescription
 from app.db.session import get_session_context
@@ -345,7 +345,7 @@ async def capture_email(
 )
 async def claim_audit(
     token: str,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user_required),
 ) -> ClaimAuditResponse:
     """
     Claim an audit after user signup.
