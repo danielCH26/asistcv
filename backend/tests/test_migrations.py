@@ -275,6 +275,73 @@ async def test_slice_a_migrations_chain_ordering(setup_test_db):
     await asyncio.to_thread(command.upgrade, alembic_cfg, "head")
 
 
+@pytest.mark.asyncio
+async def test_migration_019_renames_jd_text_column(setup_test_db):
+    """019 renombra ``jd_text_encrypted`` -> ``jd_text`` y es reversible.
+
+    La columna se llamaba ``encrypted`` pero guardaba UTF-8 crudo: el
+    nombre afirmaba una protección que no existía. Este test congela las
+    dos mitas del contrato:
+
+    * upgrade: existe ``jd_text`` (BYTEA), NO existe ``jd_text_encrypted``;
+    * downgrade: se restaura el nombre viejo y desaparece el nuevo.
+
+    No se edita la 015 (historia ya aplicada); sólo se verifica el estado
+    final del schema.
+    """
+    import asyncio
+
+    from alembic.config import Config
+
+    from alembic import command
+
+    alembic_cfg = Config("alembic.ini")
+    engine = setup_test_db
+
+    async def _column(conn, name: str):
+        result = await conn.execute(
+            text(
+                """
+                SELECT data_type FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'cv_adaptations'
+                  AND column_name = :c
+                """
+            ),
+            {"c": name},
+        )
+        row = result.fetchone()
+        return None if row is None else row[0]
+
+    # --- upgrade head (019 applied by the module fixture) ---
+    async with engine.connect() as conn:
+        assert await _column(conn, "jd_text") == "bytea", (
+            "019 should leave a BYTEA column named jd_text"
+        )
+        assert await _column(conn, "jd_text_encrypted") is None, (
+            "019 should remove the jd_text_encrypted name"
+        )
+        # The neighbouring columns must be untouched by the rename.
+        assert await _column(conn, "jd_text_hash") == "character varying"
+
+    # --- downgrade to 018: the old name comes back ---
+    await asyncio.to_thread(
+        command.downgrade, alembic_cfg, "018_audit_claim_policy"
+    )
+    async with engine.connect() as conn:
+        assert await _column(conn, "jd_text_encrypted") == "bytea", (
+            "019 downgrade should restore jd_text_encrypted as BYTEA"
+        )
+        assert await _column(conn, "jd_text") is None, (
+            "019 downgrade should remove the jd_text name"
+        )
+
+    # --- re-apply: idempotent, leaves the fixture at head ---
+    await asyncio.to_thread(command.upgrade, alembic_cfg, "head")
+    async with engine.connect() as conn:
+        assert await _column(conn, "jd_text") == "bytea"
+
+
 async def _fetch_vector_columns(engine) -> dict[str, set[str]]:
     """Devuelve {tabla: {columnas de embedding/modelo presentes}} post-migración."""
     async with engine.connect() as conn:

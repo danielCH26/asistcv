@@ -9,6 +9,8 @@ These exercise the API surface end-to-end:
 - GET /v1/adaptations/{id} → 200 completed, 200 pending, 404 NOT_FOUND.
 - GET /v1/adaptations/by-cv/{cv_id} → 200 with the user's rows,
   404 NO_CV_FOUND.
+- Kill-switch → with ``ADAPTATION_ENABLED=false`` the POST AND both GETs
+  return 503 ``FEATURE_DISABLED`` and no statement is issued.
 - POST /internal/adaptations/cleanup → 401 missing token,
   200 with deleted count.
 
@@ -303,7 +305,7 @@ class TestCreateAdaptation:
                 parent_cv_id=cv.id,
                 owner_user_id=user.id,
                 jd_text_hash=jd_hash,
-                jd_text_encrypted=jd_text.encode("utf-8"),
+                jd_text=jd_text.encode("utf-8"),
                 adapted_cv_json={
                     "full_name": "Owner",
                     "experience": [],
@@ -333,6 +335,151 @@ class TestCreateAdaptation:
         assert body["adapted_cv"]["full_name"] == "Owner"
 
 
+# === Kill-switch: ADAPTATION_ENABLED=false must gate the READ surface too ===
+
+
+@asynccontextmanager
+async def _spy_on_session_statements(monkeypatch):
+    """Record every statement issued through ``AsyncSession.execute``.
+
+    Yields the list of statement strings. Patching the class method (not
+    an instance) is what makes this catch the endpoint's own session,
+    which is created by ``get_db`` inside the request.
+    """
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    statements: list[str] = []
+    original = AsyncSession.execute
+
+    async def _spy(self, statement, *args, **kwargs):  # noqa: ANN001, ANN202
+        statements.append(str(statement))
+        return await original(self, statement, *args, **kwargs)
+
+    monkeypatch.setattr(AsyncSession, "execute", _spy)
+    try:
+        yield statements
+    finally:
+        monkeypatch.setattr(AsyncSession, "execute", original)
+
+
+class TestAdaptationKillSwitch:
+    """``ADAPTATION_ENABLED=false`` 503s every route on the adaptations router.
+
+    Regression cover for the incident where only the POST was gated:
+    ``GET /v1/adaptations/{id}`` and ``GET /v1/adaptations/by-cv/{cv_id}``
+    kept returning 200/404 and kept querying the database while the switch
+    was off. The switch is declared once on the router, so a route added
+    later is gated by default.
+    """
+
+    @pytest.mark.asyncio
+    async def test_get_503_feature_disabled(
+        self, async_client, clean_db, monkeypatch
+    ) -> None:
+        """GET by id with the flag off -> 503 FEATURE_DISABLED, not 404/200."""
+        user = await _create_user(clean_db)
+        cv = await _create_cv(clean_db, user.id)
+
+        async with clean_db.session_factory() as session:
+            await set_rls_user(session, user.id, "job_seeker")
+            row = CVAdaptation(
+                parent_cv_id=cv.id,
+                owner_user_id=user.id,
+                jd_text_hash=compute_jd_text_hash("Readable JD"),
+                jd_text=b"Readable JD",
+                adapted_cv_json={"full_name": "Owner"},
+                status="completed",
+                completed_at=datetime.now(UTC),
+            )
+            session.add(row)
+            await session.commit()
+            await session.refresh(row)
+            row_id = row.id
+
+        # ADAPTATION_ENABLED defaults to False; no override needed.
+        async with _spy_on_session_statements(monkeypatch) as statements:
+            async with _override_current_user(user):
+                response = await async_client.get(f"/v1/adaptations/{row_id}")
+
+        assert response.status_code == 503, response.text
+        assert response.json()["detail"] == "FEATURE_DISABLED"
+        # The gate lives on the router, so FastAPI never solves ``get_db``:
+        # the endpoint cannot even open a session, let alone query a row.
+        assert statements == [], (
+            f"no statement should be issued while the switch is off, got {statements}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_list_by_cv_503_feature_disabled(
+        self, async_client, clean_db, monkeypatch
+    ) -> None:
+        """GET by-cv with the flag off -> 503 FEATURE_DISABLED, not 404/200."""
+        user = await _create_user(clean_db)
+        cv = await _create_cv(clean_db, user.id)
+
+        async with clean_db.session_factory() as session:
+            await set_rls_user(session, user.id, "job_seeker")
+            row = CVAdaptation(
+                parent_cv_id=cv.id,
+                owner_user_id=user.id,
+                jd_text_hash=compute_jd_text_hash("Listable JD"),
+                jd_text=b"Listable JD",
+                adapted_cv_json={},
+                status="pending",
+            )
+            session.add(row)
+            await session.commit()
+
+        async with _spy_on_session_statements(monkeypatch) as statements:
+            async with _override_current_user(user):
+                response = await async_client.get(f"/v1/adaptations/by-cv/{cv.id}")
+
+        assert response.status_code == 503, response.text
+        assert response.json()["detail"] == "FEATURE_DISABLED"
+        assert statements == [], (
+            f"no statement should be issued while the switch is off, got {statements}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_flag_on_still_serves_reads(
+        self, async_client, clean_db, monkeypatch
+    ) -> None:
+        """Negative control: with the flag on, the same GETs reach the DB.
+
+        Proves the 503 above comes from the switch and not from an
+        unrelated breakage in the read path, and that the statement spy
+        is actually wired (it must observe the query).
+        """
+        user = await _create_user(clean_db)
+        cv = await _create_cv(clean_db, user.id)
+
+        async with clean_db.session_factory() as session:
+            await set_rls_user(session, user.id, "job_seeker")
+            row = CVAdaptation(
+                parent_cv_id=cv.id,
+                owner_user_id=user.id,
+                jd_text_hash=compute_jd_text_hash("Visible JD"),
+                jd_text=b"Visible JD",
+                adapted_cv_json={"full_name": "Owner"},
+                status="completed",
+                completed_at=datetime.now(UTC),
+            )
+            session.add(row)
+            await session.commit()
+            await session.refresh(row)
+            row_id = row.id
+
+        async with _spy_on_session_statements(monkeypatch) as statements:
+            async with _enable_adaptation_flag(), _override_current_user(user):
+                response = await async_client.get(f"/v1/adaptations/{row_id}")
+
+        assert response.status_code == 200, response.text
+        assert response.json()["id"] == row_id
+        assert any("cv_adaptations" in s for s in statements), (
+            f"spy should observe the cv_adaptations query, got {statements}"
+        )
+
+
 # === GET /v1/adaptations/{id}
 
 
@@ -354,7 +501,7 @@ class TestGetAdaptation:
                 parent_cv_id=cv.id,
                 owner_user_id=user.id,
                 jd_text_hash=jd_hash,
-                jd_text_encrypted=b"Some JD",
+                jd_text=b"Some JD",
                 adapted_cv_json={
                     "full_name": "Owner",
                     "experience": [],
@@ -370,7 +517,7 @@ class TestGetAdaptation:
             await session.refresh(row)
             row_id = row.id
 
-        async with _override_current_user(user):
+        async with _enable_adaptation_flag(), _override_current_user(user):
             response = await async_client.get(f"/v1/adaptations/{row_id}")
 
         assert response.status_code == 200, response.text
@@ -396,7 +543,7 @@ class TestGetAdaptation:
                 parent_cv_id=cv.id,
                 owner_user_id=user.id,
                 jd_text_hash=jd_hash,
-                jd_text_encrypted=b"Pending JD",
+                jd_text=b"Pending JD",
                 adapted_cv_json={},
                 status="pending",
             )
@@ -405,7 +552,7 @@ class TestGetAdaptation:
             await session.refresh(row)
             row_id = row.id
 
-        async with _override_current_user(user):
+        async with _enable_adaptation_flag(), _override_current_user(user):
             response = await async_client.get(f"/v1/adaptations/{row_id}")
 
         assert response.status_code == 200, response.text
@@ -429,7 +576,7 @@ class TestGetAdaptation:
                 parent_cv_id=cv.id,
                 owner_user_id=owner.id,
                 jd_text_hash=jd_hash,
-                jd_text_encrypted=b"owner-only JD",
+                jd_text=b"owner-only JD",
                 adapted_cv_json={},
                 status="pending",
             )
@@ -439,7 +586,7 @@ class TestGetAdaptation:
             row_id = row.id
 
         # Attacker tries to read — RLS + owner check both 404.
-        async with _override_current_user(attacker):
+        async with _enable_adaptation_flag(), _override_current_user(attacker):
             response = await async_client.get(f"/v1/adaptations/{row_id}")
 
         assert response.status_code == 404
@@ -451,7 +598,7 @@ class TestGetAdaptation:
     ) -> None:
         """A non-existent id → 404 NOT_FOUND."""
         user = await _create_user(clean_db)
-        async with _override_current_user(user):
+        async with _enable_adaptation_flag(), _override_current_user(user):
             response = await async_client.get("/v1/adaptations/999999")
         assert response.status_code == 404
 
@@ -477,7 +624,7 @@ class TestListByCV:
                 parent_cv_id=cv.id,
                 owner_user_id=user.id,
                 jd_text_hash=jd_hash,
-                jd_text_encrypted=b"x",
+                jd_text=b"x",
                 adapted_cv_json={},
                 status="completed",
                 created_at=datetime.now(UTC) - timedelta(hours=2),
@@ -487,7 +634,7 @@ class TestListByCV:
                 parent_cv_id=cv.id,
                 owner_user_id=user.id,
                 jd_text_hash=jd_hash,
-                jd_text_encrypted=b"x",
+                jd_text=b"x",
                 adapted_cv_json={},
                 status="pending",
                 created_at=datetime.now(UTC) - timedelta(minutes=5),
@@ -496,7 +643,7 @@ class TestListByCV:
             session.add(newer)
             await session.commit()
 
-        async with _override_current_user(user):
+        async with _enable_adaptation_flag(), _override_current_user(user):
             response = await async_client.get(f"/v1/adaptations/by-cv/{cv.id}")
 
         assert response.status_code == 200, response.text
@@ -510,7 +657,7 @@ class TestListByCV:
     ) -> None:
         """Asking for a CV the caller doesn't own → 404 NO_CV_FOUND."""
         user = await _create_user(clean_db)
-        async with _override_current_user(user):
+        async with _enable_adaptation_flag(), _override_current_user(user):
             response = await async_client.get("/v1/adaptations/by-cv/999999")
         assert response.status_code == 404
         assert response.json()["detail"] == "NO_CV_FOUND"
@@ -531,7 +678,7 @@ class TestListByCV:
                 parent_cv_id=cv.id,
                 owner_user_id=owner.id,
                 jd_text_hash=jd_hash,
-                jd_text_encrypted=b"x",
+                jd_text=b"x",
                 adapted_cv_json={},
                 status="completed",
                 completed_at=datetime.now(UTC),
@@ -540,7 +687,7 @@ class TestListByCV:
             await session.commit()
 
         # Attacker lists by their own (non-existent) CV → 404.
-        async with _override_current_user(attacker):
+        async with _enable_adaptation_flag(), _override_current_user(attacker):
             response = await async_client.get(f"/v1/adaptations/by-cv/{cv.id}")
         assert response.status_code == 404
 
@@ -590,7 +737,7 @@ class TestCleanupEndpoint:
                 parent_cv_id=cv.id,
                 owner_user_id=user.id,
                 jd_text_hash=compute_jd_text_hash("old"),
-                jd_text_encrypted=b"old",
+                jd_text=b"old",
                 adapted_cv_json={},
                 status="completed",
                 created_at=now - timedelta(days=100),
@@ -601,7 +748,7 @@ class TestCleanupEndpoint:
                 parent_cv_id=cv.id,
                 owner_user_id=user.id,
                 jd_text_hash=compute_jd_text_hash("fresh"),
-                jd_text_encrypted=b"fresh",
+                jd_text=b"fresh",
                 adapted_cv_json={},
                 status="completed",
                 created_at=now - timedelta(days=10),
@@ -612,7 +759,7 @@ class TestCleanupEndpoint:
                 parent_cv_id=cv.id,
                 owner_user_id=user.id,
                 jd_text_hash=compute_jd_text_hash("old_pending"),
-                jd_text_encrypted=b"old_pending",
+                jd_text=b"old_pending",
                 adapted_cv_json={},
                 status="pending",
                 created_at=now - timedelta(hours=2),
@@ -622,7 +769,7 @@ class TestCleanupEndpoint:
                 parent_cv_id=cv.id,
                 owner_user_id=user.id,
                 jd_text_hash=compute_jd_text_hash("fresh_pending"),
-                jd_text_encrypted=b"fresh_pending",
+                jd_text=b"fresh_pending",
                 adapted_cv_json={},
                 status="pending",
                 created_at=now - timedelta(minutes=30),
