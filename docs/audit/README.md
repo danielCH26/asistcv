@@ -6,7 +6,7 @@
 
 > **Alcance de la evidencia.** Los hallazgos son **análisis estático** obtenidos leyendo el código; cada referencia `file:line` fue verificada leyendo el archivo.
 >
-> **⚠️ Excepción — S1 fue REPRODUCIDO contra el despliegue real.** El backend está desplegado en `https://asistcv-backend.onrender.com` y se verificó que acepta access tokens firmados con la clave de firma por defecto publicada en el repo. Ver [Verificación en producción](#verificación-en-producción). El resto de los hallazgos sigue siendo **no reproducido**: un hallazgo "verificado por línea" requiere reproducirlo (o su test) antes de cerrar el fix.
+> **S1 fue REPRODUCIDO y luego REMEDIADO contra el despliegue real.** Se confirmó que el backend aceptaba access tokens firmados con la clave de firma por defecto publicada en el repo. **Resuelto el 2026-09-29** rotando `JWT_SECRET` en Render; verificado: el token firmado con la clave vieja ahora devuelve `401`. El resto de los hallazgos sigue siendo **no reproducido**: un hallazgo "verificado por línea" requiere reproducirlo (o su test) antes de cerrar el fix.
 
 ---
 
@@ -42,9 +42,20 @@ El backend está **live** en `https://asistcv-backend.onrender.com`. Se verific�
 
 **Acción inmediata recomendada, por orden:**
 
-1. **Rotar `JWT_SECRET` en Render inmediatamente** (invalida todos los tokens firmados con la clave pública) y agregar la guarda de fail-closed (S1 fix) para que no vuelva a pasar.
-2. Verificar/corregir S3 (`claim_audit` sin auth) — sigue abierto.
+1. ~~**Rotar `JWT_SECRET` en Render inmediatamente**~~ — **HECHO (2026-09-29).** Verificado: un token firmado con `dev-secret-change-in-production` ahora devuelve `401 Invalid credentials`. Queda pendiente el fix estructural (guarda de fail-closed) en el issue #44, para que un deploy futuro no repita el problema.
+2. Corregir S3 (`claim_audit` sin auth) — **PR #52 abierto, CI en verde, migración 018 ya aplicada.** Sigue abierto hasta el merge.
 3. Tratar S2 como hardening de diseño, no como urgencia operativa.
+
+### Nota: `JWT_SECRET` ≠ `BACKEND_API_KEY`
+
+Son secretos distintos con trabajos distintos, y confundirlos es fácil porque el nombre engaña:
+
+| Variable | Función | Dónde vive | Estado |
+|---|---|---|---|
+| `JWT_SECRET` | **Firma y verifica** los access tokens (`security.py:54,70`) | **Solo Render** | ✅ Rotada el 2026-09-29 |
+| `BACKEND_API_KEY` | Auth máquina-a-máquina: se compara contra el header del cliente (`deps.py:103`). **Nunca toca una firma.** | Solo Render | ✅ Ya configurada |
+
+**Nunca pongas `JWT_SECRET` en Cloudflare Pages.** Las variables `PUBLIC_*` se inlinean en el bundle estático que descarga cada visitante — publicarla equivaldría a exponer la clave de firma en la página. El frontend solo *decodifica* el token para leer el `exp` (`session.ts:30-47`), sin verificarlo, y su build ya falla si una credencial reaparece en el código (`check-env.mjs`). Lo único que el frontend necesita es `PUBLIC_API_URL`.
 
 ---
 
@@ -131,7 +142,7 @@ Cuatro fases, ordenadas por *blast radius decreciente y dependencia ascendente*.
 
 | ID | Título | Severidad | Fase | Estado en producción |
 |---|---|---|---|---|
-| S1 | `jwt_secret` con default público y sin guarda | P0 | 0 | 🔴 **CONFIRMADO EXPLOTADO** — acepta tokens firmados con la clave del repo |
+| S1 | `jwt_secret` con default público y sin guarda | P0 | 0 | ✅ **REMEDIADO** — rotado 2026-09-29, verificado 401. Falta el guard de fail-closed (#44) |
 | S2 | Modo abierto devuelve un service super-principal sin verificar credencial | P0 | 0 | 🟡 Mitigado por config (`BACKEND_API_KEY` seteada); sigue siendo riesgo de diseño |
 | S3 | IDOR en claim de audit (escribe cross-user, sin auth) | P0 | 0 | 🔴 Sigue explotable (sin auth, independiente de la key) |
 | S4 | Router de audit montado dos veces + kill-switch incompleto | P0 | 0 | 🟠 Sigue presente (cada ruta en dos paths) |
