@@ -55,8 +55,12 @@
 	   restrained, and a 50-step scale invites drift. Every colour below is
 	   written exactly once; the legacy names further down are pure aliases.
 
-	   Every text-on-surface pair below is verified at >= 4.5:1 by
-	   `node contrast-audit.mjs frontend/src/app.css` — re-run it after any edit.
+	   Every text-on-surface pair below was measured at >= 4.5:1 (light and
+	   dark) when this layer was written. There is no automated check for it
+	   yet, so re-measure after any edit that changes a colour value, a pair,
+	   or a mode. A previous revision of this comment cited a
+	   `contrast-audit.mjs` that was never committed; the script is still
+	   missing and the claim was doing more harm than the omission.
 	   ========================================================================= */
 	/* canvas + surfaces */
 	--color-canvas: #f8fafc;
