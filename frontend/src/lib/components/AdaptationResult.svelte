@@ -46,11 +46,11 @@
 	.adaptation-result {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
-		padding: 1.25rem;
-		border: 1px solid var(--border);
+		gap: var(--space-4);
+		padding: var(--space-5);
+		border: 1px solid var(--color-line);
 		border-radius: 12px;
-		background: var(--surface);
+		background: var(--color-surface);
 	}
 
 	.adaptation-result__header {
@@ -58,32 +58,32 @@
 		align-items: center;
 		justify-content: space-between;
 		flex-wrap: wrap;
-		gap: 0.5rem;
+		gap: var(--space-2);
 	}
 
 	.adaptation-result__name {
 		margin: 0;
-		font-size: 1.15rem;
-		color: var(--text-strong);
+		font-size: var(--text-lg);
+		color: var(--color-ink-strong);
 	}
 
 	.adaptation-result__section {
 		display: flex;
 		flex-direction: column;
-		gap: 0.4rem;
+		gap: var(--space-2);
 	}
 
 	.adaptation-result__heading {
 		margin: 0;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--text-muted);
+		letter-spacing: var(--tracking-wide);
+		color: var(--color-ink-muted);
 	}
 
 	.adaptation-result__empty {
 		margin: 0;
-		color: var(--text-muted);
+		color: var(--color-ink-muted);
 	}
 
 	.adaptation-result__tags {
@@ -92,16 +92,16 @@
 		padding: 0;
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.4rem;
+		gap: var(--space-2);
 	}
 
 	.adaptation-result__tag {
-		padding: 0.2rem 0.6rem;
+		padding: var(--space-1) var(--space-2);
 		border-radius: 999px;
-		background: var(--surface-alt);
-		border: 1px solid var(--border);
-		font-size: 0.85rem;
-		color: var(--text);
+		background: var(--color-surface-alt);
+		border: 1px solid var(--color-line);
+		font-size: var(--text-sm);
+		color: var(--color-ink);
 	}
 
 	.adaptation-result__experience {
@@ -110,37 +110,37 @@
 		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
+		gap: var(--space-3);
 	}
 
 	.adaptation-result__experience-item {
-		padding: 0.75rem 1rem;
-		border: 1px solid var(--border);
+		padding: var(--space-3) var(--space-4);
+		border: 1px solid var(--color-line);
 		border-radius: 10px;
-		background: var(--surface-alt);
+		background: var(--color-surface-alt);
 	}
 
 	.adaptation-result__experience-head {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.5rem;
+		gap: var(--space-2);
 		align-items: baseline;
 	}
 
 	.adaptation-result__title {
-		color: var(--text-strong);
+		color: var(--color-ink-strong);
 	}
 
 	.adaptation-result__company,
 	.adaptation-result__dates {
-		color: var(--text-muted);
-		font-size: 0.85rem;
+		color: var(--color-ink-muted);
+		font-size: var(--text-sm);
 	}
 
 	.adaptation-result__description {
-		margin: 0.4rem 0 0;
-		color: var(--text);
+		margin: var(--space-2) 0 0;
+		color: var(--color-ink);
 		white-space: pre-wrap;
-		line-height: 1.5;
+		line-height: var(--leading-normal);
 	}
 </style>

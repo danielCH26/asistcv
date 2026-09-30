@@ -33,11 +33,11 @@
 	.match-result {
 		display: flex;
 		flex-direction: column;
-		gap: 1.25rem;
-		background: var(--surface);
-		border: 1px solid var(--border);
+		gap: var(--space-5);
+		background: var(--color-surface);
+		border: 1px solid var(--color-line);
 		border-radius: 12px;
-		padding: 1.5rem;
+		padding: var(--space-5);
 	}
 
 	.match-result__header {
@@ -45,18 +45,18 @@
 		align-items: center;
 		justify-content: space-between;
 		flex-wrap: wrap;
-		gap: 1rem;
+		gap: var(--space-4);
 	}
 
 	.match-result__badges {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: var(--space-2);
 		align-items: flex-end;
 	}
 
 	.match-result__mode {
-		font-size: 0.85rem;
-		color: var(--text-muted);
+		font-size: var(--text-sm);
+		color: var(--color-ink-muted);
 	}
 </style>
