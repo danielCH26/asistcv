@@ -62,42 +62,45 @@
 	.jd-form {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
-		background: var(--surface);
-		border: 1px solid var(--border);
+		gap: var(--space-3);
+		background: var(--color-surface);
+		border: 1px solid var(--color-line);
 		border-radius: 12px;
-		padding: 1.25rem;
+		padding: var(--space-5);
 	}
 
 	.jd-form__label {
-		font-size: 1.1rem;
+		font-size: var(--text-lg);
 		font-weight: 600;
-		color: var(--text-strong);
+		color: var(--color-ink-strong);
 	}
 
 	.jd-form__intro {
 		margin: 0;
-		color: var(--text-muted);
-		font-size: 0.9rem;
+		color: var(--color-ink-muted);
+		font-size: var(--text-sm);
 	}
 
 	.jd-form__textarea {
 		width: 100%;
 		min-height: 220px;
 		resize: vertical;
-		padding: 0.75rem;
-		border: 1px solid var(--border);
+		padding: var(--space-3);
+		border: 1px solid var(--color-line);
 		border-radius: 8px;
 		font-family: inherit;
-		font-size: 0.95rem;
-		background: var(--bg);
-		color: var(--text);
+		font-size: var(--text-sm);
+		background: var(--clay-fill);
+		color: var(--color-ink);
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
 	}
 
 	.jd-form__textarea:focus {
-		outline: 2px solid var(--accent);
+		outline: 2px solid var(--color-action);
 		outline-offset: 1px;
-		border-color: var(--accent);
+		border-color: var(--color-action);
+		box-shadow: var(--clay-lifted);
 	}
 
 	.jd-form__textarea:disabled {
@@ -109,31 +112,39 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		gap: 1rem;
+		gap: var(--space-4);
 	}
 
 	.jd-form__count {
-		font-size: 0.85rem;
-		color: var(--text-muted);
+		font-size: var(--text-sm);
+		color: var(--color-ink-muted);
 	}
 
 	.jd-form__count.is-warned {
-		color: var(--warn);
+		color: var(--color-warning);
 	}
 
 	.jd-form__submit {
-		padding: 0.55rem 1.25rem;
+		padding: var(--space-2) var(--space-5);
 		border: none;
 		border-radius: 8px;
-		background: var(--accent);
-		color: var(--accent-contrast);
+		background: var(--color-action);
+		color: var(--color-on-action);
 		font-weight: 600;
-		font-size: 0.95rem;
+		font-size: var(--text-sm);
 		cursor: pointer;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
 	}
 
 	.jd-form__submit:hover:not(:disabled) {
 		filter: brightness(1.05);
+		box-shadow: var(--clay-lifted);
+	}
+
+	.jd-form__submit:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
 	}
 
 	.jd-form__submit:disabled {
@@ -143,10 +154,10 @@
 
 	.jd-form__error {
 		margin: 0;
-		padding: 0.5rem 0.75rem;
+		padding: var(--space-2) var(--space-3);
 		border-radius: 6px;
-		background: var(--error-bg);
-		color: var(--error);
-		font-size: 0.85rem;
+		background: var(--color-danger-muted);
+		color: var(--color-danger);
+		font-size: var(--text-sm);
 	}
 </style>

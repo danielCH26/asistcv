@@ -11,24 +11,24 @@
 
 <style>
 	.reasoning {
-		background: var(--surface);
-		border: 1px solid var(--border);
+		background: var(--color-surface);
+		border: 1px solid var(--color-line);
 		border-radius: 10px;
-		padding: 1rem 1.25rem;
+		padding: var(--space-4) var(--space-5);
 	}
 
 	.reasoning__heading {
-		margin: 0 0 0.5rem;
-		font-size: 0.95rem;
+		margin: 0 0 var(--space-2);
+		font-size: var(--text-sm);
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--text-muted);
+		letter-spacing: var(--tracking-wide);
+		color: var(--color-ink-muted);
 	}
 
 	.reasoning__body {
 		margin: 0;
-		line-height: 1.6;
-		color: var(--text);
+		line-height: var(--leading-relaxed);
+		color: var(--color-ink);
 		white-space: pre-wrap;
 	}
 </style>

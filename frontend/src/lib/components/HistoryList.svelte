@@ -50,27 +50,27 @@
 	.history-list {
 		width: 100%;
 		border-collapse: collapse;
-		background: var(--surface);
-		border: 1px solid var(--border);
+		background: var(--color-surface);
+		border: 1px solid var(--color-line);
 		border-radius: 10px;
 		overflow: hidden;
 	}
 
 	.history-list th {
 		text-align: left;
-		font-size: 0.8rem;
+		font-size: var(--text-xs);
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--text-muted);
-		padding: 0.6rem 1rem;
-		background: var(--surface-alt);
-		border-bottom: 1px solid var(--border);
+		letter-spacing: var(--tracking-wide);
+		color: var(--color-ink-muted);
+		padding: var(--space-2) var(--space-4);
+		background: var(--color-surface-alt);
+		border-bottom: 1px solid var(--color-line);
 	}
 
 	.history-list td {
-		padding: 0.7rem 1rem;
-		border-bottom: 1px solid var(--border);
-		font-size: 0.9rem;
+		padding: var(--space-3) var(--space-4);
+		border-bottom: 1px solid var(--color-line);
+		font-size: var(--text-sm);
 	}
 
 	.history-list tr:last-child td {
@@ -79,14 +79,14 @@
 
 	.history-list__cell--id {
 		font-variant-numeric: tabular-nums;
-		color: var(--text-muted);
+		color: var(--color-ink-muted);
 		width: 4ch;
 	}
 
 	.history-list__score {
 		display: inline-block;
-		min-width: 2.5rem;
-		padding: 0.15rem 0.5rem;
+		min-width: var(--space-7);
+		padding: var(--space-1) var(--space-2);
 		border-radius: 999px;
 		color: #fff;
 		font-weight: 600;
