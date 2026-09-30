@@ -322,14 +322,14 @@
 
 	.recruiter h1 {
 		margin: 0;
-		font-size: 1.5rem;
-		color: var(--text-strong);
+		font-size: var(--text-2xl);
+		color: var(--color-ink-strong);
 	}
 
 	.recruiter h2 {
-		margin: 0 0 0.5rem;
+		margin: 0 0 var(--space-2);
 		font-size: 1.15rem;
-		color: var(--text-strong);
+		color: var(--color-ink-strong);
 	}
 
 	.recruiter--consent {
@@ -344,7 +344,7 @@
 
 	.recruiter__consent-form label {
 		display: flex;
-		gap: 0.5rem;
+		gap: var(--space-2);
 		align-items: flex-start;
 		font-size: 0.9rem;
 	}
@@ -353,11 +353,23 @@
 		align-self: flex-start;
 		padding: 0.55rem 1.1rem;
 		border: none;
-		border-radius: 8px;
-		background: var(--accent);
-		color: var(--accent-contrast);
+		border-radius: var(--radius-card);
+		background: var(--color-action);
+		color: var(--color-on-action);
 		font-weight: 600;
 		cursor: pointer;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.recruiter__consent-form button:hover:not(:disabled) {
+		filter: brightness(1.05);
+		box-shadow: var(--clay-lifted);
+	}
+
+	.recruiter__consent-form button:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
 	}
 
 	.recruiter__consent-form button:disabled {
@@ -371,33 +383,58 @@
 	.recruiter__ranked {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
+		gap: var(--space-3);
 	}
 
+	/* Text inputs are controls: clay. */
 	textarea,
 	.recruiter input[type='text'],
 	.recruiter input[type='email'],
 	.recruiter input[type='tel'] {
 		padding: 0.55rem 0.7rem;
-		border: 1px solid var(--border);
-		border-radius: 6px;
-		background: var(--surface);
-		color: var(--text-strong);
+		border: var(--border-width) solid var(--color-line);
+		border-radius: var(--radius-control);
+		background: var(--clay-fill);
+		color: var(--color-ink);
 		font-family: inherit;
 		resize: vertical;
 		width: 100%;
 		box-sizing: border-box;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	textarea:focus,
+	.recruiter input[type='text']:focus,
+	.recruiter input[type='email']:focus,
+	.recruiter input[type='tel']:focus {
+		outline: 2px solid var(--color-action);
+		outline-offset: 1px;
+		border-color: var(--color-action);
+		box-shadow: var(--clay-lifted);
 	}
 
 	.recruiter__jd-actions button {
 		align-self: flex-start;
-		padding: 0.5rem 1rem;
-		border: 1px solid var(--accent);
-		border-radius: 8px;
-		background: var(--accent);
-		color: var(--accent-contrast);
+		padding: var(--space-2) var(--space-4);
+		border: var(--border-width) solid var(--color-action);
+		border-radius: var(--radius-card);
+		background: var(--color-action);
+		color: var(--color-on-action);
 		font-weight: 600;
 		cursor: pointer;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.recruiter__jd-actions button:hover:not(:disabled) {
+		filter: brightness(1.05);
+		box-shadow: var(--clay-lifted);
+	}
+
+	.recruiter__jd-actions button:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
 	}
 
 	.recruiter__jd-actions button:disabled {
@@ -407,18 +444,18 @@
 
 	.recruiter__error {
 		margin: 0;
-		color: var(--error);
+		color: var(--color-danger);
 		font-size: 0.9rem;
 	}
 
 	.recruiter__note {
 		margin: 0;
-		color: var(--text-muted);
+		color: var(--color-ink-muted);
 		font-size: 0.85rem;
 	}
 
 	.recruiter__empty {
-		color: var(--text-muted);
+		color: var(--color-ink-muted);
 		font-size: 0.9rem;
 	}
 
@@ -428,18 +465,19 @@
 		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: var(--space-2);
 	}
 
+	/* A row, not a control. Its buttons get the clay; the row stays flat. */
 	.candidate {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		gap: 1rem;
+		gap: var(--space-4);
 		padding: 0.65rem 0.9rem;
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		background: var(--surface);
+		border: var(--border-width) solid var(--color-line);
+		border-radius: var(--radius-card);
+		background: var(--color-surface);
 	}
 
 	.candidate__info {
@@ -449,28 +487,39 @@
 	}
 
 	.candidate__info span {
-		color: var(--text-muted);
+		color: var(--color-ink-muted);
 		font-size: 0.85rem;
 	}
 
 	.candidate__info small {
-		color: var(--text-muted);
+		color: var(--color-ink-muted);
 	}
 
 	.candidate__actions {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--space-2);
 	}
 
 	.candidate__actions button {
 		padding: 0.35rem 0.75rem;
-		border: 1px solid var(--border);
-		border-radius: 6px;
-		background: transparent;
-		color: var(--text);
+		border: var(--border-width) solid var(--color-line);
+		border-radius: var(--radius-control);
+		background: var(--clay-fill);
+		color: var(--color-ink);
 		cursor: pointer;
 		font-size: 0.85rem;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.candidate__actions button:hover:not(:disabled) {
+		box-shadow: var(--clay-lifted);
+	}
+
+	.candidate__actions button:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
 	}
 
 	.candidate__actions button:disabled {
@@ -479,14 +528,14 @@
 	}
 
 	.candidate__delete {
-		color: var(--error) !important;
-		border-color: var(--error) !important;
+		color: var(--color-danger) !important;
+		border-color: var(--color-danger) !important;
 	}
 
 	.candidate__score,
 	.recruiter__score {
 		font-weight: 600;
-		color: var(--text-strong);
+		color: var(--color-ink-strong);
 		font-size: 0.9rem;
 	}
 
@@ -502,7 +551,7 @@
 		flex-direction: column;
 		gap: 0.3rem;
 		font-size: 0.9rem;
-		color: var(--text);
+		color: var(--color-ink);
 	}
 
 	.recruiter__row {
@@ -515,11 +564,23 @@
 		align-self: flex-start;
 		padding: 0.55rem 1.1rem;
 		border: none;
-		border-radius: 8px;
-		background: var(--accent);
-		color: var(--accent-contrast);
+		border-radius: var(--radius-card);
+		background: var(--color-action);
+		color: var(--color-on-action);
 		font-weight: 600;
 		cursor: pointer;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.recruiter__add button[type='submit']:hover:not(:disabled) {
+		filter: brightness(1.05);
+		box-shadow: var(--clay-lifted);
+	}
+
+	.recruiter__add button[type='submit']:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
 	}
 
 	.recruiter__add button[type='submit']:disabled {
@@ -528,20 +589,22 @@
 	}
 
 	.recruiter__upsell {
-		padding: 1rem;
-		border: 1px solid var(--accent);
-		border-radius: 8px;
-		background: var(--surface);
+		padding: var(--space-4);
+		border: var(--border-width) solid var(--color-action);
+		border-radius: var(--radius-card);
+		background: var(--color-surface);
 	}
 
 	.recruiter__ranked ol {
 		margin: 0;
-		padding-left: 1.5rem;
+		padding-left: var(--space-5);
 		display: flex;
 		flex-direction: column;
 		gap: 0.4rem;
 	}
 
+	/* 640px stays a LITERAL on purpose: var() in a media condition silently
+	   drops the whole block. See the note on --breakpoint-sm in app.css. */
 	@media (max-width: 640px) {
 		.recruiter__row {
 			grid-template-columns: 1fr;

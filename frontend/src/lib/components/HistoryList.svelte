@@ -87,8 +87,8 @@
 		display: inline-block;
 		min-width: var(--space-7);
 		padding: var(--space-1) var(--space-2);
-		border-radius: 999px;
-		color: #fff;
+		border-radius: var(--radius-pill);
+		color: var(--color-on-score-fill);
 		font-weight: 600;
 		text-align: center;
 		font-variant-numeric: tabular-nums;

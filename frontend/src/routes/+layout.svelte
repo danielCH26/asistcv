@@ -86,17 +86,17 @@
 	.app-shell__header {
 		display: flex;
 		align-items: center;
-		gap: 1.5rem;
-		padding: 1rem 1.5rem;
-		background: var(--surface);
-		border-bottom: 1px solid var(--border);
+		gap: var(--space-5);
+		padding: var(--space-4) var(--space-5);
+		background: var(--color-surface);
+		border-bottom: var(--border-width) solid var(--color-line);
 	}
 
 	.app-shell__brand {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.65rem;
-		color: var(--text-strong);
+		color: var(--color-ink-strong);
 	}
 
 	.app-shell__brand:hover {
@@ -107,11 +107,11 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 2rem;
-		height: 2rem;
-		background: var(--text-strong);
-		color: var(--surface);
-		border-radius: 6px;
+		width: var(--space-6);
+		height: var(--space-6);
+		background: var(--color-ink-strong);
+		color: var(--color-surface);
+		border-radius: var(--radius-control);
 		font-weight: 700;
 		font-size: 0.85rem;
 	}
@@ -119,79 +119,95 @@
 	.app-shell__title {
 		display: flex;
 		flex-direction: column;
-		line-height: 1.1;
+		line-height: var(--leading-tight);
 	}
 
 	.app-shell__title strong {
-		font-size: 1rem;
+		font-size: var(--text-md);
 	}
 
 	.app-shell__title small {
-		font-size: 0.75rem;
-		color: var(--text-muted);
+		font-size: var(--text-xs);
+		color: var(--color-ink-muted);
 	}
 
 	.app-shell__nav {
 		display: flex;
-		gap: 0.75rem;
+		gap: var(--space-3);
 		margin-left: auto;
-		margin-right: 1rem;
+		margin-right: var(--space-4);
 	}
 
+	/* A nav link is a destination, not a control the person operates, so it
+	   stays flat. The accent fill on .is-active is the state, not the material. */
 	.app-shell__link {
 		padding: 0.4rem 0.75rem;
-		border-radius: 6px;
-		color: var(--text);
+		border-radius: var(--radius-control);
+		color: var(--color-ink);
 		font-size: 0.9rem;
 	}
 
 	.app-shell__link:hover {
-		background: var(--surface-alt);
+		background: var(--color-surface-alt);
 		text-decoration: none;
 	}
 
 	.app-shell__link.is-active {
-		background: var(--accent);
-		color: var(--accent-contrast);
+		background: var(--color-action);
+		color: var(--color-on-action);
 	}
 
 	.app-shell__actions {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--space-2);
 	}
 
 	.app-shell__signup {
-		background: var(--accent);
-		color: var(--accent-contrast);
+		background: var(--color-action);
+		color: var(--color-on-action);
 		font-weight: 600;
 	}
 
+	/* A real <button>: control, so clay. */
 	.app-shell__session {
 		padding: 0.4rem 0.75rem;
-		border: 1px solid var(--border);
-		border-radius: 6px;
-		background: transparent;
-		color: var(--text);
+		border: var(--border-width) solid var(--color-line);
+		border-radius: var(--radius-control);
+		background: var(--clay-fill);
+		color: var(--color-ink);
 		font-size: 0.9rem;
 		cursor: pointer;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.app-shell__session:hover {
+		box-shadow: var(--clay-lifted);
+	}
+
+	.app-shell__session:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
 	}
 
 	.app-shell__main {
 		flex: 1;
 		width: 100%;
-		max-width: 880px;
+		max-width: var(--layout-content-max);
 		margin: 0 auto;
-		padding: 2rem 1.5rem;
+		padding: var(--space-6) var(--space-5);
 	}
 
 	.app-shell__footer {
 		text-align: center;
-		padding: 1rem;
-		color: var(--text-muted);
-		border-top: 1px solid var(--border);
+		padding: var(--space-4);
+		color: var(--color-ink-muted);
+		border-top: var(--border-width) solid var(--color-line);
 	}
 
+	/* 640px stays a LITERAL on purpose: var() in a media condition silently
+	   drops the whole block. See the note on --breakpoint-sm in app.css. */
 	@media (max-width: 640px) {
 		.app-shell__header {
 			flex-wrap: wrap;

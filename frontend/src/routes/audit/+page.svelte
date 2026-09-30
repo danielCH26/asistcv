@@ -278,18 +278,18 @@
 	.audit {
 		display: flex;
 		flex-direction: column;
-		gap: 1.5rem;
+		gap: var(--space-5);
 	}
 
 	.audit__intro h1 {
 		margin: 0 0 0.4rem;
 		font-size: 1.6rem;
-		color: var(--text-strong);
+		color: var(--color-ink-strong);
 	}
 
 	.audit__intro p {
 		margin: 0;
-		color: var(--text-muted);
+		color: var(--color-ink-muted);
 	}
 
 	.audit__form {
@@ -303,20 +303,32 @@
 		gap: 0.4rem;
 	}
 
+	/* Mode switch: a control, so it gets clay. */
 	.audit__form .audit__modes button {
 		padding: 0.45rem 0.9rem;
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		background: var(--surface);
-		color: var(--text);
+		border: var(--border-width) solid var(--color-line);
+		border-radius: var(--radius-card);
+		background: var(--clay-fill);
+		color: var(--color-ink);
 		font-weight: 600;
 		cursor: pointer;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.audit__form .audit__modes button:hover {
+		box-shadow: var(--clay-lifted);
+	}
+
+	.audit__form .audit__modes button:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
 	}
 
 	.audit__form .audit__modes button.active {
-		border-color: var(--accent);
-		background: var(--accent);
-		color: var(--accent-contrast);
+		border-color: var(--color-action);
+		background: var(--color-action);
+		color: var(--color-on-action);
 	}
 
 	.audit__file {
@@ -332,28 +344,50 @@
 	.audit__file-button {
 		align-self: flex-start;
 		padding: 0.55rem 1.1rem;
-		border: 1px dashed var(--border);
-		border-radius: 8px;
-		background: var(--surface);
-		color: var(--text-strong);
+		border: var(--border-width) dashed var(--color-line);
+		border-radius: var(--radius-card);
+		background: var(--clay-fill);
+		color: var(--color-ink);
 		font-weight: 600;
 		cursor: pointer;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.audit__file-button:hover {
+		box-shadow: var(--clay-lifted);
+	}
+
+	.audit__file-button:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
 	}
 
 	.audit__file-meta {
 		margin: 0;
 		font-size: 0.9rem;
-		color: var(--text);
+		color: var(--color-ink);
 	}
 
 	.audit__form .audit__file-clear {
 		margin-left: 0.6rem;
 		padding: 0.15rem 0.5rem;
-		border: 1px solid var(--border);
-		border-radius: 6px;
-		background: transparent;
-		color: var(--text-muted);
+		border: var(--border-width) solid var(--color-line);
+		border-radius: var(--radius-control);
+		background: var(--clay-fill);
+		color: var(--color-ink-muted);
 		cursor: pointer;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.audit__form .audit__file-clear:hover {
+		box-shadow: var(--clay-lifted);
+	}
+
+	.audit__form .audit__file-clear:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
 	}
 
 	.audit__form label {
@@ -361,17 +395,26 @@
 		flex-direction: column;
 		gap: 0.3rem;
 		font-size: 0.9rem;
-		color: var(--text);
+		color: var(--color-ink);
 	}
 
 	.audit__form textarea {
 		padding: 0.6rem 0.75rem;
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		background: var(--surface);
-		color: var(--text-strong);
+		border: var(--border-width) solid var(--color-line);
+		border-radius: var(--radius-card);
+		background: var(--clay-fill);
+		color: var(--color-ink);
 		font-family: inherit;
 		resize: vertical;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.audit__form textarea:focus {
+		outline: 2px solid var(--color-action);
+		outline-offset: 1px;
+		border-color: var(--color-action);
+		box-shadow: var(--clay-lifted);
 	}
 
 	.audit__form button,
@@ -379,11 +422,25 @@
 		align-self: flex-start;
 		padding: 0.55rem 1.1rem;
 		border: none;
-		border-radius: 8px;
-		background: var(--accent);
-		color: var(--accent-contrast);
+		border-radius: var(--radius-card);
+		background: var(--color-action);
+		color: var(--color-on-action);
 		font-weight: 600;
 		cursor: pointer;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.audit__form button:hover:not(:disabled),
+	.audit__capture-form button:hover:not(:disabled) {
+		filter: brightness(1.05);
+		box-shadow: var(--clay-lifted);
+	}
+
+	.audit__form button:focus-visible,
+	.audit__capture-form button:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
 	}
 
 	.audit__form button:disabled,
@@ -394,18 +451,29 @@
 
 	.audit__error {
 		margin: 0;
-		color: var(--error);
+		color: var(--color-danger);
 		font-size: 0.9rem;
 	}
 
 	.audit__error button {
-		margin-left: 0.75rem;
+		margin-left: var(--space-3);
 		padding: 0.25rem 0.6rem;
-		border: 1px solid var(--error);
-		border-radius: 6px;
-		background: transparent;
-		color: var(--error);
+		border: var(--border-width) solid var(--color-danger);
+		border-radius: var(--radius-control);
+		background: var(--clay-fill);
+		color: var(--color-danger);
 		cursor: pointer;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.audit__error button:hover {
+		box-shadow: var(--clay-lifted);
+	}
+
+	.audit__error button:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
 	}
 
 	.audit__jd {
@@ -414,140 +482,165 @@
 		gap: 0.4rem;
 	}
 
+	/* Disclosure toggle: a control, so it gets clay. */
 	.audit__jd-toggle {
 		align-self: flex-start;
 		padding: 0.45rem 0.9rem;
-		border: 1px dashed var(--border);
-		border-radius: 8px;
-		background: var(--surface);
-		color: var(--text-muted);
+		border: var(--border-width) dashed var(--color-line);
+		border-radius: var(--radius-card);
+		background: var(--clay-fill);
+		color: var(--color-ink-muted);
 		font-size: 0.9rem;
 		cursor: pointer;
 		text-align: left;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.audit__jd-toggle:hover {
+		box-shadow: var(--clay-lifted);
+	}
+
+	.audit__jd-toggle:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
 	}
 
 	.audit__jd-toggle[aria-expanded='true'] {
 		border-style: solid;
-		border-color: var(--accent);
-		color: var(--text-strong);
+		border-color: var(--color-action);
+		color: var(--color-ink-strong);
 	}
 
 	.audit__issues {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: var(--space-2);
 		list-style: none;
 		margin: 0;
 		padding: 0;
 	}
 
+	/* Findings, not controls. Flat. */
 	.audit__issues li {
-		padding: 0.75rem 1rem;
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		background: var(--surface);
+		padding: var(--space-3) var(--space-4);
+		border: var(--border-width) solid var(--color-line);
+		border-radius: var(--radius-card);
+		background: var(--color-surface);
 	}
 
 	.audit__issues header {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--space-2);
 	}
 
 	.audit__issues p {
 		margin: 0.35rem 0 0;
-		color: var(--text);
+		color: var(--color-ink);
 	}
 
 	.audit__severity {
 		padding: 0.1rem 0.5rem;
-		border-radius: 999px;
-		font-size: 0.75rem;
+		border-radius: var(--radius-pill);
+		font-size: var(--text-xs);
 		font-weight: 700;
 		text-transform: uppercase;
-		border: 1px solid var(--border);
-		color: var(--text-muted);
+		border: var(--border-width) solid var(--color-line);
+		color: var(--color-ink-muted);
 	}
 
 	.audit__severity--high {
-		border-color: var(--error);
-		color: var(--error);
+		border-color: var(--color-danger);
+		color: var(--color-danger);
 	}
 
 	.audit__result {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
+		gap: var(--space-3);
 	}
 
 	.audit__result h2 {
-		margin: 0.75rem 0 0.25rem;
+		margin: var(--space-3) 0 var(--space-1);
 		font-size: 1.05rem;
-		color: var(--text-strong);
+		color: var(--color-ink-strong);
 	}
 
 	.audit__result ul {
 		margin: 0;
 		padding-left: 1.25rem;
-		color: var(--text);
+		color: var(--color-ink);
 	}
 
+	/* Score display. Stays flat: a bounce shadow behind a saturated fill would
+	   read as a glow around the number, which is the exact failure mode the
+	   "clay on controls only" rule exists to prevent. */
 	.audit__score {
 		display: flex;
 		align-items: baseline;
-		gap: 0.75rem;
-		padding: 1rem 1.25rem;
-		border: 1px solid var(--border);
-		border-radius: 12px;
-		background: var(--surface);
+		gap: var(--space-3);
+		padding: var(--space-4) 1.25rem;
+		border: var(--border-width) solid var(--color-line);
+		border-radius: var(--radius-panel);
+		background: var(--color-surface);
 	}
 
 	.audit__score strong {
 		font-size: 2rem;
-		color: var(--text-strong);
+		color: var(--color-ink-strong);
 	}
 
 	.audit__reasoning {
 		white-space: pre-wrap;
-		color: var(--text);
-		padding: 1rem 1.25rem;
-		border: 1px solid var(--border);
-		border-radius: 12px;
-		background: var(--surface);
+		color: var(--color-ink);
+		padding: var(--space-4) 1.25rem;
+		border: var(--border-width) solid var(--color-line);
+		border-radius: var(--radius-panel);
+		background: var(--color-surface);
 	}
 
 	.audit__capture {
-		margin-top: 1rem;
+		margin-top: var(--space-4);
 		padding: 1.25rem;
-		border: 1px solid var(--accent);
-		border-radius: 12px;
-		background: var(--surface);
+		border: var(--border-width) solid var(--color-action);
+		border-radius: var(--radius-panel);
+		background: var(--color-surface);
 	}
 
 	.audit__capture-form {
 		display: flex;
 		gap: 0.6rem;
-		margin-top: 0.5rem;
+		margin-top: var(--space-2);
 	}
 
 	.audit__capture-form input {
 		flex: 1;
 		max-width: 20rem;
 		padding: 0.55rem 0.75rem;
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		background: var(--surface);
-		color: var(--text-strong);
+		border: var(--border-width) solid var(--color-line);
+		border-radius: var(--radius-card);
+		background: var(--clay-fill);
+		color: var(--color-ink);
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.audit__capture-form input:focus {
+		outline: 2px solid var(--color-action);
+		outline-offset: 1px;
+		border-color: var(--color-action);
+		box-shadow: var(--clay-lifted);
 	}
 
 	.audit__capture-done {
-		color: var(--text);
+		color: var(--color-ink);
 		font-weight: 600;
 	}
 
 	.audit__signup-cta {
 		margin: 0.9rem 0 0;
-		color: var(--text-muted);
+		color: var(--color-ink-muted);
 		font-size: 0.9rem;
 	}
 
@@ -555,6 +648,8 @@
 		font-weight: 700;
 	}
 
+	/* 640px stays a LITERAL on purpose: var() in a media condition silently
+	   drops the whole block. See the note on --breakpoint-sm in app.css. */
 	@media (max-width: 640px) {
 		.audit__capture-form {
 			flex-direction: column;

@@ -87,18 +87,18 @@
 	.home {
 		display: flex;
 		flex-direction: column;
-		gap: 1.5rem;
+		gap: var(--space-5);
 	}
 
 	.home__intro h1 {
 		margin: 0 0 0.4rem;
 		font-size: 1.6rem;
-		color: var(--text-strong);
+		color: var(--color-ink-strong);
 	}
 
 	.home__intro p {
-		margin: 0 0 0.5rem;
-		color: var(--text-muted);
+		margin: 0 0 var(--space-2);
+		color: var(--color-ink-muted);
 	}
 
 	.home__profile {
@@ -108,37 +108,38 @@
 	.home__usage {
 		margin: 0;
 		font-size: 0.85rem;
-		color: var(--text-muted);
+		color: var(--color-ink-muted);
 	}
 
+	/* Status panels, not controls. Flat. */
 	.home__loading,
 	.home__error {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 0.5rem;
-		padding: 1.5rem;
-		border-radius: 12px;
+		gap: var(--space-2);
+		padding: var(--space-5);
+		border-radius: var(--radius-panel);
 		text-align: center;
 	}
 
 	.home__loading {
-		background: var(--surface);
-		border: 1px solid var(--border);
+		background: var(--color-surface);
+		border: var(--border-width) solid var(--color-line);
 	}
 
 	.home__error {
-		background: var(--error-bg);
-		color: var(--error);
-		border: 1px solid var(--error);
+		background: var(--color-danger-muted);
+		color: var(--color-danger);
+		border: var(--border-width) solid var(--color-danger);
 	}
 
 	.home__spinner {
-		width: 2rem;
-		height: 2rem;
-		border-radius: 50%;
-		border: 3px solid var(--border);
-		border-top-color: var(--accent);
+		width: var(--space-6);
+		height: var(--space-6);
+		border-radius: var(--radius-circle);
+		border: var(--border-width-heavy) solid var(--color-line);
+		border-top-color: var(--color-action);
 		animation: spin 0.9s linear infinite;
 	}
 
@@ -148,14 +149,26 @@
 		}
 	}
 
+	/* A control: clay. */
 	.home__error button {
-		margin-top: 0.5rem;
-		padding: 0.45rem 1rem;
-		border: 1px solid var(--error);
-		border-radius: 6px;
-		background: transparent;
-		color: var(--error);
+		margin-top: var(--space-2);
+		padding: 0.45rem var(--space-4);
+		border: var(--border-width) solid var(--color-danger);
+		border-radius: var(--radius-control);
+		background: var(--clay-fill);
+		color: var(--color-danger);
 		font-weight: 600;
 		cursor: pointer;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.home__error button:hover {
+		box-shadow: var(--clay-lifted);
+	}
+
+	.home__error button:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
 	}
 </style>
