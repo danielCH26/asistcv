@@ -4,6 +4,9 @@ Scenarios covered:
 - Checkout creates a Stripe session with the right price/metadata (card + pse).
 - Idempotency-Key passthrough to Stripe.
 - Auth required on checkout (401 without token).
+- Checkout gate on email verification (C3, issue #46): an unverified user
+  is rejected with 403, *not* the AttributeError → 500 that the original
+  bug shipped.
 - Subscription endpoint shape: plan_id, usage.matches_this_month, overage.
 - Match tier enforcement: free/at-limit 402 PLAN_LIMIT_REACHED, under-limit 200
   with usage increment, failed match does not consume, recruiter starter limit,
@@ -21,6 +24,19 @@ Stripe is mocked at `stripe.checkout.Session.create` so the real
 `stripe_client.create_checkout_session` wrapper runs (price mapping, pse
 config, idempotency passthrough). The LLM provider is mocked like
 test_match_persistence.py does.
+
+C3 fixture contract (issue #46)
+------------------------------
+The auth resolver returns a ``CurrentUser`` dataclass (id, name, role,
+auth_method) — not a ``User`` ORM row. The billing endpoints load the
+full row inside the handler (``_load_user``) so they can read
+``email`` and ``email_verified_at``. The fixture therefore overrides
+``get_current_user`` with a *real* ``CurrentUser`` shape; the override
+that used to return the ORM row was hiding the AttributeError that
+caused the 500 in production. With the override gone and the real
+resolver exercising the ``_load_user`` path, a regression in either
+the resolver contract or the email-verification gate now surfaces as a
+failing test.
 """
 
 from datetime import UTC, datetime
@@ -149,11 +165,44 @@ def _make_provider() -> MagicMock:
 async def billing_user(clean_db, override_get_session):
     """Verified job_seeker user with the endpoint-level auth overridden.
 
-    The override returns the User ORM row (not CurrentUser) because billing
-    endpoints read `email` / `email_verified_at`, which CurrentUser lacks.
+    Override returns a ``CurrentUser`` dataclass — the same shape
+    ``get_current_user`` produces in production. The billing handler
+    then loads the full ``User`` row via ``_load_user`` so it can read
+    ``email`` / ``email_verified_at``. The previous fixture returned the
+    ORM row directly and masked the AttributeError that caused the
+    checkout 500 in production (C3, issue #46).
     """
     user = await _create_user(clean_db, email="billing@test.com")
-    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+        id=user.id,
+        name=user.full_name,
+        role=user.role,
+        auth_method="jwt",
+    )
+    yield user
+    app.dependency_overrides.pop(get_current_user, None)
+
+
+@pytest.fixture
+async def unverified_billing_user(clean_db, override_get_session):
+    """Unverified job_seeker — checkout must reject with 403, never 500.
+
+    Mirrors ``billing_user`` but the DB row has ``email_verified_at=None``,
+    so the checkout gate at ``billing.py`` raises 403 before Stripe is
+    touched. The fixture exists specifically to lock in the F1 / C3 fix:
+    a regression that lets an unverified user past the gate (or that
+    fails the resolver contract and re-raises AttributeError as 500)
+    shows up here.
+    """
+    user = await _create_user(
+        clean_db, email="unverified-billing@test.com", verified=False
+    )
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+        id=user.id,
+        name=user.full_name,
+        role=user.role,
+        auth_method="jwt",
+    )
     yield user
     app.dependency_overrides.pop(get_current_user, None)
 
@@ -253,6 +302,53 @@ async def test_checkout_requires_auth(async_client, clean_db):
     )
 
     assert response.status_code == 401
+
+
+async def test_checkout_unverified_user_403(
+    async_client, clean_db, unverified_billing_user, fake_stripe_checkout
+):
+    """C3 / issue #46: an unverified user is rejected with 403, never 500.
+
+    Regression guard for the original bug: the handler used to read
+    ``current_user.email_verified_at`` on the resolver output (a
+    ``CurrentUser`` dataclass that doesn't have that field), so an
+    unverified user crashed with AttributeError → 500. The fix loads
+    the full ``User`` row from the DB and checks
+    ``email_verified_at`` properly. The endpoint now returns 403 before
+    Stripe is touched, which is what the contract requires.
+    """
+    response = await async_client.post(
+        "/v1/billing/checkout",
+        json={"plan_id": "job_seeker_monthly"},
+        headers=_auth_header(unverified_billing_user),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Email verification required to purchase plans"
+    # Stripe must not be called for an unverified user
+    assert fake_stripe_checkout == []
+
+
+async def test_checkout_verified_user_completes(
+    async_client, clean_db, billing_user, fake_stripe_checkout, settings
+):
+    """Verified user → checkout creates a Stripe session.
+
+    The endpoint resolves ``email`` and ``email_verified_at`` from the
+    User row loaded via ``_load_user``; this test asserts both reach
+    Stripe and the metadata is right.
+    """
+    response = await async_client.post(
+        "/v1/billing/checkout",
+        json={"plan_id": "job_seeker_monthly"},
+        headers=_auth_header(billing_user),
+    )
+
+    assert response.status_code == 200
+    assert len(fake_stripe_checkout) == 1
+    params = fake_stripe_checkout[0]
+    assert params["customer_email"] == billing_user.email
+    assert params["metadata"]["user_id"] == str(billing_user.id)
 
 
 async def test_checkout_invalid_plan_rejected(
