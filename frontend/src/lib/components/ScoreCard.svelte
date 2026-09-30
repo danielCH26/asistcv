@@ -29,8 +29,8 @@
 		align-items: center;
 		justify-content: center;
 		padding: var(--space-4) var(--space-6);
-		border-radius: 12px;
-		color: #fff;
+		border-radius: var(--radius-panel);
+		color: var(--color-on-score-fill);
 		font-family: var(--font-sans);
 		min-width: 140px;
 	}

@@ -48,6 +48,33 @@
 	--score-mid: #92400e;
 	--score-high: #047857;
 
+	/* -------------------------------------------------------------------------
+	   --color-on-score-fill — the LABEL ink for the three fills above.
+	   Used by ScoreCard.svelte and HistoryList.svelte, which sit a white number
+	   and a white label directly on the fill.
+
+	   MEASURED (WCAG 2.1 relative luminance), #ffffff against each fill:
+	     --score-low  #dc2626   4.83:1
+	     --score-mid  #92400e   7.09:1
+	     --score-high #047857   5.48:1
+	   All three clear AA for normal text (4.5:1). Those are the light-mode
+	   numbers AND the dark-mode numbers, and the fact that they are the same is
+	   the entire justification for this token existing: the fills are Layer 0,
+	   so they do not move, so a mode-invariant ink holds in both schemes.
+
+	   DO NOT re-point this at --color-on-action / --color-on-success /
+	   --color-on-danger. Those are mode-scoped and resolve to DARK ink in the
+	   dark block. Measured on the same three fills, dark ink #0f172a lands at
+	   3.70:1 / 2.52:1 / 3.26:1 — two of the three below AA for normal text.
+	   The failure is silent: the token exists, it resolves, nothing errors.
+
+	   Equally, do not treat this as a general "light ink on a dark thing". White
+	   is 1.00:1 against --color-surface and 1.05:1 against --color-canvas. It is
+	   legible HERE because these three fills stay deep in both modes, and only
+	   here. That is why it is named for the score fills and not --color-on-*.
+	   ------------------------------------------------------------------------- */
+	--color-on-score-fill: #ffffff;
+
 	/* =========================================================================
 	   LAYER 3 — SOBER PALETTE (light)
    -------------------------------------------------------------------------
@@ -193,6 +220,39 @@
 	--space-9: 6rem;
 	--space-10: 8rem;
 
+	/* -------------------------------------------------------------------------
+	   RADIUS — named by what the shape IS, not by its number, so a form reads
+	   as "more contained" than its neighbour without anyone having to remember
+	   which pixel value that was.
+
+	   The four pixel steps are a genuine monotone scale (6 / 8 / 10 / 12), and
+	   the last two are not points on it: a pill is a BADGE, not a large card,
+	   and a circle is a DOT, not a rounded card. Keeping them in the same block
+	   is a readability choice, not a scale claim.
+
+	   Values are byte-identical to the 78 literals they replace across src
+	   (8px x35, 6px x17, 12px x12, 10px x6, 999px x5, 50% x3), so adopting
+	   these is a pure rename with zero visual change.
+
+	   There is deliberately no --radius-none. Nothing in src sets a zero
+	   radius; the places that want "no rounding" say `border: none` instead,
+	   which is a different thing and already a token-free literal.
+	   ------------------------------------------------------------------------- */
+	--radius-control: 6px; /* input, small button */
+	--radius-card: 8px; /* default button, list row, inline card */
+	--radius-card-lg: 10px; /* larger card, block that sits on the canvas */
+	--radius-panel: 12px; /* the page's main panel */
+	--radius-pill: 999px; /* badge, status chip */
+	--radius-circle: 50%; /* spinner, avatar */
+
+	/* -------------------------------------------------------------------------
+	   BORDER WIDTH — three steps, all three in use (1px x58, 2px x1, 3px x1).
+	   Written as longhands rather than in a `border:` shorthand so a component
+	   can change width without also having to restate style and colour. */
+	--border-width: 1px; /* hairline: the default boundary */
+	--border-width-thick: 2px; /* emphasised boundary, spinnable arc */
+	--border-width-heavy: 3px; /* the arc of a large spinner */
+
 	/* type scale */
 	--text-2xs: 0.6875rem;
 	--text-xs: 0.75rem;
@@ -223,6 +283,40 @@
 	/* Inter is the stack the app already shipped. Exposed, not replaced. */
 	--font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
 	--font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+	/* -------------------------------------------------------------------------
+	   RESPONSIVE
+
+	   *** READ THIS BEFORE USING EITHER TOKEN IN AN @media QUERY ***
+
+	   `--breakpoint-sm` is a RECORDED VALUE, not a consumable one. It cannot be
+	   used in a media condition:
+
+	     @media (max-width: var(--breakpoint-sm))   <-- SILENTLY DOES NOTHING
+
+	   Verified in Chromium at a 500px viewport against a control: the literal
+	   `@media (max-width: 640px)` matched, the `var()` form did not. A media
+	   query is evaluated against the device before custom properties are
+	   substituted, so the condition is invalid and the whole block is dropped.
+	   There is no warning and no error — svelte-check passes, vitest passes,
+	   `vite build` passes. The only symptom is that every mobile layout in the
+	   app stops collapsing.
+
+	   So @media preludes in this codebase keep the literal 640px, on purpose.
+	   This token exists so the value has one documented home and so a future
+	   second breakpoint is added in a consistent place. Do not "tidy" the
+	   preludes to reference it.
+
+	   `--layout-content-max`, by contrast, is a normal declaration value and
+	   works normally: `max-width: var(--layout-content-max)`.
+
+	   --layout-content-max is deliberately NOT a breakpoint. It is the measure
+	   of the centred content column and never switches a layout. It is a
+	   container width, and filing it under the breakpoint namespace would imply
+	   a viewport rule that does not exist.
+	   ------------------------------------------------------------------------- */
+	--breakpoint-sm: 640px;
+	--layout-content-max: 880px;
 
 	/* =========================================================================
 	   LAYER 4 — MOTION
