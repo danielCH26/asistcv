@@ -5,9 +5,12 @@ These tests cover:
 - bcrypt password hashing and verification
 - JWT token creation and decoding
 - Refresh token generation
+- Fail-closed validation of the JWT signing key
 """
 import pytest
+from pydantic import ValidationError
 
+from app.core.config import DEFAULT_JWT_SECRET, Settings, get_settings
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -85,6 +88,95 @@ class TestJWTTokens:
 
         with pytest.raises(jwt.InvalidTokenError):
             decode_access_token(token)
+
+
+class TestJWTSecretFailClosed:
+    """The JWT signing key must never resolve to the published default.
+
+    Regression guard for the 2026-09-29 production incident: an access token
+    signed with this repo's default secret was accepted by the deployed backend
+    and returned a real user's data. The secret itself was rotated; these tests
+    pin the structural fix so a future deploy cannot silently fall back again.
+    """
+
+    def test_absent_jwt_secret_is_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Settings refuses to validate when JWT_SECRET is not set at all."""
+        monkeypatch.delenv("JWT_SECRET", raising=False)
+
+        with pytest.raises(ValidationError) as excinfo:
+            Settings(_env_file=None)
+
+        message = str(excinfo.value)
+        assert "JWT_SECRET" in message
+        assert "not acceptable" in message
+        assert "secrets.token_urlsafe(48)" in message
+
+    def test_env_provided_default_jwt_secret_is_rejected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The guard fires on the production path, where JWT_SECRET is set to the default."""
+        monkeypatch.setenv("JWT_SECRET", DEFAULT_JWT_SECRET)
+
+        with pytest.raises(ValidationError) as excinfo:
+            Settings(_env_file=None)
+
+        assert "JWT_SECRET" in str(excinfo.value)
+
+    def test_explicit_non_default_jwt_secret_is_accepted(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A generated secret is accepted and resolved verbatim."""
+        generated = "a-properly-generated-test-secret-value"
+        monkeypatch.setenv("JWT_SECRET", generated)
+
+        settings = Settings(_env_file=None)
+
+        assert settings.jwt_secret == generated
+
+    @pytest.mark.parametrize("whitespace", ["   ", "\t", "\n", " \t "])
+    def test_whitespace_only_jwt_secret_is_rejected(
+        self, monkeypatch: pytest.MonkeyPatch, whitespace: str
+    ) -> None:
+        """A blank secret is as forgeable as the published default.
+
+        An equality test against DEFAULT_JWT_SECRET alone would accept
+        "   ": it is not the default string, yet anyone can sign with it.
+        This is reachable by copy-pasting a padded value or by a deploy
+        whose secret was padded in transit.
+        """
+        monkeypatch.setenv("JWT_SECRET", whitespace)
+
+        with pytest.raises(ValidationError) as excinfo:
+            Settings(_env_file=None)
+
+        assert "JWT_SECRET" in str(excinfo.value)
+
+    def test_suite_runs_with_a_non_default_secret(self) -> None:
+        """The suite configures a real secret rather than relaxing the guard."""
+        assert get_settings().jwt_secret != DEFAULT_JWT_SECRET
+
+    def test_token_round_trip_with_configured_secret(self) -> None:
+        """A token signed with the configured secret decodes back to its claims."""
+        token = create_access_token({"sub": "42", "role": "recruiter"})
+
+        payload = decode_access_token(token)
+
+        assert payload["sub"] == "42"
+        assert payload["role"] == "recruiter"
+
+    def test_token_signed_with_published_default_is_rejected(self) -> None:
+        """The exact forgery from the incident no longer passes decode."""
+        import jwt
+
+        settings = get_settings()
+        forged = jwt.encode(
+            {"sub": "1", "role": "recruiter", "exp": 9999999999},
+            DEFAULT_JWT_SECRET,
+            algorithm=settings.jwt_algorithm,
+        )
+
+        with pytest.raises(jwt.InvalidTokenError):
+            decode_access_token(forged)
 
 
 class TestRefreshTokens:

@@ -11,7 +11,7 @@ How to deploy the AsistCV backend (FastAPI + Docker) to Render's free tier.
 
 - A Render account (https://render.com — sign up with GitHub, no card needed)
 - The repo pushed to GitHub (danielCH26/asistcv)
-- Working secrets: `GROQ_API_KEY`, `HUGGINGFACE_API_KEY`, `DATABASE_URL` (Neon)
+- Working secrets: `JWT_SECRET`, `GROQ_API_KEY`, `HUGGINGFACE_API_KEY`, `DATABASE_URL` (Neon)
 - The backend Dockerfile lives at `backend/Dockerfile` (already validated)
 
 ## 1. Create the Web Service
@@ -39,6 +39,7 @@ secrets "environment variables"; they are injected at runtime, not committed):
 
 | Key | Value |
 |---|---|
+| `JWT_SECRET` | **Required.** Secret that signs the access tokens. Generate one with `python -c "import secrets; print(secrets.token_urlsafe(48))"`. The deploy aborts at startup if it is missing or still holds the built-in default. |
 | `GROQ_API_KEY` | your Groq key (`gsk_...`) |
 | `HUGGINGFACE_API_KEY` | your HF token (`hf_...`) |
 | `DATABASE_URL` | Neon connection string (`postgresql://neondb_owner:...@ep-...neon.tech/asistcv?sslmode=require&channel_binding=require`) |
@@ -103,6 +104,9 @@ from the service dashboard.
 
 - **Service "Deploy failed"**: check the **Logs** tab; most common cause is a
   missing env var (RuntimeError at startup) or the Dockerfile build error.
+- **`JWT_SECRET must be set to a secret value...` at startup**: Render is not
+  injecting the variable, or it still holds the repo's old default. Set
+  `JWT_SECRET` in Environment to a freshly generated value and redeploy.
 - **502/timeout right after Live**: the container is still waking up (cold
   start). Retry after 30-60s.
 - **`DATABASE_URL` errors at runtime**: confirm the Neon string includes

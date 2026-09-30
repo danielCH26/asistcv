@@ -36,6 +36,15 @@ RLS_TEST_ROLE = "asistcv_rls"
 # This ensures the module-level engine cache in session.py uses the test DB
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 
+# The JWT signing key is fail-closed (see app/core/config.py): Settings refuses
+# to validate while jwt_secret is the published default. The guard must NOT be
+# weakened for tests, so the suite supplies its own explicit, non-default secret
+# before any app module is imported -- same ordering contract as DATABASE_URL
+# above. setdefault() (not assignment) keeps an explicitly exported JWT_SECRET
+# winning, and the value is >= 32 bytes so PyJWT stops warning about short HMAC
+# keys.
+os.environ.setdefault("JWT_SECRET", "test-only-jwt-secret-not-a-production-key")
+
 from app.main import app  # noqa: E402
 
 # Estado global: el setup de la DB de test corre una sola vez por sesión,

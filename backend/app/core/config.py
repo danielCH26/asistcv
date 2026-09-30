@@ -8,9 +8,25 @@ So `CORS_ORIGINS` must be set as a JSON array string:
 NOT as CSV. The default below is used when the env var is not set.
 """
 from functools import lru_cache
+from typing import Self
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Built-in fallback for the JWT signing key. It is a literal published in this
+# repo's git history, so it must never end up signing a real access token:
+# `Settings` refuses to validate while it is the resolved value (see the
+# `_reject_default_jwt_secret` model validator). Named as a constant so the
+# value is defined in exactly one place and the guard can compare against it
+# without duplicating the literal.
+DEFAULT_JWT_SECRET = "dev-secret-change-in-production"
+
+# Startup error surfaced when JWT_SECRET is missing or still the default. It
+# names the variable and the one command that fixes it.
+JWT_SECRET_ERROR = (
+    "JWT_SECRET must be set to a secret value; the built-in development default is not "
+    "acceptable. Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+)
 
 
 class Settings(BaseSettings):
@@ -49,7 +65,7 @@ class Settings(BaseSettings):
     )
 
     # JWT configuration
-    jwt_secret: str = Field(default="dev-secret-change-in-production", validation_alias="JWT_SECRET")
+    jwt_secret: str = Field(default=DEFAULT_JWT_SECRET, validation_alias="JWT_SECRET")
     jwt_algorithm: str = Field(default="HS256", validation_alias="JWT_ALGORITHM")
     jwt_access_ttl: int = Field(default=900, validation_alias="JWT_ACCESS_TTL")  # 15 minutes
     jwt_refresh_ttl: int = Field(default=2592000, validation_alias="JWT_REFRESH_TTL")  # 30 days
@@ -88,6 +104,33 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def _reject_default_jwt_secret(self) -> Self:
+        """Fail closed when the JWT signing key is still the published default.
+
+        A token signed with `DEFAULT_JWT_SECRET` can be forged by anyone who
+        has read this repository, so the process must refuse to start rather
+        than hand out authentic-looking access tokens. This mirrors how
+        `BACKEND_API_KEY` behaves in `app/main.py` when it is absent.
+
+        `mode="after"` is deliberate. `BaseSettings` resolves env vars, the
+        dotenv file and init kwargs into the model *before* model validators
+        run, so this guard observes the production value (JWT_SECRET injected
+        by the platform), not just the field default. A `mode="before"` or
+        field-level check would miss it.
+
+        There is no development exemption on purpose: an unset APP_ENV would
+        itself read as "development" and silently defeat the guard.
+
+        The check strips before comparing and also rejects a value that is
+        empty once stripped. A whitespace-only secret ("   ") is not the
+        published default, so an equality test alone would accept it — but it
+        is just as forgeable, since anyone can sign with it.
+        """
+        if not self.jwt_secret.strip() or self.jwt_secret == DEFAULT_JWT_SECRET:
+            raise ValueError(JWT_SECRET_ERROR)
+        return self
 
 
 @lru_cache
