@@ -13,9 +13,10 @@ Pipeline (PR2 design D4)
 ------------------------
 1. Load the ``CVAdaptation`` row + the source ``UserCV`` (RLS-bound
    session, service context for cross-row writes).
-2. Decode the JD text from ``jd_text_encrypted`` (PR2b stores UTF-8
-   bytes — encryption wiring is a follow-up; the column already
-   exists from migration 015 for retention purposes).
+2. Decode the JD text from ``jd_text`` (raw UTF-8 bytes — the column is
+   plaintext, consistently with the rest of the schema, and was renamed
+   from ``jd_text_encrypted`` in migration 019 to stop the name claiming
+   an encryption that does not exist).
 3. Call ``llm_provider.generate_adaptation(cv_structured, jd_text,
    max_tokens=4000)``.
 4. On LLM exception / parse failure → ``status=failed``,
@@ -195,11 +196,11 @@ class AdaptationRunner:
         """Load the row, the source CV, and the JD text.
 
         Returns ``(None, None, "")`` when the row is missing or in a
-        terminal state. JD text is decoded from ``jd_text_encrypted``
-        (UTF-8 bytes in PR2b). Returns empty string when the bytes are
-        NULL (e.g. retention expired) — the LLM will see an empty JD
-        and produce a generic output, but the row still flows to a
-        terminal state so the client isn't blocked.
+        terminal state. JD text is decoded from ``jd_text`` (raw UTF-8
+        bytes). Returns empty string when the bytes are NULL (e.g.
+        retention expired) — the LLM will see an empty JD and produce a
+        generic output, but the row still flows to a terminal state so
+        the client isn't blocked.
         """
         async with self._session_factory() as session:
             await set_rls_user(session, 0, "service")
@@ -224,9 +225,9 @@ class AdaptationRunner:
                 )
                 source_cv = cv_result.scalar_one_or_none()
             jd_text = ""
-            if row.jd_text_encrypted is not None:
+            if row.jd_text is not None:
                 try:
-                    jd_text = row.jd_text_encrypted.decode("utf-8")
+                    jd_text = row.jd_text.decode("utf-8")
                 except UnicodeDecodeError:
                     logger.warning(
                         "adaptation_jd_decode_failed",

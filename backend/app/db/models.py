@@ -725,11 +725,13 @@ class CVAdaptation(SQLModel, table=True):
         max_length=64,
         description="SHA256 hex digest of the first 500 chars of the JD text.",
     )
-    jd_text_encrypted: bytes | None = Field(
+    jd_text: bytes | None = Field(
         default=None,
         description=(
-            "Encrypted JD text (optional). NULL when the source has "
-            "expired past the retention window."
+            "JD text stored as raw UTF-8 bytes — plaintext, not encrypted. "
+            "NULL when the source has expired past the retention window. "
+            "Renamed from ``jd_text_encrypted`` in migration 019: the old "
+            "name asserted a privacy protection that was never implemented."
         ),
     )
     adapted_cv_json: dict = Field(
