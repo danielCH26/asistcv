@@ -769,3 +769,48 @@ class CVAdaptation(SQLModel, table=True):
         sa_column=Column(DateTime(timezone=True), nullable=True),
         description="Set when status transitions to completed.",
     )
+
+
+# === C3 (issue #46) — Email verification tokens ===
+
+
+class EmailVerificationToken(SQLModel, table=True):
+    """One-shot, time-bound token used by ``POST /v1/auth/verify-email``.
+
+    The plaintext token is sent in the email link; only its SHA256 hash
+    is persisted (mirrors the ``refresh_tokens`` / ``audit_tokens``
+    pattern). The row is marked with ``used_at`` when confirm succeeds,
+    so a second confirm with the same token returns 400.
+
+    A new row is created on every ``POST /v1/auth/verify-email/request``;
+    older unused rows for the same user are not invalidated — they're
+    pruned by the next ``expires_at < now()`` sweep or simply outlive
+    their TTL. Confirm-time checks pick the *unused* row whose hash
+    matches; a used row fails with INVALID_TOKEN regardless of expiry.
+    """
+
+    __tablename__ = "email_verification_tokens"
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        description="User who requested the verification.",
+    )
+    token_hash: str = Field(
+        max_length=128,
+        unique=True,
+        description="SHA256 hex digest of the plaintext sent in the email.",
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column=Column(DateTime(timezone=True), server_default="NOW()", nullable=False),
+    )
+    expires_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+        description="When the token stops being valid (TTL from settings).",
+    )
+    used_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+        description="Set when the confirm endpoint validates it.",
+    )
