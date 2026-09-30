@@ -33,16 +33,16 @@
 
 	.energy--low {
 		background: rgba(239, 68, 68, 0.12);
-		color: var(--score-low);
+		color: var(--score-low-ink);
 	}
 
 	.energy--medium {
 		background: rgba(234, 179, 8, 0.15);
-		color: var(--score-mid);
+		color: var(--score-mid-ink);
 	}
 
 	.energy--high {
 		background: rgba(16, 185, 129, 0.15);
-		color: var(--score-high);
+		color: var(--score-high-ink);
 	}
 </style>

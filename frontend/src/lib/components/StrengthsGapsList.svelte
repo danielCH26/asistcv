@@ -55,7 +55,7 @@
 	}
 
 	.strengths-gaps__heading--strength {
-		color: var(--score-high);
+		color: var(--score-high-ink);
 	}
 
 	.strengths-gaps__heading--gap {

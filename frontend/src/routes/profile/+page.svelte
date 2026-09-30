@@ -764,8 +764,8 @@
 	}
 
 	.profile__adapt-list-status--completed {
-		border-color: var(--score-high);
-		color: var(--score-high);
+		border-color: var(--score-high-ink);
+		color: var(--score-high-ink);
 	}
 
 	.profile__adapt-list-status--failed {
