@@ -2,6 +2,7 @@ import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
 import { derived, get, writable, type Readable } from 'svelte/store';
 import { ApiError, type Role, type SessionUser, type SignUpPayload, type TokenResponse } from '$api/types';
+import { apiClient } from '$api/client';
 import { API_BASE } from '$api/base';
 
 /**
@@ -206,7 +207,7 @@ export async function signup(payload: SignUpPayload): Promise<SignupResult> {
 	const tokens = (await res.json()) as TokenResponse;
 	const user = await fetchMe(tokens.access_token);
 	session.set(toSession(tokens, user));
-	const analysis_id = await claimPendingAudit(user.id);
+	const analysis_id = await claimPendingAudit();
 	return analysis_id !== undefined ? { user, analysis_id } : { user };
 }
 
@@ -224,20 +225,16 @@ export function clearPendingAuditToken(): void {
 	if (browser) localStorage.removeItem(AUDIT_TOKEN_KEY);
 }
 
-async function claimPendingAudit(userId: number): Promise<number | undefined> {
+async function claimPendingAudit(): Promise<number | undefined> {
 	const token = getPendingAuditToken();
 	if (!token) return undefined;
 	try {
-		const res = await fetch(`${API_BASE}/v1/audit/${encodeURIComponent(token)}/claim`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-			body: JSON.stringify({ audit_token: token, user_id: userId })
-		});
-		if (res.ok) {
-			const body = (await res.json()) as { analysis_id?: number | null };
-			clearPendingAuditToken();
-			return typeof body.analysis_id === 'number' ? body.analysis_id : undefined;
-		}
+		// El claim exige sesión: `apiClient` adjunta el bearer desde el store
+		// (ya seteado por `signup`) y reintenta tras un refresh silencioso.
+		// El backend vincula el audit al usuario del JWT, no al body.
+		const body = await apiClient.linkAudit(token);
+		clearPendingAuditToken();
+		return typeof body.analysis_id === 'number' ? body.analysis_id : undefined;
 	} catch {
 		// Claim best-effort: no bloquea el registro.
 	}

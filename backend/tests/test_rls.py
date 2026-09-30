@@ -450,6 +450,113 @@ class TestAnonymousAuditFlow:
                 ))
 
 
+class TestAuditClaimPolicy:
+    """Migration 018: a user principal may claim an audit, but only for itself.
+
+    This is the database half of the ``POST /v1/audit/{token}/claim`` fix:
+    the endpoint runs under ``set_rls_user``, and these policies are what
+    make that transition possible *and* keep it from becoming a cross-user
+    write at the DB layer.
+    """
+
+    async def test_user_can_read_an_unlinked_audit(self, clean_db, world):
+        factory = clean_db.session_factory
+        async with factory() as session:
+            unlinked = AuditUpload(
+                audit_token_hash="claim_unlinked", jd_text="j",
+                expires_at=datetime.now(UTC) + timedelta(days=1),
+            )
+            session.add(unlinked)
+            await session.commit()
+            world["audit_claim_unlinked"] = unlinked.id
+
+        async with conn_as(clean_db.engine, str(world["user_a"])) as conn:
+            seen = await _fetch_ids(
+                conn, f"SELECT id FROM audit_uploads WHERE id = {world['audit_claim_unlinked']}"
+            )
+        assert seen == {world["audit_claim_unlinked"]}
+
+    async def test_user_can_claim_an_unlinked_audit_for_itself(self, clean_db, world):
+        factory = clean_db.session_factory
+        async with factory() as session:
+            session.add(AuditUpload(
+                audit_token_hash="claim_self", jd_text="j",
+                expires_at=datetime.now(UTC) + timedelta(days=1),
+            ))
+            await session.commit()
+
+        async with conn_as(clean_db.engine, str(world["user_a"])) as conn:
+            result = await conn.execute(text(
+                "UPDATE audit_uploads SET linked_user_id = :uid "
+                "WHERE audit_token_hash = 'claim_self'"
+            ), {"uid": world["user_a"]})
+            assert result.rowcount == 1
+            await conn.commit()
+
+        async with conn_as(clean_db.engine, str(world["user_a"])) as conn:
+            owners = await _fetch_ids(
+                conn, "SELECT linked_user_id FROM audit_uploads "
+                "WHERE audit_token_hash = 'claim_self'"
+            )
+        assert owners == {world["user_a"]}
+
+    async def test_user_cannot_claim_an_audit_for_another_user(self, clean_db, world):
+        """WITH CHECK pins the claim to the caller — no cross-user write."""
+        factory = clean_db.session_factory
+        async with factory() as session:
+            session.add(AuditUpload(
+                audit_token_hash="claim_cross", jd_text="j",
+                expires_at=datetime.now(UTC) + timedelta(days=1),
+            ))
+            await session.commit()
+
+        async with conn_as(clean_db.engine, str(world["user_b"])) as conn:
+            with pytest.raises(DBAPIError):
+                await conn.execute(text(
+                    f"UPDATE audit_uploads SET linked_user_id = {world['user_a']} "
+                    f"WHERE audit_token_hash = 'claim_cross'"
+                ))
+
+    async def test_user_cannot_read_an_audit_claimed_by_another_user(self, clean_db, world):
+        """Once claimed, the row belongs to its owner and nobody else."""
+        factory = clean_db.session_factory
+        async with factory() as session:
+            session.add(AuditUpload(
+                audit_token_hash="claim_taken", jd_text="j",
+                expires_at=datetime.now(UTC) + timedelta(days=1),
+            ))
+            await session.commit()
+
+        async with conn_as(clean_db.engine, str(world["user_a"])) as conn:
+            await conn.execute(text(
+                f"UPDATE audit_uploads SET linked_user_id = {world['user_a']} "
+                f"WHERE audit_token_hash = 'claim_taken'"
+            ))
+            await conn.commit()
+
+        async with conn_as(clean_db.engine, str(world["user_b"])) as conn:
+            seen = await _fetch_ids(
+                conn, "SELECT id FROM audit_uploads WHERE audit_token_hash = 'claim_taken'"
+            )
+        assert seen == set()
+
+    async def test_no_principal_cannot_read_an_unlinked_audit(self, clean_db, world):
+        """With no GUC at all the claim policies default to DENY."""
+        factory = clean_db.session_factory
+        async with factory() as session:
+            session.add(AuditUpload(
+                audit_token_hash="claim_noguc", jd_text="j",
+                expires_at=datetime.now(UTC) + timedelta(days=1),
+            ))
+            await session.commit()
+
+        async with conn_as(clean_db.engine, None) as conn:
+            seen = await _fetch_ids(
+                conn, "SELECT id FROM audit_uploads WHERE audit_token_hash = 'claim_noguc'"
+            )
+        assert seen == set()
+
+
 # === Endpoint-level wiring (RLS GUC bound per request by get_db) ===
 
 

@@ -182,14 +182,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         prefix=settings.api_prefix,
     )
 
-    # Audit endpoints are public (no auth required for anonymous funnel)
+    # Audit endpoints are public (no auth required for anonymous funnel).
+    # Mounted ONCE: a second include_router would expose the whole funnel
+    # (and its rate limit) at the app root too.
     app.include_router(
         audit.router,
         prefix=settings.api_prefix,
     )
-    # Internal cleanup endpoint (protected by token)
+    # Internal cleanup endpoint (protected by AUDIT_CLEANUP_TOKEN). Lives on
+    # its own router, mounted at the root (no /v1 prefix) so the retention
+    # cron keeps calling POST /internal/audit/cleanup.
     app.include_router(
-        audit.router,
+        audit.internal_router,
         prefix="",
     )
 

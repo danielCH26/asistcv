@@ -4,27 +4,31 @@ Audit API endpoints for anonymous CV analysis.
 Provides:
 - POST /v1/audit/anonymous - Submit CV (+ optional JD) for analysis (rate limited)
 - POST /v1/audit/{token}/capture-email - Capture email for audit result
-- POST /v1/audit/{token}/claim - Claim audit after user signup
+- POST /v1/audit/{token}/claim - Claim audit after signup (JWT required)
 - GET /v1/audit/{token} - Retrieve cached audit result
-- POST /internal/audit/cleanup - Internal endpoint for retention cron
+
+`router` holds the public funnel and is mounted once, under
+``settings.api_prefix``. ``internal_router`` holds the token-protected
+retention endpoint and is mounted at the app root so
+``POST /internal/audit/cleanup`` keeps resolving for the cron workflow.
 """
 from datetime import UTC, datetime, timedelta
 from typing import cast
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import col
 
+from app.api.deps import CurrentUser, get_current_user
 from app.core.logging import get_logger
-from app.db.models import Analysis, AuditFunnelEvent, AuditUpload, JobDescription, User
+from app.db.models import Analysis, AuditFunnelEvent, AuditUpload, JobDescription
 from app.db.session import get_session_context
 from app.schemas.audit import (
     AuditAnonymousResponse,
     AuditRetrieveResponse,
     CaptureEmailRequest,
     CaptureEmailResponse,
-    ClaimAuditRequest,
     ClaimAuditResponse,
 )
 from app.services import pdf_parser
@@ -35,9 +39,14 @@ from app.services.audit_token import (
     compute_token_hash,
     hash_ip,
 )
-from app.services.rls_context import set_rls_anonymous, set_rls_service
+from app.services.rls_context import set_rls_anonymous, set_rls_service, set_rls_user
 
+# Public funnel: mounted once, under settings.api_prefix.
 router = APIRouter(tags=["audit"])
+# Cron-only surface (token-protected, no /v1 prefix). Kept on its own router
+# so the public funnel is not duplicated at the app root just to keep
+# /internal/audit/cleanup reachable by the retention workflow.
+internal_router = APIRouter(tags=["audit-internal"])
 logger = get_logger("app.api.audit")
 
 # Maximum PDF size (10MB)
@@ -330,37 +339,32 @@ async def capture_email(
     status_code=200,
     responses={
         400: {"description": "BAD_REQUEST", "model": dict},
+        401: {"description": "UNAUTHORIZED", "model": dict},
         404: {"description": "AUDIT_NOT_FOUND", "model": dict},
     },
 )
 async def claim_audit(
     token: str,
-    body: ClaimAuditRequest,
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> ClaimAuditResponse:
     """
     Claim an audit after user signup.
 
-    Links an anonymous audit to a user account and materializes the audit
-    result into a persistent ``Analysis`` row so the user lands in their
-    history at ``/history/{analysis_id}`` (instead of a stale profile).
+    The audit is always linked to the authenticated caller: the request
+    carries no user id, so an audit token can never be attached to another
+    account and the endpoint is not a user-enumeration oracle.
+
     Idempotent: a second claim of the same audit returns the existing
     analysis_id (or None if no result was ever materialized).
     """
     token_hash = compute_token_hash(token)
 
     async with get_session_context() as session:
-        # The claim links an anonymous audit to an account; the audit token
-        # is the capability, so this backend-sanctioned transition runs in
-        # the service context (anonymous WITH CHECK forbids linking).
-        await set_rls_service(session)
-        # Verify user exists
-        user = await session.get(User, body.user_id)
-        if user is None:
-            raise HTTPException(
-                status_code=404,
-                detail={"code": "USER_NOT_FOUND", "message": "User not found"},
-            )
-
+        # The claim transitions an anonymous audit into a row owned by the
+        # caller, so it runs under that principal's context, never the
+        # service bypass: only the owner may read the claimed row and the
+        # policy WITH CHECK only lets a user link an audit to itself.
+        await set_rls_user(session, current_user.id, current_user.role)
         # Find audit
         result = await session.execute(
             select(AuditUpload).where(AuditUpload.audit_token_hash == token_hash)
@@ -384,8 +388,8 @@ async def claim_audit(
                 analysis_id=existing_id,
             )
 
-        # Link audit to user
-        audit.linked_user_id = body.user_id
+        # Link audit to the authenticated user
+        audit.linked_user_id = current_user.id
         # Extend expiry to 30 more days from now (if not already extended)
         from app.services.audit_token import calculate_expiry
 
@@ -403,7 +407,7 @@ async def claim_audit(
             analysis_id = await _materialize_analysis_from_audit(
                 session=session,
                 audit=audit,
-                owner_user_id=body.user_id,
+                owner_user_id=current_user.id,
             )
 
         # Log funnel event
@@ -481,7 +485,7 @@ async def get_audit(token: str) -> AuditRetrieveResponse:
 
 
 # Internal endpoint for cron job
-@router.post(
+@internal_router.post(
     "/internal/audit/cleanup",
     status_code=200,
 )
