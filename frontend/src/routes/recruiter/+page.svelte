@@ -317,7 +317,7 @@
 	.recruiter {
 		display: flex;
 		flex-direction: column;
-		gap: 1.75rem;
+		gap: var(--space-6);
 	}
 
 	.recruiter h1 {
@@ -328,7 +328,7 @@
 
 	.recruiter h2 {
 		margin: 0 0 var(--space-2);
-		font-size: 1.15rem;
+		font-size: var(--text-lg);
 		color: var(--color-ink-strong);
 	}
 
@@ -339,19 +339,19 @@
 	.recruiter__consent-form {
 		display: flex;
 		flex-direction: column;
-		gap: 0.8rem;
+		gap: var(--space-3);
 	}
 
 	.recruiter__consent-form label {
 		display: flex;
 		gap: var(--space-2);
 		align-items: flex-start;
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 	}
 
 	.recruiter__consent-form button {
 		align-self: flex-start;
-		padding: 0.55rem 1.1rem;
+		padding: var(--space-2) var(--space-4);
 		border: none;
 		border-radius: var(--radius-card);
 		background: var(--color-action);
@@ -391,7 +391,7 @@
 	.recruiter input[type='text'],
 	.recruiter input[type='email'],
 	.recruiter input[type='tel'] {
-		padding: 0.55rem 0.7rem;
+		padding: var(--space-2) var(--space-3);
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-control);
 		background: var(--clay-fill);
@@ -445,18 +445,18 @@
 	.recruiter__error {
 		margin: 0;
 		color: var(--color-danger);
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 	}
 
 	.recruiter__note {
 		margin: 0;
 		color: var(--color-ink-muted);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 	}
 
 	.recruiter__empty {
 		color: var(--color-ink-muted);
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 	}
 
 	.candidate-list {
@@ -474,7 +474,7 @@
 		justify-content: space-between;
 		align-items: center;
 		gap: var(--space-4);
-		padding: 0.65rem 0.9rem;
+		padding: var(--space-3) var(--space-4);
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-card);
 		background: var(--color-surface);
@@ -483,12 +483,12 @@
 	.candidate__info {
 		display: flex;
 		flex-direction: column;
-		gap: 0.15rem;
+		gap: var(--space-1);
 	}
 
 	.candidate__info span {
 		color: var(--color-ink-muted);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 	}
 
 	.candidate__info small {
@@ -502,13 +502,13 @@
 	}
 
 	.candidate__actions button {
-		padding: 0.35rem 0.75rem;
+		padding: var(--space-1) 0.75rem;
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-control);
 		background: var(--clay-fill);
 		color: var(--color-ink);
 		cursor: pointer;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		box-shadow: var(--clay-raised);
 		transition: box-shadow var(--duration-fast) var(--ease-standard);
 	}
@@ -536,33 +536,33 @@
 	.recruiter__score {
 		font-weight: 600;
 		color: var(--color-ink-strong);
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 	}
 
 	.recruiter__add form {
 		display: flex;
 		flex-direction: column;
-		gap: 0.8rem;
+		gap: var(--space-3);
 		max-width: 32rem;
 	}
 
 	.recruiter__add label {
 		display: flex;
 		flex-direction: column;
-		gap: 0.3rem;
-		font-size: 0.9rem;
+		gap: var(--space-1);
+		font-size: var(--text-sm);
 		color: var(--color-ink);
 	}
 
 	.recruiter__row {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 0.8rem;
+		gap: var(--space-3);
 	}
 
 	.recruiter__add button[type='submit'] {
 		align-self: flex-start;
-		padding: 0.55rem 1.1rem;
+		padding: var(--space-2) var(--space-4);
 		border: none;
 		border-radius: var(--radius-card);
 		background: var(--color-action);
@@ -600,7 +600,7 @@
 		padding-left: var(--space-5);
 		display: flex;
 		flex-direction: column;
-		gap: 0.4rem;
+		gap: var(--space-2);
 	}
 
 	/* 640px stays a LITERAL on purpose: var() in a media condition silently

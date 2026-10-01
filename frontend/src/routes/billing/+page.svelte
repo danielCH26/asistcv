@@ -166,7 +166,7 @@
 	.billing {
 		display: flex;
 		flex-direction: column;
-		gap: 1.75rem;
+		gap: var(--space-6);
 	}
 
 	.billing h1 {
@@ -177,7 +177,7 @@
 
 	.billing h2 {
 		margin: 0 0 0.5rem;
-		font-size: 1.15rem;
+		font-size: var(--text-lg);
 		color: var(--text-strong);
 	}
 
@@ -194,7 +194,7 @@
 
 	.billing__usage {
 		color: var(--text-muted);
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 	}
 
 	.billing__current button {
@@ -215,7 +215,7 @@
 
 	.billing__no-portal {
 		margin: 0;
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 		color: var(--text-muted);
 	}
 
@@ -233,21 +233,21 @@
 	.billing__error {
 		margin: 0;
 		color: var(--error);
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 	}
 
 	.billing__method {
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 		color: var(--text);
 	}
 
 	.billing__method label {
 		display: flex;
 		align-items: center;
-		gap: 0.35rem;
+		gap: var(--space-1);
 		cursor: pointer;
 	}
 
@@ -261,7 +261,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
-		padding: 1.1rem;
+		padding: var(--space-4);
 		border: 1px solid var(--border);
 		border-radius: 12px;
 		background: var(--surface);
@@ -269,7 +269,7 @@
 
 	.plan-card h3 {
 		margin: 0;
-		font-size: 1.05rem;
+		font-size: var(--text-md);
 		color: var(--text-strong);
 	}
 
@@ -281,9 +281,9 @@
 
 	.plan-card ul {
 		margin: 0;
-		padding-left: 1.1rem;
+		padding-left: var(--space-4);
 		color: var(--text-muted);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;

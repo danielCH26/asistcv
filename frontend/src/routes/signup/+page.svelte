@@ -139,7 +139,7 @@
 	.signup {
 		display: flex;
 		flex-direction: column;
-		gap: 1.25rem;
+		gap: var(--space-5);
 		max-width: 26rem;
 		margin: 0 auto;
 	}
@@ -162,21 +162,21 @@
 	.signup__form {
 		display: flex;
 		flex-direction: column;
-		gap: 0.9rem;
+		gap: var(--space-4);
 	}
 
 	.signup__form label {
 		display: flex;
 		flex-direction: column;
-		gap: 0.3rem;
-		font-size: 0.9rem;
+		gap: var(--space-1);
+		font-size: var(--text-sm);
 		color: var(--text);
 	}
 
 	.signup__form input[type='text'],
 	.signup__form input[type='email'],
 	.signup__form input[type='password'] {
-		padding: 0.55rem 0.75rem;
+		padding: var(--space-2) 0.75rem;
 		border: 1px solid var(--border);
 		border-radius: 6px;
 		background: var(--surface);
@@ -189,13 +189,13 @@
 		padding: 0.75rem;
 		display: flex;
 		flex-direction: column;
-		gap: 0.4rem;
+		gap: var(--space-2);
 	}
 
 	legend {
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-muted);
-		padding: 0 0.35rem;
+		padding: 0 var(--space-1);
 	}
 
 	.signup__role {
@@ -207,7 +207,7 @@
 	.signup__consent {
 		display: flex;
 		flex-direction: column;
-		gap: 0.45rem;
+		gap: var(--space-2);
 		padding: 0.75rem;
 		border: 1px solid var(--border);
 		border-radius: 8px;
@@ -218,17 +218,17 @@
 		flex-direction: row;
 		align-items: flex-start;
 		gap: 0.5rem;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 	}
 
 	.signup__error {
 		margin: 0;
 		color: var(--error);
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 	}
 
 	button[type='submit'] {
-		padding: 0.65rem 1rem;
+		padding: var(--space-3) 1rem;
 		border: none;
 		border-radius: 8px;
 		background: var(--accent);
@@ -244,7 +244,7 @@
 
 	.signup__login {
 		margin: 0;
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 		color: var(--text-muted);
 	}
 </style>
