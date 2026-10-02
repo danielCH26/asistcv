@@ -241,6 +241,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         prefix="/internal",
     )
 
+    # Internal cleanup endpoint for the refresh-token retention sweeper.
+    # Same shape as the adaptation sweeper: no router-level auth, a
+    # per-endpoint BACKEND_API_KEY check inside the handler, mounted at
+    # /internal (no /v1 prefix) so the cron keeps calling
+    # POST /internal/auth/refresh-tokens/cleanup.
+    from app.api.v1.internal import refresh_tokens as internal_refresh_tokens
+
+    app.include_router(
+        internal_refresh_tokens.router,
+        prefix="/internal",
+    )
+
     return app
 
 

@@ -394,3 +394,431 @@ async def test_full_signup_flow_writes_refresh_token(
         )
         now = datetime.now(UTC)
         assert refresh.expires_at > now, "expires_at must be in the future"
+
+
+# --- Absolute session lifetime: la rotación hereda el expiry original ---
+
+
+async def _register_user(async_client, email: str) -> dict:
+    """Registra un usuario vía el endpoint real y devuelve el body del token pair."""
+    response = await async_client.post(
+        "/v1/auth/register",
+        json={
+            "email": email,
+            "password": "StrongPass123",
+            "role": "job_seeker",
+            "full_name": "Session Lifetime",
+            "locale": "es",
+        },
+    )
+    assert response.status_code == 201, f"register failed: {response.text}"
+    return response.json()
+
+
+async def _refresh_rows(clean_db, email: str) -> list[dict]:
+    """Filas de ``users_refresh_tokens`` del usuario, de la más antigua a la más nueva.
+
+    Se devuelven como dicts planos (no instancias de ORM) para que los
+    valores sobrevivan al cierre de la sesión de test.
+    """
+    from sqlalchemy import select
+
+    from app.db.models import RefreshToken, User
+
+    async with clean_db.session_factory() as session:
+        user = (
+            await session.execute(select(User).where(User.email == email))
+        ).scalar_one()
+        rows = (
+            await session.execute(
+                select(RefreshToken)
+                .where(RefreshToken.user_id == user.id)
+                .order_by(RefreshToken.id)
+            )
+        ).scalars().all()
+        return [
+            {
+                "id": row.id,
+                "expires_at": row.expires_at,
+                "consumed_at": row.consumed_at,
+                "revoked_at": row.revoked_at,
+            }
+            for row in rows
+        ]
+
+
+async def test_rotation_inherits_seeded_expiry_not_fresh_ttl(
+    async_client, clean_db
+) -> None:
+    """Una rotación hereda el expiry ORIGINAL; no recalcula now + JWT_REFRESH_TTL.
+
+    La fila se siembra con un expiry distintivo (7 días) en lugar de dejar que
+    ``register`` lo fije, para que la diferencia contra el TTL por defecto
+    (30 días) sea inequívoca en el assert.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import select
+
+    from app.core.security import create_refresh_token, hash_token
+    from app.db.models import RefreshToken, User
+
+    email = "rotation.seeded@example.com"
+    await _register_user(async_client, email)
+
+    raw_token = create_refresh_token()
+    seeded_expiry = datetime.now(UTC) + timedelta(days=7)
+
+    async with clean_db.session_factory() as session:
+        user = (
+            await session.execute(select(User).where(User.email == email))
+        ).scalar_one()
+        session.add(
+            RefreshToken(
+                user_id=user.id,
+                token_hash=hash_token(raw_token),
+                expires_at=seeded_expiry,
+            )
+        )
+        await session.commit()
+
+    response = await async_client.post(
+        "/v1/auth/refresh", json={"refresh_token": raw_token}
+    )
+    assert response.status_code == 200, response.text
+
+    rows = await _refresh_rows(clean_db, email)
+    # _refresh_rows orders by id, so the last row is the newly minted one.
+    # The invariant under test: rotation carries the presented token's
+    # expiry forward untouched rather than recomputing now + jwt_refresh_ttl.
+    # The absolute row count is irrelevant here (register() mints one row
+    # and the seed adds another), so it is not asserted.
+    rotated = rows[-1]
+    assert rotated["expires_at"] == seeded_expiry, (
+        "rotation must inherit the presented token's expiry (absolute lifetime); "
+        f"original={seeded_expiry.isoformat()} "
+        f"rotated={rotated['expires_at'].isoformat()}"
+    )
+
+
+async def test_rotation_inherits_expiry_end_to_end(async_client, clean_db) -> None:
+    """Flujo real register → refresh: la fila rotada conserva el expiry de register."""
+    from datetime import UTC, datetime
+
+    email = "rotation.e2e@example.com"
+    body = await _register_user(async_client, email)
+
+    before = await _refresh_rows(clean_db, email)
+    assert len(before) == 1
+    original_expires_at = before[0]["expires_at"]
+    assert original_expires_at > datetime.now(UTC)
+
+    response = await async_client.post(
+        "/v1/auth/refresh", json={"refresh_token": body["refresh_token"]}
+    )
+    assert response.status_code == 200, response.text
+
+    after = await _refresh_rows(clean_db, email)
+    assert len(after) == 2
+    assert after[-1]["expires_at"] == original_expires_at, (
+        "rotation must inherit the original absolute expiry; "
+        f"original={original_expires_at.isoformat()} "
+        f"rotated={after[-1]['expires_at'].isoformat()}"
+    )
+    # The presented token is retired, not deleted: it stays as evidence.
+    assert after[0]["consumed_at"] is not None
+
+
+async def test_repeated_rotation_never_extends_lifetime(
+    async_client, clean_db
+) -> None:
+    """Rotar N veces NO extiende la vida de la sesión.
+
+    Este es el test que falla con el TTL deslizante: cada rotación empujaba
+    el expiry 30 días hacia adelante, así que el límite era inalcanzable.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    email = "rotation.chain@example.com"
+    body = await _register_user(async_client, email)
+    original_expires_at = (await _refresh_rows(clean_db, email))[0]["expires_at"]
+
+    rotations = 5
+    token = body["refresh_token"]
+    for attempt in range(1, rotations + 1):
+        response = await async_client.post(
+            "/v1/auth/refresh", json={"refresh_token": token}
+        )
+        assert response.status_code == 200, (
+            f"rotation {attempt} failed: {response.status_code} {response.text}"
+        )
+        token = response.json()["refresh_token"]
+
+    rows = await _refresh_rows(clean_db, email)
+    assert len(rows) == rotations + 1, (
+        f"expected 1 initial + {rotations} rotated rows, got {len(rows)}"
+    )
+
+    for row in rows:
+        assert row["expires_at"] == original_expires_at, (
+            f"row {row['id']} drifted: expected {original_expires_at.isoformat()}, "
+            f"got {row['expires_at'].isoformat()}"
+        )
+
+    # The absolute window is still the original one, not 30 days from now.
+    remaining = rows[-1]["expires_at"] - datetime.now(UTC)
+    assert timedelta(days=29) < remaining <= timedelta(days=30), (
+        f"absolute window should still be the original ~30 days, got {remaining}"
+    )
+
+
+async def test_expired_absolute_token_rejected_even_if_otherwise_valid(
+    async_client, clean_db
+) -> None:
+    """Un token pasado su expiry absoluto se rechaza aunque la fila sea válida.
+
+    ``consumed_at`` y ``revoked_at`` quedan en NULL a propósito: el rechazo
+    tiene que venir del expiry, no de un flag de revocación.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import select
+
+    from app.db.models import RefreshToken, User
+
+    email = "rotation.expired@example.com"
+    body = await _register_user(async_client, email)
+
+    expired_expiry = datetime.now(UTC) - timedelta(seconds=1)
+    async with clean_db.session_factory() as session:
+        user = (
+            await session.execute(select(User).where(User.email == email))
+        ).scalar_one()
+        token = (
+            await session.execute(
+                select(RefreshToken).where(RefreshToken.user_id == user.id)
+            )
+        ).scalar_one()
+        token.expires_at = expired_expiry
+        token.consumed_at = None
+        token.revoked_at = None
+        await session.commit()
+
+    response = await async_client.post(
+        "/v1/auth/refresh", json={"refresh_token": body["refresh_token"]}
+    )
+    assert response.status_code == 401, response.text
+    assert response.json()["detail"] == "TOKEN_INVALID"
+
+    # No new row minted, and the presented one was not consumed.
+    rows = await _refresh_rows(clean_db, email)
+    assert len(rows) == 1
+    assert rows[0]["consumed_at"] is None
+    assert rows[0]["revoked_at"] is None
+
+
+# --- POST /internal/auth/refresh-tokens/cleanup ---
+
+
+def _pin_sweeper_settings(monkeypatch: pytest.MonkeyPatch, key: str | None) -> None:
+    """Fija BACKEND_API_KEY (o la borra) para el sweeper y refresca el cache.
+
+    Se ejercita el auth REAL (hmac.compare_digest contra settings) en vez de
+    monkeypatchear ``_verify_api_key``: este endpoint borra filas, y un test
+    que se saltee la verificación no prueba nada sobre el auth.
+    """
+    from app.core.config import get_settings
+
+    if key is None:
+        monkeypatch.delenv("BACKEND_API_KEY", raising=False)
+    else:
+        monkeypatch.setenv("BACKEND_API_KEY", key)
+    get_settings.cache_clear()
+
+
+async def test_refresh_token_cleanup_401_without_api_key(
+    async_client, clean_db, monkeypatch
+) -> None:
+    """Sin ``X-Backend-API-Key`` → 401 y NO se borra ninguna fila."""
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import select
+
+    from app.core.security import create_refresh_token, hash_token
+    from app.db.models import RefreshToken, User
+
+    email = "cleanup.401@example.com"
+    await _register_user(async_client, email)
+
+    async with clean_db.session_factory() as session:
+        user = (
+            await session.execute(select(User).where(User.email == email))
+        ).scalar_one()
+        session.add(
+            RefreshToken(
+                user_id=user.id,
+                token_hash=hash_token(create_refresh_token()),
+                expires_at=datetime.now(UTC) - timedelta(days=1),
+                consumed_at=datetime.now(UTC) - timedelta(days=100),
+            )
+        )
+        await session.commit()
+
+    _pin_sweeper_settings(monkeypatch, "sweeper-test-key")
+    try:
+        response = await async_client.post("/internal/auth/refresh-tokens/cleanup")
+        assert response.status_code == 401, response.text
+        assert response.json()["detail"] == "UNAUTHORIZED"
+
+        assert len(await _refresh_rows(clean_db, email)) == 2, (
+            "an unauthorized sweep must not delete anything"
+        )
+    finally:
+        from app.core.config import get_settings
+
+        get_settings.cache_clear()
+
+
+async def test_refresh_token_cleanup_fails_closed_when_key_unset(
+    async_client, clean_db, monkeypatch
+) -> None:
+    """Sin BACKEND_API_KEY configurada el endpoint es 401, no un delete abierto."""
+    _pin_sweeper_settings(monkeypatch, None)
+    try:
+        response = await async_client.post(
+            "/internal/auth/refresh-tokens/cleanup",
+            headers={"X-Backend-API-Key": "anything-goes"},
+        )
+        assert response.status_code == 401, response.text
+    finally:
+        from app.core.config import get_settings
+
+        get_settings.cache_clear()
+
+
+async def test_refresh_token_cleanup_deletes_old_terminal_rows_only(
+    async_client, clean_db, monkeypatch
+) -> None:
+    """El sweep borra consumidas/revocadas fuera de ventana y deja el resto.
+
+    La ventana se ancla en el timestamp TERMINAL (``consumed_at`` /
+    ``revoked_at``), no en ``created_at``: una fila creada hace 200 días y
+    rotada ayer sigue siendo evidencia y se conserva.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import select
+
+    from app.core.security import create_refresh_token, hash_token
+    from app.db.models import RefreshToken, User
+
+    email = "cleanup.sweep@example.com"
+    await _register_user(async_client, email)
+    now = datetime.now(UTC)
+
+    async with clean_db.session_factory() as session:
+        user = (
+            await session.execute(select(User).where(User.email == email))
+        ).scalar_one()
+        uid = user.id
+
+        def _row(**kwargs) -> RefreshToken:
+            return RefreshToken(
+                user_id=uid,
+                token_hash=hash_token(create_refresh_token()),
+                **kwargs,
+            )
+
+        # Elegibles: terminales y fuera de la ventana de 90 días.
+        old_consumed = _row(
+            expires_at=now - timedelta(days=5),
+            created_at=now - timedelta(days=200),
+            consumed_at=now - timedelta(days=100),
+        )
+        old_revoked = _row(
+            expires_at=now - timedelta(days=3),
+            created_at=now - timedelta(days=200),
+            revoked_at=now - timedelta(days=95),
+        )
+        # Conservadas: terminales pero recientes.
+        recent_consumed = _row(
+            expires_at=now + timedelta(days=10),
+            created_at=now - timedelta(days=20),
+            consumed_at=now - timedelta(days=2),
+        )
+        recent_revoked = _row(
+            expires_at=now - timedelta(days=1),
+            created_at=now - timedelta(days=20),
+            revoked_at=now - timedelta(days=3),
+        )
+        # Conservada: activa (nunca consumida ni revocada) y vencida de
+        # todos modos. Borrarla cortaría el único hilo de una sesión viva.
+        active = _row(
+            expires_at=now + timedelta(days=20),
+            created_at=now - timedelta(days=200),
+        )
+        # Conservada: creada hace mucho, terminalizada hace poco.
+        old_created_recent_terminal = _row(
+            expires_at=now + timedelta(days=5),
+            created_at=now - timedelta(days=200),
+            consumed_at=now - timedelta(days=1),
+        )
+
+        session.add_all(
+            [
+                old_consumed,
+                old_revoked,
+                recent_consumed,
+                recent_revoked,
+                active,
+                old_created_recent_terminal,
+            ]
+        )
+        await session.commit()
+        kept_ids = {
+            recent_consumed.id,
+            recent_revoked.id,
+            active.id,
+            old_created_recent_terminal.id,
+        }
+
+    _pin_sweeper_settings(monkeypatch, "sweeper-test-key")
+    try:
+        response = await async_client.post(
+            "/internal/auth/refresh-tokens/cleanup",
+            headers={"X-Backend-API-Key": "sweeper-test-key"},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json() == {"deleted": 2}
+
+        rows = await _refresh_rows(clean_db, email)
+        # La fila de register sobrevive + las 4 conservadas.
+        assert {row["id"] for row in rows if row["id"] in kept_ids} == kept_ids
+        assert len(rows) == 5
+    finally:
+        from app.core.config import get_settings
+
+        get_settings.cache_clear()
+
+
+async def test_refresh_token_cleanup_keeps_everything_inside_window(
+    async_client, clean_db, monkeypatch
+) -> None:
+    """Un sweep sobre datos recientes devuelve deleted=0 (sweep vacío ≠ error)."""
+    email = "cleanup.empty@example.com"
+    await _register_user(async_client, email)
+
+    _pin_sweeper_settings(monkeypatch, "sweeper-test-key")
+    try:
+        response = await async_client.post(
+            "/internal/auth/refresh-tokens/cleanup",
+            headers={"X-Backend-API-Key": "sweeper-test-key"},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json() == {"deleted": 0}
+        assert len(await _refresh_rows(clean_db, email)) == 1
+    finally:
+        from app.core.config import get_settings
+
+        get_settings.cache_clear()
+
