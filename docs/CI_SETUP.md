@@ -56,6 +56,46 @@ Para los futuros workflows de deploy (no usados por CI de validación), el repo 
 
 CI de validación **no** necesita secrets: los tests usan `LLM_PROVIDER=mock` por defecto y la DB del service container.
 
+## Guard de la base de test (fail-closed)
+
+El suite es **destructivo por diseño**: `tests/conftest.py` corre `DROP SCHEMA public CASCADE` una vez por sesión y `TRUNCATE ... CASCADE` sobre ~20 tablas (`users`, `payments`, `audit_uploads`, `subscriptions`, ...) después de cada test. Como la resolución de la URL hace fallback a `DATABASE_URL` — que es la variable de la **aplicación** (`app/db/session.py` lee el mismo nombre) — exportar la connection string de producción y correr `pytest` borraba el schema de producción.
+
+`tests/conftest.py` agrega un guard que aborta la sesión si el destino no es demostrablemente descartable. Corre **en el import del conftest**, o sea antes de cualquier fixture: si falla, pytest corta en collection y **nada** llega al `DROP SCHEMA` (ni siquiera un skip). Esto también cubre `tests/test_migrations.py`, que resuelve su propia `TEST_DATABASE_URL` y corre `alembic downgrade base` sin pasar por el fixture `test_db`.
+
+El guard **rechaza** cuando:
+
+| Check | Condición | Ejemplo que cae |
+|---|---|---|
+| 1. Parseable | la URL no identifica una base | URL malformada, sin nombre de base |
+| 2. Misma base | `TEST_DATABASE_URL` y `DATABASE_URL` resuelven al mismo host + puerto + base + usuario | `TEST_DATABASE_URL` apuntando a producción |
+| 3. Nombre descartable | el nombre de la base no contiene `test` como token | `neondb`, `asistcv` |
+| 4. Host remoto | el host no es loopback y no hubo opt-in | cualquier Neon/RDS |
+
+Pasa el path local sin ninguna configuración extra (`localhost` / `127.0.0.1` → el contenedor de `make db-up` en 5433).
+
+### `ALLOW_REMOTE_TEST_DATABASE`
+
+Opt-in explícito para correr el suite contra una base de test **remota** (por ejemplo, un branch de Neon descartable). Cubre los checks 3 y 4:
+
+```bash
+export TEST_DATABASE_URL="postgresql://USER:PASS@ep-xxx.us-east-2.aws.neon.tech/asistcv_test?sslmode=require"
+export ALLOW_REMOTE_TEST_DATABASE=1
+uv run pytest
+```
+
+Dos cosas importantes:
+
+- **Va en el entorno real, no en `.env`.** pydantic-settings carga `.env` dentro de `Settings` y nunca puebla `os.environ`, así que el guard (que lee `os.environ`) no vería un valor posto sólo en `.env`.
+- **No hay flag para saltear el check 2.** Si la URL de test y la de la app apuntan a la misma base, hay que corregir la URL, no levantar una bandera. `ALLOW_REMOTE_TEST_DATABASE` no lo destraba.
+
+La comparación de "misma base" es por identidad completa (host + puerto + base + usuario) y **no** por host: una branch de Neon comparte host con su parent y sólo se diferencia en el nombre de la base, así que comparar por host bloquearía las branches (falso positivo) o dejaría pasar la base de producción (falso negativo). El nombre de la base es el discriminante.
+
+El check 2 sólo corre cuando `TEST_DATABASE_URL` fue seteado explícitamente. Sin él, el destino de test **es** `DATABASE_URL` por declaración propia — que es lo que hace el CI de arriba, apuntando al Postgres descartable del service container. Ese caso lo cubren los checks 3 y 4: una `DATABASE_URL` de producción es remota y no se llama `*_test`, así que cae igual.
+
+### Alcance de `CREATE ROLE`
+
+El `CREATE ROLE asistcv_rls` (para los tests de RLS) queda **habilitado también en bases remotas**: los roles son de CLUSTER en Postgres, no de base, así que ese `CREATE` escribe en el namespace de roles del endpoint completo. La decisión es mantenerlo porque en una branch de Neon el cluster ya está aislado de producción, y porque `NOLOGIN NOSUPERUSER NOBYPASSRLS` no otorga ningún acceso. Lo que sí es database-scoped (`GRANT USAGE ON SCHEMA public`, `REASSIGN OWNED`) sólo toca la base guardada. Cuando el destino no es loopback, el suite imprime un aviso por stderr con la instrucción de limpieza manual (`DROP ROLE asistcv_rls;`) por si el endpoint no fuera una branch aislada.
+
 ## Debugging
 
 - Si un job falla, el log de cada step está en **Actions → CI → run → job**.
