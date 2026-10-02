@@ -44,8 +44,24 @@ secrets "environment variables"; they are injected at runtime, not committed):
 | `HUGGINGFACE_API_KEY` | your HF token (`hf_...`) |
 | `DATABASE_URL` | Neon connection string (`postgresql://neondb_owner:...@ep-...neon.tech/asistcv?sslmode=require&channel_binding=require`) |
 | `LLM_PROVIDER` | `groq` |
+| `REFRESH_TOKEN_RETENTION_DAYS` | Optional. Days of history kept for consumed/revoked rows in `users_refresh_tokens` by the `refresh-token-sweeper` cron. Defaults to `90`. Consumed/revoked rows are audit evidence, not active state, so the window is sized for incident response. **Active tokens are never deleted** — raising the value can never shorten a live session, and it does not affect the 30-day absolute session lifetime (`JWT_REFRESH_TTL`). |
 
 Click **Save Changes** — Render redeploys automatically after env changes.
+
+### Retention sweepers
+
+Three GitHub Actions crons POST to internal cleanup endpoints on the
+deployed backend. All of them authenticate with the `BACKEND_API_KEY`
+secret via the `X-Backend-API-Key` header and **fail closed (401)** when
+that key is unset, so `BACKEND_API_KEY` must be configured on the service
+for any of them to run.
+
+| Workflow | Endpoint | Cadence | Deletes |
+|---|---|---|---|
+| `audit-retention.yml` | `POST /internal/audit/cleanup` | daily 03:17 UTC | expired `audit_uploads` |
+| `adaptation-sweeper.yml` | `POST /internal/adaptations/cleanup` | every 15 min | completed/orphaned `cv_adaptations` |
+| `refresh-token-sweeper.yml` | `POST /internal/auth/refresh-tokens/cleanup` | daily 04:23 UTC | consumed/revoked `users_refresh_tokens` older than `REFRESH_TOKEN_RETENTION_DAYS` |
+
 
 **Note on the port**: Render auto-detects the port exposed by the Dockerfile
 (EXPOSE 7860) via its `PORT` mechanism. If the service doesn't bind, set
