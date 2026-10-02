@@ -302,13 +302,21 @@ async def refresh(
     access_token, new_refresh_token = create_token_pair(user.id, user.role)
 
     # Store new refresh token
-    from app.core.config import get_settings
-    settings = get_settings()
     new_token_hash = hash_token(new_refresh_token)
     new_refresh = RefreshToken(
         user_id=user.id,
         token_hash=new_token_hash,
-        expires_at=datetime.now(UTC) + timedelta(seconds=settings.jwt_refresh_ttl),
+        # ABSOLUTE session lifetime. The rotated token inherits the
+        # presented token's expiry instead of recomputing it from now, so
+        # one login is bounded by a single JWT_REFRESH_TTL window no
+        # matter how many times the client rotates (the SPA polls every
+        # 30s, which previously made the TTL sliding and unreachable).
+        #
+        # This cannot mint an already-expired token: the check at the top
+        # of this handler runs against the *presented* token, i.e. the same
+        # row whose ``expires_at`` is inherited, and it raises before we
+        # ever get here. The inherited value is therefore >= now.
+        expires_at=refresh_token.expires_at,
         ip=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
     )

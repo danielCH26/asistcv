@@ -70,6 +70,17 @@ class Settings(BaseSettings):
     jwt_access_ttl: int = Field(default=900, validation_alias="JWT_ACCESS_TTL")  # 15 minutes
     jwt_refresh_ttl: int = Field(default=2592000, validation_alias="JWT_REFRESH_TTL")  # 30 days
 
+    # Retention window for the ``users_refresh_tokens`` sweeper
+    # (POST /internal/auth/refresh-tokens/cleanup). Consumed/revoked rows
+    # are audit evidence, not active state: they only prove that a
+    # rotation or a reuse-detection revocation happened. 90 days keeps a
+    # full quarter of session history for incident response while
+    # bounding the table. Active rows (never consumed, never revoked) are
+    # never touched, so this can never shorten a live session.
+    refresh_token_retention_days: int = Field(
+        default=90, validation_alias="REFRESH_TOKEN_RETENTION_DAYS"
+    )
+
     # Audit configuration (PR3)
     audit_cleanup_token: str | None = Field(default=None, validation_alias="AUDIT_CLEANUP_TOKEN")
 

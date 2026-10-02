@@ -1,0 +1,43 @@
+name: refresh-token-sweeper
+
+on:
+  # Run daily at 04:23 UTC. Off-hour and distinct from audit-retention
+  # (03:17) so both sweeps never contend for the same DB window. Consumed
+  # and revoked refresh tokens are retained for a quarter as audit
+  # evidence, so an hourly cadence would be pure cost.
+  schedule:
+    - cron: '23 4 * * *'
+  # Allow manual trigger for incident debugging.
+  workflow_dispatch:
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST cleanup
+        env:
+          BACKEND_URL: ${{ vars.RENDER_BACKEND_URL || 'https://asistcv-backend.onrender.com' }}
+          BACKEND_API_KEY: ${{ secrets.BACKEND_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          # The key travels in a header, never in the URL, so it cannot
+          # leak through the access log or a Referer. The endpoint fails
+          # closed (401) when BACKEND_API_KEY is unset on the service.
+          response=$(curl -fsS -w "\n%{http_code}" -X POST "$BACKEND_URL/internal/auth/refresh-tokens/cleanup" \
+            -H "X-Backend-API-Key: $BACKEND_API_KEY" \
+            -H "Content-Type: application/json")
+
+          body=$(echo "$response" | sed '$d')
+          status_code=$(echo "$response" | tail -n1)
+
+          echo "Response status: $status_code"
+          echo "Response body: $body"
+
+          if [ "$status_code" -eq 200 ]; then
+            deleted=$(echo "$body" | python -c 'import sys, json; print(json.load(sys.stdin).get("deleted", 0))')
+            echo "Sweep completed successfully — deleted $deleted refresh token row(s)"
+          else
+            echo "Sweep failed with status $status_code"
+            exit 1
+          fi
