@@ -91,8 +91,8 @@
 	}
 
 	.home__intro h1 {
-		margin: 0 0 0.4rem;
-		font-size: 1.6rem;
+		margin: 0 0 var(--space-2);
+		font-size: var(--text-2xl);
 		color: var(--color-ink-strong);
 	}
 
@@ -102,12 +102,12 @@
 	}
 
 	.home__profile {
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 	}
 
 	.home__usage {
 		margin: 0;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--color-ink-muted);
 	}
 
@@ -152,7 +152,7 @@
 	/* A control: clay. */
 	.home__error button {
 		margin-top: var(--space-2);
-		padding: 0.45rem var(--space-4);
+		padding: var(--space-2) var(--space-4);
 		border: var(--border-width) solid var(--color-danger);
 		border-radius: var(--radius-control);
 		background: var(--clay-fill);

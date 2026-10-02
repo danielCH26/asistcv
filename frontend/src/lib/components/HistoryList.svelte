@@ -49,7 +49,20 @@
 <style>
 	.history-list {
 		width: 100%;
-		border-collapse: collapse;
+		/* `separate` + zero spacing, NOT `collapse`.
+		   A `<table>` is not a block container, so `overflow: hidden` does not
+		   give it a clipping context: under `border-collapse: collapse` the
+		   radius and the overflow are both ignored for the CELLS, and the
+		   `th` background paints a square corner straight over the rounded
+		   one. Verified in Chromium at a 40px radius -- the collapse version
+		   renders a hard 90-degree corner, the separate version renders the
+		   curve. `separate` makes the table a real box that `overflow: hidden`
+		   can clip; `border-spacing: 0` keeps the rows visually flush, so
+		   this costs no spacing token.
+		   Keep the radius in sync with the collapse mode: reverting to
+		   `collapse` silently brings the square corner back. */
+		border-collapse: separate;
+		border-spacing: 0;
 		background: var(--color-surface);
 		border: 1px solid var(--color-line);
 		border-radius: 10px;

@@ -486,7 +486,7 @@
 	.profile {
 		display: flex;
 		flex-direction: column;
-		gap: 1.75rem;
+		gap: var(--space-6);
 	}
 
 	.profile h1 {
@@ -497,18 +497,18 @@
 
 	.profile h2 {
 		margin: 0 0 var(--space-2);
-		font-size: 1.15rem;
+		font-size: var(--text-lg);
 		color: var(--color-ink-strong);
 	}
 
 	.profile__user {
-		margin: -0.5rem 0 0;
+		margin: calc(-1 * var(--space-2)) 0 0;
 		color: var(--color-ink-muted);
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 	}
 
 	.onboarding {
-		padding: 1.25rem;
+		padding: var(--space-5);
 		border: var(--border-width) solid var(--color-action);
 		border-radius: var(--radius-panel);
 		background: var(--color-surface);
@@ -516,7 +516,7 @@
 
 	.onboarding__steps {
 		color: var(--color-ink-muted);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		margin: var(--space-1) 0 var(--space-3);
 	}
 
@@ -530,8 +530,8 @@
 	.onboarding__upload {
 		display: flex;
 		flex-direction: column;
-		gap: 0.35rem;
-		font-size: 0.9rem;
+		gap: var(--space-1);
+		font-size: var(--text-sm);
 		color: var(--color-ink);
 	}
 
@@ -545,12 +545,12 @@
 	.profile__error {
 		margin: 0;
 		color: var(--color-danger);
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 	}
 
 	.profile__empty {
 		color: var(--color-ink-muted);
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 	}
 
 	.cv-list {
@@ -568,7 +568,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-3);
-		padding: 0.6rem 0.8rem;
+		padding: var(--space-2) var(--space-3);
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-card);
 		background: var(--color-surface);
@@ -588,17 +588,17 @@
 
 	.cv-list__date {
 		color: var(--color-ink-muted);
-		font-size: 0.8rem;
+		font-size: var(--text-xs);
 	}
 
 	.cv-list__item button {
-		padding: 0.3rem 0.7rem;
+		padding: var(--space-1) var(--space-3);
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-control);
 		background: var(--clay-fill);
 		color: var(--color-ink);
 		cursor: pointer;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		box-shadow: var(--clay-raised);
 		transition: box-shadow var(--duration-fast) var(--ease-standard);
 	}
@@ -619,7 +619,7 @@
 
 	.profile__jd {
 		width: 100%;
-		padding: 0.6rem 0.75rem;
+		padding: var(--space-2) 0.75rem;
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-card);
 		background: var(--clay-fill);
@@ -639,7 +639,7 @@
 
 	.profile__match button[type='button'] {
 		align-self: flex-start;
-		padding: 0.55rem 1.1rem;
+		padding: var(--space-2) var(--space-4);
 		border: none;
 		border-radius: var(--radius-card);
 		background: var(--color-action);
@@ -674,25 +674,25 @@
 	.profile__adapt-subtitle {
 		margin: 0;
 		color: var(--color-ink-muted);
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 	}
 
 	.profile__adapt-empty {
 		margin: 0;
 		color: var(--color-ink-muted);
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 	}
 
 	.profile__adapt-field {
 		display: flex;
 		flex-direction: column;
-		gap: 0.35rem;
-		font-size: 0.9rem;
+		gap: var(--space-1);
+		font-size: var(--text-sm);
 		color: var(--color-ink);
 	}
 
 	.profile__adapt-field select {
-		padding: 0.55rem 0.75rem;
+		padding: var(--space-2) 0.75rem;
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-card);
 		background: var(--clay-fill);
@@ -711,7 +711,7 @@
 
 	.profile__adapt-cta {
 		align-self: flex-start;
-		padding: 0.55rem 1.1rem;
+		padding: var(--space-2) var(--space-4);
 		border: none;
 		border-radius: var(--radius-card);
 		background: var(--color-action);
@@ -741,7 +741,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-3);
-		padding: 0.85rem var(--space-4);
+		padding: var(--space-3) var(--space-4);
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-card-lg);
 		background: var(--color-surface);
@@ -770,7 +770,7 @@
 	}
 
 	.profile__upsell-text {
-		margin: 0.4rem 0;
+		margin: var(--space-2) 0;
 		color: var(--color-ink);
 	}
 
@@ -781,7 +781,7 @@
 	.profile__muted {
 		margin: 0;
 		color: var(--color-ink-muted);
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 	}
 
 	.profile__adapt-list {
@@ -790,18 +790,18 @@
 		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 0.35rem;
+		gap: var(--space-1);
 	}
 
 	.profile__adapt-list-item {
 		display: flex;
 		align-items: center;
-		gap: 0.6rem;
+		gap: var(--space-2);
 		padding: var(--space-2) var(--space-3);
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-card);
 		background: var(--color-surface);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 	}
 
 	.profile__adapt-list-id {
@@ -810,7 +810,7 @@
 	}
 
 	.profile__adapt-list-status {
-		padding: 0.1rem var(--space-2);
+		padding: var(--space-1) var(--space-2);
 		border-radius: var(--radius-pill);
 		font-size: var(--text-xs);
 		font-weight: 600;
@@ -852,14 +852,14 @@
 	/* A RESULT card. Not interactive, so it stays flat: a light bounce shadow
 	   over a saturated surface reads as glow, not as material. */
 	.profile__result {
-		padding: var(--space-4) 1.25rem;
+		padding: var(--space-4) var(--space-5);
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-card);
 		background: var(--color-surface);
 	}
 
 	.profile__score strong {
-		font-size: 1.4rem;
+		font-size: var(--text-2xl);
 		color: var(--color-ink-strong);
 	}
 

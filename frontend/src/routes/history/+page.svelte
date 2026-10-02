@@ -84,11 +84,11 @@
 	.history {
 		display: flex;
 		flex-direction: column;
-		gap: 1.25rem;
+		gap: var(--space-5);
 	}
 
 	.history__intro h1 {
-		margin: 0 0 0.4rem;
+		margin: 0 0 var(--space-2);
 		color: var(--text-strong);
 	}
 
@@ -107,7 +107,7 @@
 	}
 
 	.history__error {
-		padding: 1rem 1.25rem;
+		padding: 1rem var(--space-5);
 		background: var(--error-bg);
 		color: var(--error);
 		border: 1px solid var(--error);
@@ -122,7 +122,7 @@
 	}
 
 	.history__pagination button {
-		padding: 0.4rem 0.9rem;
+		padding: var(--space-2) var(--space-4);
 		border: 1px solid var(--border);
 		border-radius: 6px;
 		background: var(--surface);
@@ -136,7 +136,7 @@
 	}
 
 	.history__page-label {
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-muted);
 	}
 </style>

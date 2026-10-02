@@ -282,8 +282,8 @@
 	}
 
 	.audit__intro h1 {
-		margin: 0 0 0.4rem;
-		font-size: 1.6rem;
+		margin: 0 0 var(--space-2);
+		font-size: var(--text-2xl);
 		color: var(--color-ink-strong);
 	}
 
@@ -295,17 +295,17 @@
 	.audit__form {
 		display: flex;
 		flex-direction: column;
-		gap: 0.9rem;
+		gap: var(--space-4);
 	}
 
 	.audit__modes {
 		display: flex;
-		gap: 0.4rem;
+		gap: var(--space-2);
 	}
 
 	/* Mode switch: a control, so it gets clay. */
 	.audit__form .audit__modes button {
-		padding: 0.45rem 0.9rem;
+		padding: var(--space-2) var(--space-4);
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-card);
 		background: var(--clay-fill);
@@ -334,7 +334,7 @@
 	.audit__file {
 		display: flex;
 		flex-direction: column;
-		gap: 0.4rem;
+		gap: var(--space-2);
 	}
 
 	.audit__file-input {
@@ -343,7 +343,7 @@
 
 	.audit__file-button {
 		align-self: flex-start;
-		padding: 0.55rem 1.1rem;
+		padding: var(--space-2) var(--space-4);
 		border: var(--border-width) dashed var(--color-line);
 		border-radius: var(--radius-card);
 		background: var(--clay-fill);
@@ -365,13 +365,13 @@
 
 	.audit__file-meta {
 		margin: 0;
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 		color: var(--color-ink);
 	}
 
 	.audit__form .audit__file-clear {
-		margin-left: 0.6rem;
-		padding: 0.15rem 0.5rem;
+		margin-left: var(--space-2);
+		padding: var(--space-1) 0.5rem;
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-control);
 		background: var(--clay-fill);
@@ -393,13 +393,13 @@
 	.audit__form label {
 		display: flex;
 		flex-direction: column;
-		gap: 0.3rem;
-		font-size: 0.9rem;
+		gap: var(--space-1);
+		font-size: var(--text-sm);
 		color: var(--color-ink);
 	}
 
 	.audit__form textarea {
-		padding: 0.6rem 0.75rem;
+		padding: var(--space-2) 0.75rem;
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-card);
 		background: var(--clay-fill);
@@ -420,7 +420,7 @@
 	.audit__form button,
 	.audit__capture-form button {
 		align-self: flex-start;
-		padding: 0.55rem 1.1rem;
+		padding: var(--space-2) var(--space-4);
 		border: none;
 		border-radius: var(--radius-card);
 		background: var(--color-action);
@@ -452,12 +452,12 @@
 	.audit__error {
 		margin: 0;
 		color: var(--color-danger);
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 	}
 
 	.audit__error button {
 		margin-left: var(--space-3);
-		padding: 0.25rem 0.6rem;
+		padding: 0.25rem var(--space-2);
 		border: var(--border-width) solid var(--color-danger);
 		border-radius: var(--radius-control);
 		background: var(--clay-fill);
@@ -479,18 +479,18 @@
 	.audit__jd {
 		display: flex;
 		flex-direction: column;
-		gap: 0.4rem;
+		gap: var(--space-2);
 	}
 
 	/* Disclosure toggle: a control, so it gets clay. */
 	.audit__jd-toggle {
 		align-self: flex-start;
-		padding: 0.45rem 0.9rem;
+		padding: var(--space-2) var(--space-4);
 		border: var(--border-width) dashed var(--color-line);
 		border-radius: var(--radius-card);
 		background: var(--clay-fill);
 		color: var(--color-ink-muted);
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 		cursor: pointer;
 		text-align: left;
 		box-shadow: var(--clay-raised);
@@ -536,12 +536,12 @@
 	}
 
 	.audit__issues p {
-		margin: 0.35rem 0 0;
+		margin: var(--space-1) 0 0;
 		color: var(--color-ink);
 	}
 
 	.audit__severity {
-		padding: 0.1rem 0.5rem;
+		padding: var(--space-1) 0.5rem;
 		border-radius: var(--radius-pill);
 		font-size: var(--text-xs);
 		font-weight: 700;
@@ -563,13 +563,13 @@
 
 	.audit__result h2 {
 		margin: var(--space-3) 0 var(--space-1);
-		font-size: 1.05rem;
+		font-size: var(--text-md);
 		color: var(--color-ink-strong);
 	}
 
 	.audit__result ul {
 		margin: 0;
-		padding-left: 1.25rem;
+		padding-left: var(--space-5);
 		color: var(--color-ink);
 	}
 
@@ -580,21 +580,21 @@
 		display: flex;
 		align-items: baseline;
 		gap: var(--space-3);
-		padding: var(--space-4) 1.25rem;
+		padding: var(--space-4) var(--space-5);
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-panel);
 		background: var(--color-surface);
 	}
 
 	.audit__score strong {
-		font-size: 2rem;
+		font-size: var(--text-3xl);
 		color: var(--color-ink-strong);
 	}
 
 	.audit__reasoning {
 		white-space: pre-wrap;
 		color: var(--color-ink);
-		padding: var(--space-4) 1.25rem;
+		padding: var(--space-4) var(--space-5);
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-panel);
 		background: var(--color-surface);
@@ -602,7 +602,7 @@
 
 	.audit__capture {
 		margin-top: var(--space-4);
-		padding: 1.25rem;
+		padding: var(--space-5);
 		border: var(--border-width) solid var(--color-action);
 		border-radius: var(--radius-panel);
 		background: var(--color-surface);
@@ -610,14 +610,14 @@
 
 	.audit__capture-form {
 		display: flex;
-		gap: 0.6rem;
+		gap: var(--space-2);
 		margin-top: var(--space-2);
 	}
 
 	.audit__capture-form input {
 		flex: 1;
 		max-width: 20rem;
-		padding: 0.55rem 0.75rem;
+		padding: var(--space-2) 0.75rem;
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-card);
 		background: var(--clay-fill);
@@ -639,9 +639,9 @@
 	}
 
 	.audit__signup-cta {
-		margin: 0.9rem 0 0;
+		margin: var(--space-4) 0 0;
 		color: var(--color-ink-muted);
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 	}
 
 	.audit__signup-cta a {
