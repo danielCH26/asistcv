@@ -17,6 +17,7 @@ import hashlib
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app.db.models import CVAdaptation, User, UserCV
 from app.services.adaptation_cache import (
@@ -171,45 +172,40 @@ class TestGetCached:
     ) -> None:
         """When the runner rewrites a row's status over time, the most recent completed row is returned.
 
-        Partial UNIQUE on ``(parent_cv_id, jd_text_hash) WHERE status='completed'``
-        (migration 015) keeps only ONE completed row per (cv, hash), so we
-        cannot stack multiple completed rows. Instead we exercise the
-        ordering by inserting one completed row at ``t-5m`` and one at
-        ``t-10s`` with DIFFERENT jd_hashes — the SQL ``ORDER BY created_at DESC
-        LIMIT 1`` is what gives us the most-recent semantics when the
-        cache is populated with overlapping rows over time.
+        Since migration 021 the partial UNIQUE is scoped to
+        ``status='pending'`` (``uq_cv_adapt_parent_jd_hash_pending``),
+        so completed rows for one ``(cv, jd)`` may now stack up. This
+        test therefore seeds two completed rows for the SAME pair — the
+        shape a repeat adaptation after the 24 h TTL produces — and
+        asserts the SQL ``ORDER BY created_at DESC LIMIT 1`` returns the
+        newer one.
         """
-        hash_a = "ba" + "a" * 62
-        hash_b = "bb" + "b" * 62
+        jd_hash = "ba" + "a" * 62
         older = await self._insert_adaptation(
             clean_db,
             cv_id=cv.id,
             owner_user_id=owner.id,
-            jd_hash=hash_a,
+            jd_hash=jd_hash,
             created_at=datetime.now(UTC) - timedelta(minutes=5),
         )
         newer = await self._insert_adaptation(
             clean_db,
             cv_id=cv.id,
             owner_user_id=owner.id,
-            jd_hash=hash_b,
+            jd_hash=jd_hash,
             created_at=datetime.now(UTC) - timedelta(seconds=10),
         )
 
         async with clean_db.session_factory() as session:
             await set_rls_user(session, owner.id, "job_seeker")
-            # Each lookup filters on its own hash, so each returns its row.
-            hit_a = await get_cached(
-                session, cv_id=cv.id, content_version=1, jd_text_hash=hash_a
+            hit = await get_cached(
+                session, cv_id=cv.id, content_version=1, jd_text_hash=jd_hash
             )
-            hit_b = await get_cached(
-                session, cv_id=cv.id, content_version=1, jd_text_hash=hash_b
-            )
-            assert hit_a is not None
-            assert hit_b is not None
-            assert hit_a.id == older.id
-            assert hit_b.id == newer.id
-            assert hit_a.created_at < hit_b.created_at
+            assert hit is not None
+            # Same key for both rows: the tie is broken by recency, which
+            # is what makes a repeat adaptation serve the fresh answer.
+            assert hit.id == newer.id
+            assert older.created_at < newer.created_at
 
     async def test_skips_pending_and_failed_rows(
         self, clean_db, owner: User, cv: UserCV
@@ -343,3 +339,158 @@ class TestGetCached:
             # of the cache; the negative case (other user reading) is
             # exercised by test_rls.py with raw engine connections.
             assert hit is not None
+
+
+class TestAdaptationUniqueness:
+    """The partial unique index is scoped to IN-FLIGHT rows (migration 021).
+
+    Pins both halves of the new invariant, because they are two
+    different guarantees and either one alone would be a regression:
+
+    - completed rows for the same ``(cv, jd)`` may stack up (history),
+      which is what lets a repeat adaptation land after the 24 h TTL;
+    - a second *pending* row for the same ``(cv, jd)`` is refused,
+      which is what stops two concurrent POSTs from paying for two LLM
+      calls.
+    """
+
+    @pytest.fixture
+    async def owner(self, clean_db) -> User:
+        async with clean_db.session_factory() as session:
+            user = User(
+                email="uq@example.com",
+                password_hash="x",
+                role="job_seeker",
+                full_name="Uq",
+            )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+            return user
+
+    @pytest.fixture
+    async def cv(self, clean_db, owner: User) -> UserCV:
+        async with clean_db.session_factory() as session:
+            cv_row = UserCV(
+                owner_user_id=owner.id,
+                original_filename="cv.pdf",
+                structured={},
+                content_version=1,
+            )
+            session.add(cv_row)
+            await session.commit()
+            await session.refresh(cv_row)
+            return cv_row
+
+    async def _insert(
+        self,
+        clean_db,
+        *,
+        cv_id: int,
+        owner_user_id: int,
+        jd_hash: str,
+        status: str,
+    ) -> CVAdaptation:
+        async with clean_db.session_factory() as session:
+            await set_rls_user(session, owner_user_id, "job_seeker")
+            row = CVAdaptation(
+                parent_cv_id=cv_id,
+                owner_user_id=owner_user_id,
+                jd_text_hash=jd_hash,
+                adapted_cv_json={},
+                status=status,
+            )
+            session.add(row)
+            await session.commit()
+            await session.refresh(row)
+            return row
+
+    async def test_two_completed_rows_for_same_pair_are_allowed(
+        self, clean_db, owner: User, cv: UserCV
+    ) -> None:
+        """Re-adapting the same JD later appends history.
+
+        The old index (``WHERE status='completed'``) rejected this, which
+        stranded the repeat request in ``pending`` after the LLM call had
+        already been paid for.
+        """
+        jd_hash = compute_jd_text_hash("Backend role, Python and AWS.")
+        first = await self._insert(
+            clean_db,
+            cv_id=cv.id,
+            owner_user_id=owner.id,
+            jd_hash=jd_hash,
+            status="completed",
+        )
+        second = await self._insert(
+            clean_db,
+            cv_id=cv.id,
+            owner_user_id=owner.id,
+            jd_hash=jd_hash,
+            status="completed",
+        )
+        assert first.id != second.id
+
+    async def test_second_pending_row_for_same_pair_is_rejected(
+        self, clean_db, owner: User, cv: UserCV
+    ) -> None:
+        """Only one in-flight job per (cv, jd) — the anti-concurrency half."""
+        jd_hash = compute_jd_text_hash("Platform role, Go and Kubernetes.")
+        await self._insert(
+            clean_db,
+            cv_id=cv.id,
+            owner_user_id=owner.id,
+            jd_hash=jd_hash,
+            status="pending",
+        )
+        with pytest.raises(IntegrityError):
+            await self._insert(
+                clean_db,
+                cv_id=cv.id,
+                owner_user_id=owner.id,
+                jd_hash=jd_hash,
+                status="pending",
+            )
+
+    async def test_pending_may_flip_to_completed_while_old_completed_exists(
+        self, clean_db, owner: User, cv: UserCV
+    ) -> None:
+        """The exact production failure: T completed, T+25h re-run.
+
+        Reproduces the stuck-pending path at the schema level — the
+        UPDATE that the runner performs is what used to raise.
+        """
+        jd_hash = compute_jd_text_hash("Data role, Python and dbt.")
+        old = await self._insert(
+            clean_db,
+            cv_id=cv.id,
+            owner_user_id=owner.id,
+            jd_hash=jd_hash,
+            status="completed",
+        )
+        repeat = await self._insert(
+            clean_db,
+            cv_id=cv.id,
+            owner_user_id=owner.id,
+            jd_hash=jd_hash,
+            status="pending",
+        )
+
+        async with clean_db.session_factory() as session:
+            await set_rls_user(session, owner.id, "job_seeker")
+            row = await session.get(CVAdaptation, repeat.id)
+            assert row is not None
+            row.status = "completed"
+            row.adapted_cv_json = {"full_name": "Uq"}
+            row.completed_at = datetime.now(UTC)
+            # This UPDATE violated uq_cv_adapt_parent_jd_hash_completed.
+            await session.commit()
+
+        async with clean_db.session_factory() as session:
+            await set_rls_user(session, owner.id, "job_seeker")
+            still_old = await session.get(CVAdaptation, old.id)
+            updated = await session.get(CVAdaptation, repeat.id)
+            assert still_old is not None
+            assert still_old.status == "completed"
+            assert updated is not None
+            assert updated.status == "completed"

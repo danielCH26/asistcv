@@ -56,6 +56,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
@@ -194,6 +195,29 @@ async def _resolve_cv_for_user(
     return result.scalar_one_or_none()
 
 
+async def _find_inflight(
+    *, session: AsyncSession, cv_id: int, jd_text_hash: str
+) -> CVAdaptation | None:
+    """Return the oldest in-flight adaptation for this (cv, jd), if any.
+
+    The recovery path for a lost insert race against
+    ``uq_cv_adapt_parent_jd_hash_pending``. Ordered by ``id`` ascending
+    so the caller converges on the SAME row no matter how many requests
+    collided — the first job created is the one that gets polled.
+    """
+    result = await session.execute(
+        select(CVAdaptation)
+        .where(
+            CVAdaptation.parent_cv_id == cv_id,
+            CVAdaptation.jd_text_hash == jd_text_hash,
+            CVAdaptation.status == "pending",
+        )
+        .order_by(CVAdaptation.id.asc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 # === Endpoints
 
 
@@ -286,6 +310,13 @@ async def create_adaptation(
     # (``users_cvs.raw_text``, ``audit_uploads.cv_text``). The column was
     # renamed from ``jd_text_encrypted`` in migration 019 because the old
     # name claimed a protection that was never implemented.
+    #
+    # ``uq_cv_adapt_parent_jd_hash_pending`` (migration 021) allows at
+    # most one IN-FLIGHT row per (cv, jd), so a concurrent POST for the
+    # same input loses the insert race. That is the desired outcome —
+    # one LLM call, not two — so the loser resolves the existing job
+    # and returns 202 with the SAME ``adaptation_id`` instead of
+    # spawning a second runner for work already in flight.
     row = CVAdaptation(
         parent_cv_id=cv.id,
         owner_user_id=current_user.id,
@@ -295,7 +326,44 @@ async def create_adaptation(
         status="pending",
     )
     db.add(row)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # The failed COMMIT leaves the session mid-rollback. Clear it
+        # before the follow-up read — and note that ``rollback()``
+        # expires every ORM object in the session, so this block must
+        # not touch ``cv`` (or any other loaded row): a lazy refresh
+        # there is IO outside the greenlet and raises MissingGreenlet.
+        # ``payload.cv_id`` is a plain int off the request body and is
+        # what the caller already used, so use that instead.
+        await db.rollback()
+        inflight = await _find_inflight(
+            session=db, cv_id=payload.cv_id, jd_text_hash=jd_hash
+        )
+        if inflight is None:
+            # Not the uniqueness conflict we know how to resolve (e.g.
+            # a FK race on a CV deleted underneath us). Surface it
+            # rather than inventing a job id.
+            logger.warning(
+                "adaptation_insert_conflict_unresolved",
+                owner_user_id=current_user.id,
+                cv_id=payload.cv_id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="ADAPTATION_CONFLICT",
+            )
+        logger.info(
+            "adaptation_deduped_inflight",
+            adaptation_id=inflight.id,
+            owner_user_id=current_user.id,
+            cv_id=payload.cv_id,
+        )
+        response.status_code = status.HTTP_202_ACCEPTED
+        return AdaptationAcceptedResponse(
+            adaptation_id=inflight.id, status="pending"
+        )
+
     await db.refresh(row)
 
     logger.info(
