@@ -1,14 +1,14 @@
-"""
-Tests de autenticación por API key (PR-B, tasks B1-B4).
+﻿"""
+Tests de autenticaciÃ³n por API key (PR-B, tasks B1-B4).
 
 Matriz cubierta:
 - Modo abierto (sin BACKEND_API_KEY): requests pasan sin header.
-- Modo protegido + sin header → 401.
-- Modo protegido + header con key incorrecta → 401.
-- Modo protegido + header con key correcta → 200.
+- Modo protegido + sin header â†’ 401.
+- Modo protegido + header con key incorrecta â†’ 401.
+- Modo protegido + header con key correcta â†’ 200.
 - Modo protegido: prefijo Bearer case-insensitive (bearer/BEARER).
 - Modo protegido: /health y / exentos (200 sin header).
-- Modo protegido: /docs, /redoc y /openapi.json → 404.
+- Modo protegido: /docs, /redoc y /openapi.json â†’ 404.
 - Endpoints v1 protegidos (/v1/ping, /v1/analyses, /v1/match).
 
 Los tests de modo protegido construyen una app fresh con `create_app()`
@@ -20,6 +20,7 @@ from collections.abc import AsyncIterator
 import pytest
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 
 API_KEY = "test-secret-key-abc123"
 AUTH_HEADER = {"Authorization": f"Bearer {API_KEY}"}
@@ -28,7 +29,7 @@ AUTH_HEADER = {"Authorization": f"Bearer {API_KEY}"}
 def _build_protected_app(monkeypatch: pytest.MonkeyPatch, key: str = API_KEY):
     """Construye una app fresh con BACKEND_API_KEY seteado.
 
-    Limpia el cache de `get_settings` antes y después para que cada llamada
+    Limpia el cache de `get_settings` antes y despuÃ©s para que cada llamada
     refleje el env actualizado (lru_cache se cachea por proceso).
     """
     from app.core.config import get_settings
@@ -39,14 +40,14 @@ def _build_protected_app(monkeypatch: pytest.MonkeyPatch, key: str = API_KEY):
     try:
         return create_app()
     finally:
-        # El app ya está construida con la key en memoria; dejamos que el
+        # El app ya estÃ¡ construida con la key en memoria; dejamos que el
         # cache siga cacheado durante este test y limpiamos al final del
         # fixture para no contaminar otros tests.
         pass
 
 
 def _build_open_app(monkeypatch: pytest.MonkeyPatch):
-    """Construye una app fresh con BACKEND_API_KEY explícitamente ausente."""
+    """Construye una app fresh con BACKEND_API_KEY explÃ­citamente ausente."""
     from app.core.config import get_settings
     from app.main import create_app
 
@@ -161,7 +162,7 @@ async def test_open_mode_health_without_header(client: TestClient) -> None:
 
 
 async def test_open_mode_docs_available(client: TestClient) -> None:
-    """Sin key configurada, /docs y /redoc están disponibles."""
+    """Sin key configurada, /docs y /redoc estÃ¡n disponibles."""
     assert client.get("/docs").status_code == 200
     assert client.get("/redoc").status_code == 200
     assert client.get("/openapi.json").status_code == 200
@@ -182,7 +183,7 @@ async def test_open_mode_root_returns_metadata(client: TestClient) -> None:
 async def test_protected_mode_ping_without_header_returns_401(
     protected_async_client: AsyncClient,
 ) -> None:
-    """Sin header `Authorization` → 401."""
+    """Sin header `Authorization` â†’ 401."""
     response = await protected_async_client.get("/v1/ping")
     assert response.status_code == 401
     assert response.json()["detail"] == "Invalid or missing API key"
@@ -191,7 +192,7 @@ async def test_protected_mode_ping_without_header_returns_401(
 async def test_protected_mode_ping_with_wrong_key_returns_401(
     protected_async_client: AsyncClient,
 ) -> None:
-    """Header con key incorrecta → 401."""
+    """Header con key incorrecta â†’ 401."""
     response = await protected_async_client.get(
         "/v1/ping", headers={"Authorization": "Bearer wrong-key"}
     )
@@ -202,7 +203,7 @@ async def test_protected_mode_ping_with_wrong_key_returns_401(
 async def test_protected_mode_ping_with_bearer_wrong_scheme_returns_401(
     protected_async_client: AsyncClient,
 ) -> None:
-    """Esquema distinto a Bearer (e.g. Basic) → 401."""
+    """Esquema distinto a Bearer (e.g. Basic) â†’ 401."""
     response = await protected_async_client.get(
         "/v1/ping", headers={"Authorization": f"Basic {API_KEY}"}
     )
@@ -212,7 +213,7 @@ async def test_protected_mode_ping_with_bearer_wrong_scheme_returns_401(
 async def test_protected_mode_ping_with_bearer_no_token_returns_401(
     protected_async_client: AsyncClient,
 ) -> None:
-    """`Bearer` sin token → 401."""
+    """`Bearer` sin token â†’ 401."""
     response = await protected_async_client.get("/v1/ping", headers={"Authorization": "Bearer "})
     assert response.status_code == 401
 
@@ -220,7 +221,7 @@ async def test_protected_mode_ping_with_bearer_no_token_returns_401(
 async def test_protected_mode_ping_with_correct_key_returns_200(
     protected_async_client: AsyncClient,
 ) -> None:
-    """Header correcto → 200."""
+    """Header correcto â†’ 200."""
     response = await protected_async_client.get("/v1/ping", headers=AUTH_HEADER)
     assert response.status_code == 200
     assert response.json()["pong"] is True
@@ -229,7 +230,7 @@ async def test_protected_mode_ping_with_correct_key_returns_200(
 async def test_protected_mode_ping_with_lowercase_bearer_returns_200(
     protected_async_client: AsyncClient,
 ) -> None:
-    """Prefijo `bearer` (lowercase) con key correcta → 200."""
+    """Prefijo `bearer` (lowercase) con key correcta â†’ 200."""
     response = await protected_async_client.get(
         "/v1/ping", headers={"Authorization": f"bearer {API_KEY}"}
     )
@@ -239,7 +240,7 @@ async def test_protected_mode_ping_with_lowercase_bearer_returns_200(
 async def test_protected_mode_ping_with_uppercase_bearer_returns_200(
     protected_async_client: AsyncClient,
 ) -> None:
-    """Prefijo `BEARER` (uppercase) con key correcta → 200."""
+    """Prefijo `BEARER` (uppercase) con key correcta â†’ 200."""
     response = await protected_async_client.get(
         "/v1/ping", headers={"Authorization": f"BEARER {API_KEY}"}
     )
@@ -311,7 +312,7 @@ async def test_401_does_not_invoke_llm_provider(
 
     def _spy_get_llm_provider():  # noqa: ANN202 - test spy
         called["value"] = True
-        raise AssertionError("LLM provider no debería ser llamado en 401")
+        raise AssertionError("LLM provider no deberÃ­a ser llamado en 401")
 
     monkeypatch.setattr(match_module, "get_llm_provider", _spy_get_llm_provider)
 
@@ -323,7 +324,7 @@ async def test_401_does_not_invoke_llm_provider(
     assert called["value"] is False
 
 
-# --- Regresión TZ-mismatch: signup no debe dejar orphan user ---
+# --- RegresiÃ³n TZ-mismatch: signup no debe dejar orphan user ---
 
 
 async def test_full_signup_flow_writes_refresh_token(
@@ -396,11 +397,264 @@ async def test_full_signup_flow_writes_refresh_token(
         assert refresh.expires_at > now, "expires_at must be in the future"
 
 
-# --- Absolute session lifetime: la rotación hereda el expiry original ---
+# --- Verify-email flow (C3 / issue #46) ---
+
+
+async def test_verify_email_request_persists_token_and_returns_202(
+    async_client, clean_db, monkeypatch
+):
+    """POST /v1/auth/verify-email/request returns 202 and writes a token row.
+
+    Regression guard for the original stub: the handler used to do
+    nothing â€” no token row, no email â€” and just returned 200/202. This
+    test asserts the row is actually written with the expected hash,
+    expiry in the future, and ``used_at`` null. ``send_email_async`` is
+    monkeypatched so the test runs without a real Resend key (the
+    service-level graceful fallback is exercised in test_email_service).
+    """
+    from datetime import UTC, datetime
+
+    from app.core.security import create_access_token
+    from app.db.models import EmailVerificationToken, User
+
+    # Seed a user we can auth as; the JWT below references its id.
+    async with clean_db.session_factory() as session:
+        existing = await session.execute(select(User).where(User.id == 42))
+        if existing.scalar_one_or_none() is None:
+            session.add(
+                User(
+                    id=42,
+                    email="verify-req@example.com",
+                    password_hash="hashed",
+                    role="job_seeker",
+                    full_name="Verify Req",
+                )
+            )
+            await session.commit()
+
+    token_header = {
+        "Authorization": f"Bearer {create_access_token({'sub': '42', 'role': 'job_seeker'})}"
+    }
+
+    sent: dict[str, bool] = {"called": False}
+
+    async def _spy_send(*args, **kwargs):  # noqa: ANN001
+        sent["called"] = True
+        return False  # pretend the key is missing â€” endpoint still 202
+
+    monkeypatch.setattr(
+        "app.api.v1.auth.email_service.send_email_async", _spy_send
+    )
+
+    response = await async_client.post(
+        "/v1/auth/verify-email/request", headers=token_header
+    )
+    assert response.status_code == 202
+    body = response.json()
+    assert body["detail"] == "Verification email sent"
+    assert isinstance(body["token_id"], int)
+
+    # A row with the right hash exists, not expired, and not used.
+    async with clean_db.session_factory() as session:
+        result = await session.execute(
+            select(EmailVerificationToken).where(
+                EmailVerificationToken.user_id == 42
+            )
+        )
+        rows = result.scalars().all()
+        assert len(rows) == 1, "request must persist exactly one token row"
+        row = rows[0]
+        assert row.token_hash  # sha256 hex
+        assert len(row.token_hash) == 64
+        assert row.used_at is None
+        assert row.expires_at.tzinfo is not None, (
+            "expires_at must be timezone-aware (TIMESTAMPTZ)"
+        )
+        assert row.expires_at > datetime.now(UTC), "token must not be expired on creation"
+
+    # Send was attempted (even though we returned False from the spy).
+    assert sent["called"] is True
+
+
+async def test_verify_email_confirm_marks_user_verified(
+    async_client, clean_db, monkeypatch
+):
+    """Confirm with a valid token stamps email_verified_at on the user.
+
+    Walks the full happy path: insert a User row, mint a token row by
+    hand (so the test owns the plaintext), POST /verify-email/confirm,
+    then read back the user to assert the column is populated and the
+    token row has ``used_at`` set.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from app.core.security import hash_token
+    from app.db.models import EmailVerificationToken, User
+
+    # Seed: a user and a fresh token row.
+    plain_token = "valid-plaintext-token-for-confirm"
+    token_hash = hash_token(plain_token)
+    async with clean_db.session_factory() as session:
+        user = User(
+            email="confirm@example.com",
+            password_hash="hashed",
+            role="job_seeker",
+            full_name="Confirm Tester",
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+        session.add(
+            EmailVerificationToken(
+                user_id=user.id,
+                token_hash=token_hash,
+                expires_at=datetime.now(UTC) + timedelta(hours=24),
+            )
+        )
+        await session.commit()
+        user_id = user.id
+
+    response = await async_client.post(
+        "/v1/auth/verify-email/confirm",
+        json={"token": plain_token},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"detail": "Email verified"}
+
+    async with clean_db.session_factory() as session:
+        user_result = await session.execute(select(User).where(User.id == user_id))
+        user = user_result.scalar_one()
+        assert user.email_verified_at is not None, (
+            "user.email_verified_at must be stamped on successful confirm"
+        )
+        assert user.email_verified_at.tzinfo is not None, (
+            "email_verified_at must be tz-aware (TIMESTAMPTZ)"
+        )
+
+        token_result = await session.execute(
+            select(EmailVerificationToken).where(EmailVerificationToken.user_id == user_id)
+        )
+        token_row = token_result.scalar_one()
+        assert token_row.used_at is not None, (
+            "token row must be marked used_at after confirm"
+        )
+
+
+async def test_verify_email_confirm_expired_token_returns_400(
+    async_client, clean_db
+):
+    """Expired token â†’ 400 TOKEN_EXPIRED, no user mutation."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.core.security import hash_token
+    from app.db.models import EmailVerificationToken, User
+
+    plain_token = "expired-plaintext-token"
+    async with clean_db.session_factory() as session:
+        user = User(
+            email="expired@example.com",
+            password_hash="hashed",
+            role="job_seeker",
+            full_name="Expired Tester",
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+        session.add(
+            EmailVerificationToken(
+                user_id=user.id,
+                token_hash=hash_token(plain_token),
+                # Already past its TTL.
+                expires_at=datetime.now(UTC) - timedelta(seconds=1),
+            )
+        )
+        await session.commit()
+        user_id = user.id
+
+    response = await async_client.post(
+        "/v1/auth/verify-email/confirm",
+        json={"token": plain_token},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "TOKEN_EXPIRED"
+
+    # No mutation on the user row.
+    async with clean_db.session_factory() as session:
+        user_result = await session.execute(select(User).where(User.id == user_id))
+        user = user_result.scalar_one()
+        assert user.email_verified_at is None
+
+
+async def test_verify_email_confirm_used_token_returns_400(
+    async_client, clean_db
+):
+    """Replaying a used token â†’ 400 TOKEN_USED, second attempt fails.
+
+    The first confirm consumes the token; the second one with the same
+    plaintext must be rejected even if the row is still inside its TTL.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from app.core.security import hash_token
+    from app.db.models import EmailVerificationToken, User
+
+    plain_token = "replay-attempt-token"
+    async with clean_db.session_factory() as session:
+        user = User(
+            email="used@example.com",
+            password_hash="hashed",
+            role="job_seeker",
+            full_name="Used Tester",
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+        session.add(
+            EmailVerificationToken(
+                user_id=user.id,
+                token_hash=hash_token(plain_token),
+                expires_at=datetime.now(UTC) + timedelta(hours=24),
+            )
+        )
+        await session.commit()
+        user_id = user.id
+
+    first = await async_client.post(
+        "/v1/auth/verify-email/confirm",
+        json={"token": plain_token},
+    )
+    assert first.status_code == 200
+
+    second = await async_client.post(
+        "/v1/auth/verify-email/confirm",
+        json={"token": plain_token},
+    )
+    assert second.status_code == 400
+    assert second.json()["detail"] == "TOKEN_USED"
+
+    # User is verified exactly once â€” verify email_verified_at doesn't get re-stamped.
+    async with clean_db.session_factory() as session:
+        user_result = await session.execute(select(User).where(User.id == user_id))
+        user = user_result.scalar_one()
+        assert user.email_verified_at is not None
+
+
+async def test_verify_email_confirm_unknown_token_returns_400(
+    async_client, clean_db
+):
+    """Token that doesn't exist in the table â†’ 400 INVALID_TOKEN."""
+    response = await async_client.post(
+        "/v1/auth/verify-email/confirm",
+        json={"token": "no-such-token-anywhere"},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "INVALID_TOKEN"
+
+# --- Absolute session lifetime: la rotaci├│n hereda el expiry original ---
 
 
 async def _register_user(async_client, email: str) -> dict:
-    """Registra un usuario vía el endpoint real y devuelve el body del token pair."""
+    """Registra un usuario v├¡a el endpoint real y devuelve el body del token pair."""
     response = await async_client.post(
         "/v1/auth/register",
         json={
@@ -416,10 +670,10 @@ async def _register_user(async_client, email: str) -> dict:
 
 
 async def _refresh_rows(clean_db, email: str) -> list[dict]:
-    """Filas de ``users_refresh_tokens`` del usuario, de la más antigua a la más nueva.
+    """Filas de ``users_refresh_tokens`` del usuario, de la m├ís antigua a la m├ís nueva.
 
     Se devuelven como dicts planos (no instancias de ORM) para que los
-    valores sobrevivan al cierre de la sesión de test.
+    valores sobrevivan al cierre de la sesi├│n de test.
     """
     from sqlalchemy import select
 
@@ -450,11 +704,11 @@ async def _refresh_rows(clean_db, email: str) -> list[dict]:
 async def test_rotation_inherits_seeded_expiry_not_fresh_ttl(
     async_client, clean_db
 ) -> None:
-    """Una rotación hereda el expiry ORIGINAL; no recalcula now + JWT_REFRESH_TTL.
+    """Una rotaci├│n hereda el expiry ORIGINAL; no recalcula now + JWT_REFRESH_TTL.
 
-    La fila se siembra con un expiry distintivo (7 días) en lugar de dejar que
+    La fila se siembra con un expiry distintivo (7 d├¡as) en lugar de dejar que
     ``register`` lo fije, para que la diferencia contra el TTL por defecto
-    (30 días) sea inequívoca en el assert.
+    (30 d├¡as) sea inequ├¡voca en el assert.
     """
     from datetime import UTC, datetime, timedelta
 
@@ -502,7 +756,7 @@ async def test_rotation_inherits_seeded_expiry_not_fresh_ttl(
 
 
 async def test_rotation_inherits_expiry_end_to_end(async_client, clean_db) -> None:
-    """Flujo real register → refresh: la fila rotada conserva el expiry de register."""
+    """Flujo real register ΓåÆ refresh: la fila rotada conserva el expiry de register."""
     from datetime import UTC, datetime
 
     email = "rotation.e2e@example.com"
@@ -532,10 +786,10 @@ async def test_rotation_inherits_expiry_end_to_end(async_client, clean_db) -> No
 async def test_repeated_rotation_never_extends_lifetime(
     async_client, clean_db
 ) -> None:
-    """Rotar N veces NO extiende la vida de la sesión.
+    """Rotar N veces NO extiende la vida de la sesi├│n.
 
-    Este es el test que falla con el TTL deslizante: cada rotación empujaba
-    el expiry 30 días hacia adelante, así que el límite era inalcanzable.
+    Este es el test que falla con el TTL deslizante: cada rotaci├│n empujaba
+    el expiry 30 d├¡as hacia adelante, as├¡ que el l├¡mite era inalcanzable.
     """
     from datetime import UTC, datetime, timedelta
 
@@ -575,10 +829,10 @@ async def test_repeated_rotation_never_extends_lifetime(
 async def test_expired_absolute_token_rejected_even_if_otherwise_valid(
     async_client, clean_db
 ) -> None:
-    """Un token pasado su expiry absoluto se rechaza aunque la fila sea válida.
+    """Un token pasado su expiry absoluto se rechaza aunque la fila sea v├ílida.
 
-    ``consumed_at`` y ``revoked_at`` quedan en NULL a propósito: el rechazo
-    tiene que venir del expiry, no de un flag de revocación.
+    ``consumed_at`` y ``revoked_at`` quedan en NULL a prop├│sito: el rechazo
+    tiene que venir del expiry, no de un flag de revocaci├│n.
     """
     from datetime import UTC, datetime, timedelta
 
@@ -625,7 +879,7 @@ def _pin_sweeper_settings(monkeypatch: pytest.MonkeyPatch, key: str | None) -> N
 
     Se ejercita el auth REAL (hmac.compare_digest contra settings) en vez de
     monkeypatchear ``_verify_api_key``: este endpoint borra filas, y un test
-    que se saltee la verificación no prueba nada sobre el auth.
+    que se saltee la verificaci├│n no prueba nada sobre el auth.
     """
     from app.core.config import get_settings
 
@@ -639,7 +893,7 @@ def _pin_sweeper_settings(monkeypatch: pytest.MonkeyPatch, key: str | None) -> N
 async def test_refresh_token_cleanup_401_without_api_key(
     async_client, clean_db, monkeypatch
 ) -> None:
-    """Sin ``X-Backend-API-Key`` → 401 y NO se borra ninguna fila."""
+    """Sin ``X-Backend-API-Key`` ΓåÆ 401 y NO se borra ninguna fila."""
     from datetime import UTC, datetime, timedelta
 
     from sqlalchemy import select
@@ -702,7 +956,7 @@ async def test_refresh_token_cleanup_deletes_old_terminal_rows_only(
     """El sweep borra consumidas/revocadas fuera de ventana y deja el resto.
 
     La ventana se ancla en el timestamp TERMINAL (``consumed_at`` /
-    ``revoked_at``), no en ``created_at``: una fila creada hace 200 días y
+    ``revoked_at``), no en ``created_at``: una fila creada hace 200 d├¡as y
     rotada ayer sigue siendo evidencia y se conserva.
     """
     from datetime import UTC, datetime, timedelta
@@ -729,7 +983,7 @@ async def test_refresh_token_cleanup_deletes_old_terminal_rows_only(
                 **kwargs,
             )
 
-        # Elegibles: terminales y fuera de la ventana de 90 días.
+        # Elegibles: terminales y fuera de la ventana de 90 d├¡as.
         old_consumed = _row(
             expires_at=now - timedelta(days=5),
             created_at=now - timedelta(days=200),
@@ -752,7 +1006,7 @@ async def test_refresh_token_cleanup_deletes_old_terminal_rows_only(
             revoked_at=now - timedelta(days=3),
         )
         # Conservada: activa (nunca consumida ni revocada) y vencida de
-        # todos modos. Borrarla cortaría el único hilo de una sesión viva.
+        # todos modos. Borrarla cortar├¡a el ├║nico hilo de una sesi├│n viva.
         active = _row(
             expires_at=now + timedelta(days=20),
             created_at=now - timedelta(days=200),
@@ -804,7 +1058,7 @@ async def test_refresh_token_cleanup_deletes_old_terminal_rows_only(
 async def test_refresh_token_cleanup_keeps_everything_inside_window(
     async_client, clean_db, monkeypatch
 ) -> None:
-    """Un sweep sobre datos recientes devuelve deleted=0 (sweep vacío ≠ error)."""
+    """Un sweep sobre datos recientes devuelve deleted=0 (sweep vac├¡o Γëá error)."""
     email = "cleanup.empty@example.com"
     await _register_user(async_client, email)
 

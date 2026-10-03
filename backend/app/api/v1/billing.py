@@ -2,14 +2,26 @@
 Billing API endpoints.
 
 Provides plans catalog, checkout, portal, and subscription management.
+
+Auth resolver contract (C3, issue #46)
+--------------------------------------
+``get_current_user`` returns the lightweight ``CurrentUser`` dataclass
+``(id, name, role, auth_method)`` — adding ``email`` / ``email_verified_at``
+would force a DB lookup on every authenticated request, even routes that
+don't care. The billing endpoints DO care: they gate checkout on
+``email_verified_at`` and pass ``email`` to Stripe. So inside each
+billing handler we re-load the full ``User`` row by id. The lookup is
+already a single ``Session.get`` and the resolver is the only thing the
+rest of the API pays a DB hit for.
 """
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import and_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import CurrentUser, get_current_user
 from app.core.config import get_settings
 from app.db.models import Subscription, User
 from app.services import stripe_client, tier_limits
@@ -144,7 +156,7 @@ async def get_plans(tier: str | None = None):
 @router.post("/checkout", response_model=CheckoutResponse)
 async def create_checkout(
     request: CheckoutRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
     idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ):
     """Create a Stripe Checkout session for plan purchase.
@@ -153,29 +165,45 @@ async def create_checkout(
 
     Supports Idempotency-Key header for safe retries - same key with same
     payload returns the same checkout URL without creating duplicate sessions.
+
+    The ``current_user`` here is the ``CurrentUser`` dataclass (cheap, no
+    DB hit). The full ``User`` ORM row — which carries ``email`` and
+    ``email_verified_at`` — is loaded once below via the DB session that
+    we already need for Stripe.
     """
-    # Check email verification
-    if not current_user.email_verified_at:
-        raise HTTPException(
-            status_code=403,
-            detail="Email verification required to purchase plans",
-        )
+    from app.db.session import get_session_context
 
-    # Validate plan
-    valid_plans = ["job_seeker_monthly", "recruiter_starter", "recruiter_business", "recruiter_agency"]
-    if request.plan_id not in valid_plans:
-        raise HTTPException(status_code=400, detail="Invalid plan_id")
+    async with get_session_context() as session:
+        await bind_rls_context(session, current_user.id, current_user.role)
+        user = await _load_user(session, current_user.id)
 
-    # Validate payment method
-    if request.payment_method not in ["card", "pse"]:
-        raise HTTPException(status_code=400, detail="Invalid payment_method")
+        # Check email verification
+        if not user.email_verified_at:
+            raise HTTPException(
+                status_code=403,
+                detail="Email verification required to purchase plans",
+            )
 
-    # Validate recruiter plans require recruiter role
-    if request.plan_id.startswith("recruiter_") and current_user.role != "recruiter":
-        raise HTTPException(
-            status_code=400,
-            detail="Recruiter plans require recruiter role",
-        )
+        # Validate plan
+        valid_plans = ["job_seeker_monthly", "recruiter_starter", "recruiter_business", "recruiter_agency"]
+        if request.plan_id not in valid_plans:
+            raise HTTPException(status_code=400, detail="Invalid plan_id")
+
+        # Validate payment method
+        if request.payment_method not in ["card", "pse"]:
+            raise HTTPException(status_code=400, detail="Invalid payment_method")
+
+        # Validate recruiter plans require recruiter role
+        if request.plan_id.startswith("recruiter_") and user.role != "recruiter":
+            raise HTTPException(
+                status_code=400,
+                detail="Recruiter plans require recruiter role",
+            )
+
+        # Snapshot what we need after the session closes: the Stripe call
+        # is a separate client (sync SDK) and runs after the with-block.
+        customer_email = user.email
+        user_id = user.id
 
     settings = get_settings()
     success_url = f"{settings.frontend_url}/billing/subscription?status=success"
@@ -184,10 +212,10 @@ async def create_checkout(
     try:
         # Same-key retries return the same session (Stripe-side idempotency); verified by test_checkout_idempotency_key_passthrough
         result = await stripe_client.create_checkout_session(
-            user_id=current_user.id,
+            user_id=user_id,
             plan_id=request.plan_id,
             payment_method=request.payment_method,
-            customer_email=current_user.email,
+            customer_email=customer_email,
             success_url=success_url,
             cancel_url=cancel_url,
             idempotency_key=idempotency_key,
@@ -198,7 +226,7 @@ async def create_checkout(
 
 
 @router.post("/portal", response_model=PortalResponse)
-async def create_portal(current_user: User = Depends(get_current_user)):
+async def create_portal(current_user: CurrentUser = Depends(get_current_user)):
     """Create a Stripe Customer Portal session.
 
     Allows users to manage/cancel their subscription.
@@ -237,7 +265,7 @@ async def create_portal(current_user: User = Depends(get_current_user)):
 
 
 @router.get("/subscription", response_model=SubscriptionResponse)
-async def get_subscription(current_user: User = Depends(get_current_user)):
+async def get_subscription(current_user: CurrentUser = Depends(get_current_user)):
     """Get current user's subscription details."""
     from app.db.session import get_session_context
 
@@ -282,3 +310,20 @@ async def get_subscription(current_user: User = Depends(get_current_user)):
             and sub.status in _PORTAL_STATUSES
         ),
     )
+
+
+async def _load_user(session: AsyncSession, user_id: int) -> User:
+    """Load the full User row by id inside the current RLS context.
+
+    Returns 404 if the row is missing — the resolver accepted a JWT for
+    a user that doesn't exist (e.g. the JWT was issued before the row
+    was hard-deleted by the admin). The resolver only validated the
+    signature, not the lifetime of the principal.
+    """
+    user = await session.get(User, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=404,
+            detail="USER_NOT_FOUND",
+        )
+    return user

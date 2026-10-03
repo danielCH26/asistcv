@@ -109,6 +109,23 @@ class Settings(BaseSettings):
         default="price_recruiter_agency", validation_alias="STRIPE_PRICE_RECRUITER_AGENCY"
     )
 
+    # Email delivery (verify-email flow, C3 / issue #46).
+    # ``resend`` is the only provider that actually sends today; ``sendgrid``
+    # and ``smtp`` are reserved names so the next branch in email_service is
+    # a straight diff, not a refactor. ``resend_api_key=None`` triggers a
+    # graceful warning-and-skip in the service so the rest of the request
+    # keeps working in dev — the token still gets persisted and the link is
+    # visible in the logs.
+    email_provider: str = Field(default="resend", validation_alias="EMAIL_PROVIDER")
+    resend_api_key: str | None = Field(default=None, validation_alias="RESEND_API_KEY")
+    email_from: str = Field(
+        default="AsistCV <noreply@asistcv.com>", validation_alias="EMAIL_FROM"
+    )
+    email_verification_ttl_seconds: int = Field(
+        default=86400,  # 24h
+        validation_alias="EMAIL_VERIFICATION_TTL_SECONDS",
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

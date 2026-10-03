@@ -4,6 +4,8 @@
 
 > **Nota de migración (septiembre 2026).** El roadmap se ajusta a un stack 100% free tier (sin tarjeta de crédito) en reemplazo del stack GCP original. Las capabilities del producto y las métricas del documento fundacional se mantienen sin cambios; cambian los destinos de deploy y los proveedores de LLM / embeddings. Detalle arquitectónico en [`STACK.md`](./STACK.md).
 
+> **Reestructuración (septiembre 2026).** El roadmap se reorganiza en dos hitos de release después de descubrir, en la auditoría [`docs/audit/`](./audit/), bugs bloqueantes del MVP que se priorizan sobre nuevas features. Las nuevas requests de producto se posponen al release v2.0.
+
 ---
 
 ## TL;DR
@@ -81,6 +83,49 @@ El orden de los slices sigue el flujo natural de uso: primero se necesita poder 
 **Métricas a validar.** Cobertura: porcentaje de aplicaciones que entraron al pipeline vs aplicaciones totales hechas por el autor. Cumplimiento de follow-ups en la fecha marcada.
 
 **Criterio de éxito.** Las 30+ aplicaciones del criterio fundacional están registradas en el pipeline; el sistema recuerda los follow-ups a tiempo; las métricas primarias del documento fundacional se pueden calcular desde los datos.
+
+---
+
+## Hito v1.0 — MVP Early Adopters (release target: 14 oct 2026)
+
+**Por qué este orden.** La auditoría [`docs/audit/`](./audit/) descubrió bugs que rompen la promesa central del producto (verificación de email nunca se ejecuta, el CV nunca llega al LLM en `jd_directed`, la cuota de adaptaciones no se consume, etc.). Cerrar esos bugs antes de invertir en nuevas features es la diferencia entre un MVP cobrable y un demo con riesgo de reputación.
+
+**Scope concreto.**
+
+- Cierra Fase 0 (seguridad) y Fase 1 (funcional) del [plan de remediación](./audit/PLAN.md): issues #44–#51.
+- Tres issues nuevas del sprint: tabs CV vs JD en `/profile` (#61), `web_search` tool en el MCP adapter (#59), design tokens base en el frontend (#54).
+- Stripe queda como única pasarela de cobro. **No** hay landing pública, **no** hay pasarela Colombia, **no** hay rediseño visual completo.
+
+**Modelo de distribución.** Cobro a early adopters manuales que Daniel invita uno-a-uno. Sin signup público masivo. Email de verificación real (no stub) es prerequisito de cualquier cobro.
+
+**Métricas a validar.** Email de verificación llega a la bandeja en <2 min; checkout de Stripe completa con un usuario verificado y devuelve 200; el score del audit refleja el CV subido en `jd_directed`; la cuota del plan se consume por adaptación; los tests del frontend corren en CI.
+
+**Criterio de éxito.** Al menos un early adopter completa signup → verificación → pago → uso del producto sin errores 500. Lighthouse score > 85. Cero issues P0 abiertas al cierre.
+
+**Issues del milestone.** Ver [milestone v1.0 en GitHub](https://github.com/danielCH26/asistcv/milestone/7). Kanban en vivo en [Proyecto #8 AsistCV Kanban](https://github.com/users/danielCH26/projects/8), columnas Backlog → Ready → In progress → In review → Done, con vista Timeline por Start/Target date.
+
+---
+
+## Hito v2.0 — Post-MVP Lanzamiento público (release target: dic 2026)
+
+**Por qué después de v1.0.** Depende de v1.0 cerrado: sin verificación de email real no podés exponer un CTA "empezá gratis"; sin auditoría honesta del CV no podés comunicar honestidad; sin cuota RLS funcionando el multi-tenant filtra. Y depende de gates que **no se acceleran con paralelismo**: KYC de pasarela colombiana (1–3 semanas por banco), redacción legal (privacy + terms), copy de landing validado, bug bash con usuarios reales.
+
+**Scope concreto.**
+
+- Landing pública seria en `/` (producto, beneficios, "cómo funciona", planes, FAQ, CTA, footer con legal).
+- Pasarela de pago Colombia (PSE / Nequi / Daviplata vía Wompi/Bold/PayU o Stripe+PSE).
+- Rediseño visual completo Claymorphism + minimalismo suizo (#60), construido sobre los design tokens de v1.0 (#54) y la paleta completa de v2.0 (#57).
+- Paleta de colores completa con roles semánticos y validación WCAG AA/AAA (#57).
+- Cron de ofertas de empleo según perfil (#55): scheduler + `web_search` + matching + email resumen.
+- Privacidad: privacy policy y terms redactados y revisados.
+- KYC Colombia: completar la verificación con el proveedor elegido antes de exponer el path CO.
+- Monitoreo + alertas (Sentry, Plausible analytics, dashboard de error rate).
+
+**Métricas a validar.** Conversión landing → signup ≥ 5%; tasa de verificación de email ≥ 80%; suscripciones activas de Colombia vía PSE; ofertas relevantes entregadas por el cron con feedback positivo del usuario.
+
+**Criterio de éxito.** El producto soporta el flujo completo de un usuario colombiano desde cero sin intervención manual. Lighthouse ≥ 90 en la landing. Cero issues P0/P1 abiertas.
+
+**Issues del milestone.** Ver [milestone v2.0 en GitHub](https://github.com/danielCH26/asistcv/milestone/8).
 
 ---
 
