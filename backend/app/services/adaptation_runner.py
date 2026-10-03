@@ -183,10 +183,12 @@ class AdaptationRunner:
             adapted=adapted_dict,
         )
 
-        # Increment usage counter out-of-band so a credit-tracking
-        # hiccup never rolls back a successful adaptation. Best-effort:
-        # if the increment fails, log and continue.
-        await self._increment_usage(owner_user_id)
+        # Charge the quota in a separate transaction so a credit-tracking
+        # hiccup can never roll back a delivered adaptation. The failure
+        # is logged at ERROR (billing bug, not a hiccup) but does not
+        # fail the job — the LLM spend is already sunk and ``completed``
+        # is already committed.
+        await self._increment_usage(owner_user_id, adaptation_id=adaptation_id)
 
     # === Pipeline steps ===
 
@@ -353,19 +355,45 @@ class AdaptationRunner:
                 error_code=error_code,
             )
 
-    async def _increment_usage(self, owner_user_id: int) -> None:
+    async def _increment_usage(
+        self, owner_user_id: int, *, adaptation_id: int
+    ) -> None:
         """Increment the owner's monthly adaptation counter.
 
-        Best-effort: a failure to write the counter does not undo the
-        successful adaptation (we already persisted ``completed``).
-        Logs the failure for ops to surface in metrics.
+        RLS context: bound to the OWNER, not to service. ``usage_counters``
+        has FORCE ROW LEVEL SECURITY (migration 011), and this session
+        factory hands out bare connections (``NullPool``, no
+        ``server_settings``), so a session that does not bind the GUC
+        runs with ``app.current_user_id`` unset: the SELECT sees 0 rows
+        and the INSERT fails ``usage_counters_owner_insert`` because
+        ``NULL = app_current_user_id()`` is not true. The owner id is
+        passed in, so the owner policy is both sufficient and the
+        narrowest grant available — the service context is not needed
+        and would be strictly broader than this write requires.
+
+        The role argument is deliberately omitted. No ``usage_counters``
+        policy reads ``app.user_role`` (they key on the id GUC only),
+        and the runner has no trustworthy role for the owner, so we
+        assert no role rather than inventing one. This also matches
+        ``increment_usage`` itself, which re-binds with the bare id
+        after its internal COMMIT.
+
+        The failure is logged at ERROR, not WARNING: a counter that does
+        not persist is a billing defect (the subscriber keeps unlimited
+        adaptations), and a swallowed exception at WARNING is what made
+        it invisible in the first place. It does NOT fail the
+        adaptation — by this point the LLM call is already paid for and
+        ``completed`` is already committed, so raising would discard a
+        delivered result without recovering a cent of the spend.
         """
         try:
             async with self._session_factory() as session:
+                await set_rls_user(session, owner_user_id)
                 await increment_usage(session, owner_user_id, "adaptation")
         except Exception as exc:
-            logger.warning(
+            logger.exception(
                 "adaptation_usage_increment_failed",
+                adaptation_id=adaptation_id,
                 owner_user_id=owner_user_id,
                 error=str(exc)[:200],
             )

@@ -228,8 +228,14 @@ async def test_slice_a_migrations_chain_ordering(setup_test_db):
         assert await _column_exists(conn, "users_cvs", "content_version")
         assert await _column_exists(conn, "usage_counters", "adaptations_used")
         assert await _table_exists(conn, "cv_adaptations")
-        # PR1 partial UNIQUE index on completed adaptations.
-        assert await _index_exists(conn, "uq_cv_adapt_parent_jd_hash_completed")
+        # Migration 021 moved the partial UNIQUE from completed rows to
+        # in-flight rows: the anti-concurrency guarantee now lives on
+        # ``status='pending'`` so a repeat adaptation is not blocked by
+        # its own predecessor. The completed-scoped index is gone.
+        assert await _index_exists(conn, "uq_cv_adapt_parent_jd_hash_pending")
+        assert not await _index_exists(
+            conn, "uq_cv_adapt_parent_jd_hash_completed"
+        )
 
     # --- downgrade 017: drops adaptations_used ---
     await asyncio.to_thread(command.downgrade, alembic_cfg, "016_rls_cv_adaptations")

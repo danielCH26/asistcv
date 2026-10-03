@@ -25,10 +25,12 @@ Auth uses ``app.dependency_overrides[get_current_user]`` with a real
 """
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy import select
 
 from app.api.deps import CurrentUser, get_current_user, get_runner
 from app.core.config import get_settings
@@ -333,6 +335,127 @@ class TestCreateAdaptation:
         assert body["id"] == cached_id
         assert body["status"] == "completed"
         assert body["adapted_cv"]["full_name"] == "Owner"
+
+
+# === Concurrent POSTs for the same (cv, jd) ===
+
+
+class TestConcurrentDuplicatePost:
+    """Two POSTs for one (cv, jd) must converge on a single job.
+
+    ``uq_cv_adapt_parent_jd_hash_pending`` (migration 021) allows at most
+    one IN-FLIGHT row per (cv, jd), so the second insert of a concurrent
+    pair raises ``IntegrityError``. The endpoint resolves the existing
+    row and returns 202 with the SAME ``adaptation_id``: one LLM call,
+    both clients polling one job, nothing stuck in ``pending``.
+    """
+
+    @pytest.mark.asyncio
+    async def test_second_post_returns_the_inflight_job(
+        self, async_client, clean_db
+    ) -> None:
+        """A pending row already in flight → 202 with the SAME id.
+
+        Deterministic: seeds the exact row a losing racer would find, so
+        the conflict path is exercised without relying on timing.
+        """
+        user = await _create_user(clean_db)
+        await _create_subscription(clean_db, user.id, "job_seeker_monthly")
+        cv = await _create_cv(clean_db, user.id)
+        jd_text = "Senior Backend Engineer, Python and AWS."
+
+        inflight = CVAdaptation(
+            parent_cv_id=cv.id,
+            owner_user_id=user.id,
+            jd_text_hash=compute_jd_text_hash(jd_text),
+            jd_text=jd_text.encode("utf-8"),
+            adapted_cv_json={},
+            status="pending",
+        )
+        async with clean_db.session_factory() as session:
+            await set_rls_user(session, user.id, "job_seeker")
+            session.add(inflight)
+            await session.commit()
+            await session.refresh(inflight)
+
+        fake_runner = _FakeRunner()
+        async with (
+            _enable_adaptation_flag(),
+            _override_current_user(user),
+            _override_runner(fake_runner),
+        ):
+            response = await async_client.post(
+                "/v1/adaptations", json={"cv_id": cv.id, "jd_text": jd_text}
+            )
+
+        assert response.status_code == 202, response.text
+        body = response.json()
+        assert body["adaptation_id"] == inflight.id
+        assert body["status"] == "pending"
+        # No second runner: the work is already in flight.
+        assert fake_runner.calls == []
+
+        async with clean_db.session_factory() as session:
+            await set_rls_user(session, user.id, "job_seeker")
+            result = await session.execute(
+                select(CVAdaptation).where(
+                    CVAdaptation.parent_cv_id == cv.id,
+                    CVAdaptation.status == "pending",
+                )
+            )
+            rows = result.scalars().all()
+            assert [r.id for r in rows] == [inflight.id]
+
+    @pytest.mark.asyncio
+    async def test_concurrent_posts_leave_no_stuck_pending(
+        self, async_client, clean_db
+    ) -> None:
+        """Two POSTs fired together → 202s, one row, one runner call.
+
+        The cache only ever serves ``completed`` rows, so a pending row
+        never satisfies the second request: the loser always reaches the
+        INSERT and always loses. The assertion therefore holds whether or
+        not the two requests actually overlap.
+        """
+        user = await _create_user(clean_db)
+        await _create_subscription(clean_db, user.id, "job_seeker_monthly")
+        cv = await _create_cv(clean_db, user.id)
+        payload = {
+            "cv_id": cv.id,
+            "jd_text": "Platform engineer with Kubernetes and Go.",
+        }
+
+        fake_runner = _FakeRunner()
+        async with (
+            _enable_adaptation_flag(),
+            _override_current_user(user),
+            _override_runner(fake_runner),
+        ):
+            first, second = await asyncio.gather(
+                async_client.post("/v1/adaptations", json=payload),
+                async_client.post("/v1/adaptations", json=payload),
+            )
+
+        assert first.status_code == 202, first.text
+        assert second.status_code == 202, second.text
+        # Both clients are pointed at the same job.
+        assert first.json()["adaptation_id"] == second.json()["adaptation_id"]
+        # Exactly one runner was spawned, so exactly one LLM call.
+        assert len(fake_runner.calls) == 1
+
+        async with clean_db.session_factory() as session:
+            await set_rls_user(session, user.id, "job_seeker")
+            result = await session.execute(
+                select(CVAdaptation).where(
+                    CVAdaptation.parent_cv_id == cv.id
+                )
+            )
+            rows = result.scalars().all()
+            assert len(rows) == 1
+            assert rows[0].id == fake_runner.calls[0]
+            # The one row that exists is the in-flight job, not a
+            # duplicate left behind by the losing request.
+            assert rows[0].status == "pending"
 
 
 # === Kill-switch: ADAPTATION_ENABLED=false must gate the READ surface too ===
