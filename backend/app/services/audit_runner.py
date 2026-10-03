@@ -1,7 +1,9 @@
 """
 Audit runner service - orchestrates CV vs JD match for anonymous audits.
 
-This service reuses the existing match logic but:
+This service reuses the existing match provider call but:
+- Does NOT run the profile retrieval pipeline (no persisted Profile to
+  retrieve from; the extracted CV text is passed straight to the prompt)
 - Does NOT persist to analyses table
 - Does NOT persist to users_cvs table
 - Returns the result directly to the caller
@@ -14,10 +16,8 @@ from typing import Any
 import groq
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.llm.factory import get_llm_provider
-from app.services.retrieval import retrieve_profile_context
 
 logger = get_logger("app.services.audit_runner")
 
@@ -50,13 +50,31 @@ async def run_audit(
     pdf_bytes: bytes | None = None,
 ) -> AuditResult:
     """
-    Run an audit analysis on JD vs CV.
+    Run a JD-directed audit: score a job description against the uploaded CV.
+
+    The anonymous funnel has no persisted ``Profile``, so the CV text the
+    endpoint already extracted is the only real candidate context. It goes
+    into the match prompt directly, mirroring the recruiter-candidate path
+    (``api/v1/recruiter_candidates.py``), which matches a JD against an
+    uploaded CV the same way.
+
+    The retrieval pipeline is deliberately NOT used here.
+    ``retrieve_profile_context`` derives its output exclusively from
+    ``Profile.experience`` / ``skills`` / ``preferences``. A synthetic
+    ``Profile`` carrying the CV nowhere serializes to a handful of chars, so
+    retrieval always short-circuits to ``mode="complete"`` and returns the
+    empty profile's own JSON -- which used to overwrite the ``cv_text``
+    fallback and make the audit a match between the JD and nothing at all.
+    Retrieval still runs for the authenticated path (``/v1/match``), which
+    has a real stored Profile to select fragments from.
 
     Args:
-        session: Database session
+        session: Unused. This path performs no database work; kept in the
+            signature for parity with the other service entry points.
         jd_text: Job description text (must be >= 50 chars)
-        cv_text: Extracted CV text (optional, for text-based matching)
-        pdf_bytes: Raw PDF bytes (optional, for future PDF-based matching)
+        cv_text: Extracted CV text (text or parsed from the uploaded PDF)
+        pdf_bytes: Unused. The endpoint already persists the raw bytes on the
+            ``audit_uploads`` row; scoring only needs the extracted text.
 
     Returns:
         AuditResult with score, strengths, gaps, energy_level, reasoning
@@ -67,50 +85,13 @@ async def run_audit(
     if len(jd_text.strip()) < MIN_JD_LENGTH:
         raise ValueError(f"JD_TOO_SHORT: JD must be at least {MIN_JD_LENGTH} characters")
 
-    settings = get_settings()
     provider = get_llm_provider()
 
-    # Step 1: Generate JD embedding
-    try:
-        jd_embedding = await provider.generate_embedding(jd_text)
-    except Exception as exc:
-        logger.error("audit_jd_embedding_failed", error=str(exc)[:200])
-        raise RuntimeError(f"Embedding provider failed: {exc}") from exc
+    # The endpoint guarantees a non-empty CV (>= 50 chars) on this path; the
+    # placeholder only guards direct service callers.
+    profile_context_text = cv_text or "No CV text provided"
 
-    # Step 2: Build profile context from CV text (or mock profile)
-    # For anonymous audit, we use the CV text directly as a "profile"
-    # The retrieval service expects a Profile object, so we create a minimal mock
-
-    # Create a mock profile object for retrieval
-    from app.db.models import Profile
-
-    mock_profile = Profile(
-        id=0,
-        name="Anonymous",
-        headline="Anonymous CV",
-        experience={},
-        skills={},
-        preferences={},
-        embedding=list(jd_embedding.vector) if jd_embedding.vector else None,
-    )
-
-    # Step 3: Run retrieval (even for anonymous, to get best context)
-    try:
-        profile_context = await retrieve_profile_context(
-            profile=mock_profile,
-            jd_embedding=list(jd_embedding.vector),
-            settings=settings,
-            provider=provider,
-            regenerate_profile_embedding=False,
-        )
-    except Exception as exc:
-        logger.warning("audit_retrieval_failed", error=str(exc)[:200])
-        # Fall back to using CV text directly as context
-        profile_context_text = cv_text or "No CV text provided"
-    else:
-        profile_context_text = profile_context.text
-
-    # Step 4: Generate match analysis via LLM
+    # Generate match analysis via LLM
     try:
         analysis = await provider.generate_match(
             jd_text=jd_text,
@@ -118,10 +99,10 @@ async def run_audit(
                 "id": 0,
                 "name": "Anonymous",
                 "headline": "Anonymous CV",
-                "experience": {},
-                "skills": {},
-                "preferences": {},
-                "retrieval_mode": "complete",
+                "experience": "",
+                "skills": "",
+                "preferences": "",
+                "retrieval_mode": "full",
                 "retrieval_context": profile_context_text,
             },
         )
