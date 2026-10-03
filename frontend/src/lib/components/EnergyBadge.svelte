@@ -17,32 +17,32 @@
 	.energy {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.5rem;
-		padding: 0.35rem 0.75rem;
+		gap: var(--space-2);
+		padding: var(--space-1) var(--space-3);
 		border-radius: 999px;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		font-weight: 600;
 	}
 
 	.energy__dot {
-		width: 0.55rem;
-		height: 0.55rem;
+		width: var(--space-2);
+		height: var(--space-2);
 		border-radius: 50%;
 		background: currentColor;
 	}
 
 	.energy--low {
-		background: rgba(239, 68, 68, 0.12);
-		color: var(--score-low);
+		background: var(--color-danger-muted);
+		color: var(--score-low-ink);
 	}
 
 	.energy--medium {
-		background: rgba(234, 179, 8, 0.15);
-		color: var(--score-mid);
+		background: var(--color-warning-muted);
+		color: var(--score-mid-ink);
 	}
 
 	.energy--high {
-		background: rgba(16, 185, 129, 0.15);
-		color: var(--score-high);
+		background: var(--color-success-muted);
+		color: var(--score-high-ink);
 	}
 </style>

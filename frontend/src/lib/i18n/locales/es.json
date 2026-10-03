@@ -1,7 +1,7 @@
 {
 	"app": {
 		"title": "AsistCV",
-		"tagline": "Match JD ↔ Perfil",
+		"tagline": "Descripción del puesto ↔ Perfil",
 		"nav": {
 			"home": "Inicio",
 			"history": "Historial",
@@ -20,18 +20,18 @@
 		"tokenReused": "Tu sesión fue invalidada por seguridad. Iniciá sesión nuevamente."
 	},
 	"home": {
-		"heading": "Pegá una Job Description",
-		"intro": "Pegá el texto del JD (mínimo 50 caracteres) y obtené un match honesto contra tu perfil.",
+		"heading": "Pegá una descripción del puesto",
+		"intro": "Pegá el texto de la descripción del puesto (mínimo 50 caracteres) y obtené una coincidencia honesta contra tu perfil.",
 		"profileLabel": "Perfil activo",
 		"profileDefault": "Perfil por defecto (#1)"
 	},
 	"form": {
-		"placeholder": "Pegá acá el texto completo del JD…",
+		"placeholder": "Pegá acá el texto completo de la descripción del puesto…",
 		"submit": "Analizar",
 		"submitting": "Analizando…",
 		"charsHint": "{count} caracteres",
-		"validationShort": "El JD debe tener al menos 50 caracteres para enviarse.",
-		"validationEmpty": "Pegá el texto del JD antes de enviar."
+		"validationShort": "La descripción del puesto debe tener al menos 50 caracteres para enviarse.",
+		"validationEmpty": "Pegá el texto de la descripción del puesto antes de enviar."
 	},
 	"loading": {
 		"title": "Analizando…",
@@ -39,7 +39,7 @@
 		"detail": "Cuando Render hiberna el contenedor, el primer request despierta la instancia."
 	},
 	"error": {
-		"title": "No se pudo analizar el match",
+		"title": "No se pudo completar el análisis",
 		"retry": "Reintentar",
 		"401Hint": "Tu sesión expiró. Iniciá sesión nuevamente para continuar."
 	},
@@ -77,7 +77,7 @@
 		"loading": "Cargando detalle…",
 		"notFound": "Análisis no encontrado.",
 		"back": "Volver al historial",
-		"jobSnippet": "JD",
+		"jobSnippet": "Vacante",
 		"createdAt": "Analizado el {date}",
 		"invalidId": "ID de análisis inválido.",
 		"unexpectedError": "Error inesperado"
@@ -123,16 +123,16 @@
 		"title": "Mi perfil",
 		"heading": "Mi perfil",
 		"userInfo": "{name} · {email}",
-		"matchHeading": "Analizar contra un JD",
-		"matchWithCv": "Se usará el CV seleccionado: {name}",
-		"matchNoCv": "Subí o seleccioná un CV para dar contexto a tus análisis."
+		"matchHeading": "Analizar contra una descripción del puesto",
+		"matchWithCv": "Se usará la hoja de vida seleccionada: {name}",
+		"matchNoCv": "Subí o seleccioná una hoja de vida para dar contexto a tus análisis."
 	},
 	"onboarding": {
 		"heading": "Bienvenido a AsistCV",
 		"stepOf": "Paso {step} de 3",
-		"roleConfirm": "Tu cuenta es de tipo: {role}. Podés continuar para cargar tu CV.",
+		"roleConfirm": "Tu cuenta es de tipo: {role}. Podés continuar para cargar tu hoja de vida.",
 		"next": "Continuar",
-		"matchCta": "Último paso: pegá un JD abajo y ejecutá tu primer match.",
+		"matchCta": "Último paso: pegá una descripción del puesto abajo y ejecutá tu primer análisis.",
 		"skip": "Hacerlo más tarde"
 	},
 	"cv": {
@@ -143,8 +143,8 @@
 		"empty": "Aún no tenés CV cargados.",
 		"edit": "Editar",
 		"delete": "Eliminar",
-		"listError": "No se pudo cargar la lista de CV.",
-		"uploadError": "No se pudo subir el CV.",
+		"listError": "No se pudo cargar la lista de hojas de vida.",
+		"uploadError": "No se pudo subir la hoja de vida.",
 		"fileTooLarge": "El PDF supera el límite de 10 MB.",
 		"notPdf": "El archivo debe ser un PDF.",
 		"noText": "El PDF no contiene texto extraíble.",
@@ -167,7 +167,7 @@
 	"recruiter": {
 		"title": "Reclutador",
 		"heading": "Roster de candidatos",
-		"jdHeading": "Job Description de referencia",
+		"jdHeading": "Descripción del puesto de referencia",
 		"rankCta": "Rankear candidatos",
 		"ranking": "Rankeando…",
 		"rankedHeading": "Ranking del roster",
@@ -210,10 +210,10 @@
 		"currencyPrefix": "{currency}",
 		"subscribeCta": "Suscribirme",
 		"redirecting": "Redirigiendo…",
-		"usage": "Uso este mes: {used} de {limit} matches.",
-		"usageUnlimited": "Uso este mes: {used} matches (sin límite).",
-		"overage": "Consumo excedido: {overage} matches.",
-		"limitReached": "Alcanzaste el límite de matches de tu plan este mes.",
+		"usage": "Uso este mes: {used} de {limit} análisis.",
+		"usageUnlimited": "Uso este mes: {used} análisis (sin límite).",
+		"overage": "Consumo excedido: {overage} análisis.",
+		"limitReached": "Alcanzaste el límite de análisis de tu plan este mes.",
 		"upgradeCta": "Mejorar mi plan",
 		"noCustomer": "Todavía no tenés una suscripción activa para administrar.",
 		"noPortal": "Todavía no tenés una suscripción activa.",
@@ -225,10 +225,10 @@
 	},
 	"audit": {
 		"title": "Auditoría gratis",
-		"heading": "Auditoría anónima de tu CV",
-		"intro": "Pegá tu CV y recibí una auditoría de calidad al instante. Sin registro (hasta 3 por día).",
+		"heading": "Auditoría anónima de tu hoja de vida",
+		"intro": "Pegá tu hoja de vida y recibí una auditoría de calidad al instante. Sin registro (hasta 3 por día).",
 		"cvLabel": "Tu CV (texto)",
-		"cvPlaceholder": "Pegá acá el texto de tu CV…",
+		"cvPlaceholder": "Pegá acá el texto de tu hoja de vida…",
 		"modePdf": "Subir PDF",
 		"modeText": "Pegar texto",
 		"fileLabel": "Tu CV (PDF, máx. 10 MB)",
@@ -238,8 +238,8 @@
 		"pdfNoText": "El PDF no contiene texto extraíble (parece escaneado). Intente con otro archivo.",
 		"pdfParseFailed": "No se pudo procesar el PDF. Intente con otro archivo.",
 		"cvRequired": "Adjunte un PDF o pegue el texto de su CV.",
-		"cvTooShort": "El texto del CV debe tener al menos 50 caracteres.",
-		"jdLabel": "Job Description",
+		"cvTooShort": "El texto de la hoja de vida debe tener al menos 50 caracteres.",
+		"jdLabel": "Descripción del puesto",
 		"jdOptionalToggle": "¿Tenés una vacante en mente? Pegá la descripción para un análisis dirigido (opcional)",
 		"submit": "Auditar mi CV",
 		"submitting": "Auditando…",
@@ -252,16 +252,16 @@
 		"captureError": "No se pudo registrar el email. Reintentá.",
 		"expired": "Esta auditoría ya expiró. Podés hacer una nueva.",
 		"emailInvalid": "El email no es válido.",
-		"signupCta": "¿Querés guardar este análisis y gestionar tus CV?",
+		"signupCta": "¿Querés guardar este análisis y gestionar tus hojas de vida?",
 		"signupLink": "Creá tu cuenta para guardar"
 	},
 	"plan": {
-		"limitReached": "Alcanzaste el límite de matches de tu plan este mes. Mejorá tu plan para seguir analizando.",
+		"limitReached": "Alcanzaste el límite de análisis de tu plan este mes. Mejorá tu plan para seguir analizando.",
 		"upgradeCta": "Ver planes"
 	},
 	"adapt": {
 		"title": "Adaptá tu CV",
-		"subtitle": "Reescribimos las descripciones de tu experiencia para que matcheen mejor con la vacante, sin inventar nada.",
+		"subtitle": "Reescribimos las descripciones de tu experiencia para que encajen mejor con la vacante, sin inventar nada.",
 		"heading": "Adaptá tu CV",
 		"cta": {
 			"submit": "Adaptar mi CV",
@@ -280,13 +280,13 @@
 			"failed": "No se pudo adaptar el CV"
 		},
 		"errors": {
-			"LLM_ERROR": "El modelo tuvo un error al adaptar tu CV. Reintentá.",
-			"INVALID_HONESTY": "La adaptación propuesta no pasó el control de honestidad. Reintentá con un JD más corto o editá el CV.",
+			"LLM_ERROR": "El modelo tuvo un error al adaptar tu hoja de vida. Reintentá.",
+			"INVALID_HONESTY": "La adaptación propuesta no pasó el control de honestidad. Reintentá con una descripción del puesto más corta o editá la hoja de vida.",
 			"PLAN_LIMIT_REACHED": "Alcanzaste el límite de adaptaciones de tu plan este mes.",
-			"NO_CV_FOUND": "No se encontró el CV seleccionado.",
+			"NO_CV_FOUND": "No se encontró la hoja de vida seleccionada.",
 			"FEATURE_DISABLED": "La función de adaptación está deshabilitada temporalmente.",
 			"POLL_TIMEOUT": "La adaptación tardó demasiado. Reintentá en unos minutos.",
-			"GENERIC": "No se pudo adaptar el CV. Reintentá."
+			"GENERIC": "No se pudo adaptar la hoja de vida. Reintentá."
 		},
 		"result": {
 			"heading": "CV adaptado",

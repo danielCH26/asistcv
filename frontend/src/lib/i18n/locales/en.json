@@ -1,7 +1,7 @@
 {
 	"app": {
 		"title": "AsistCV",
-		"tagline": "JD ↔ Profile match",
+		"tagline": "Job description ↔ Profile match",
 		"nav": {
 			"home": "Home",
 			"history": "History",
@@ -21,17 +21,17 @@
 	},
 	"home": {
 		"heading": "Paste a Job Description",
-		"intro": "Paste the JD text (minimum 50 characters) and get an honest match against your profile.",
+		"intro": "Paste the job description text (minimum 50 characters) and get an honest match against your profile.",
 		"profileLabel": "Active profile",
 		"profileDefault": "Default profile (#1)"
 	},
 	"form": {
-		"placeholder": "Paste the full JD text here…",
+		"placeholder": "Paste the full job description text here…",
 		"submit": "Analyze",
 		"submitting": "Analyzing…",
 		"charsHint": "{count} characters",
-		"validationShort": "The JD must have at least 50 characters to be submitted.",
-		"validationEmpty": "Paste the JD text before submitting."
+		"validationShort": "The job description must have at least 50 characters to be submitted.",
+		"validationEmpty": "Paste the job description text before submitting."
 	},
 	"loading": {
 		"title": "Analyzing…",
@@ -77,7 +77,7 @@
 		"loading": "Loading detail…",
 		"notFound": "Analysis not found.",
 		"back": "Back to history",
-		"jobSnippet": "JD",
+		"jobSnippet": "Job description",
 		"createdAt": "Analyzed on {date}",
 		"invalidId": "Invalid analysis ID.",
 		"unexpectedError": "Unexpected error"
@@ -123,7 +123,7 @@
 		"title": "My profile",
 		"heading": "My profile",
 		"userInfo": "{name} · {email}",
-		"matchHeading": "Analyze against a JD",
+		"matchHeading": "Analyze against a job description",
 		"matchWithCv": "The selected CV will be used: {name}",
 		"matchNoCv": "Upload or select a CV to give context to your analyses."
 	},
@@ -132,7 +132,7 @@
 		"stepOf": "Step {step} of 3",
 		"roleConfirm": "Your account type is: {role}. You can continue to upload your CV.",
 		"next": "Continue",
-		"matchCta": "Last step: paste a JD below and run your first match.",
+		"matchCta": "Last step: paste a job description below and run your first match.",
 		"skip": "Do it later"
 	},
 	"cv": {
@@ -281,7 +281,7 @@
 		},
 		"errors": {
 			"LLM_ERROR": "The model had an error while adapting your CV. Please retry.",
-			"INVALID_HONESTY": "The proposed adaptation failed the honesty check. Retry with a shorter JD or edit your CV.",
+			"INVALID_HONESTY": "The proposed adaptation failed the honesty check. Retry with a shorter job description or edit your CV.",
 			"PLAN_LIMIT_REACHED": "You reached your plan's adaptation limit this month.",
 			"NO_CV_FOUND": "The selected CV was not found.",
 			"FEATURE_DISABLED": "The adaptation feature is temporarily disabled.",

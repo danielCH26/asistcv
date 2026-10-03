@@ -76,7 +76,7 @@
 	.login {
 		display: flex;
 		flex-direction: column;
-		gap: 1.25rem;
+		gap: var(--space-5);
 		max-width: 24rem;
 		margin: 0 auto;
 	}
@@ -94,25 +94,25 @@
 		background: var(--surface);
 		color: var(--text);
 		margin: 0;
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 	}
 
 	.login__form {
 		display: flex;
 		flex-direction: column;
-		gap: 0.9rem;
+		gap: var(--space-4);
 	}
 
 	.login__form label {
 		display: flex;
 		flex-direction: column;
-		gap: 0.3rem;
-		font-size: 0.9rem;
+		gap: var(--space-1);
+		font-size: var(--text-sm);
 		color: var(--text);
 	}
 
 	.login__form input {
-		padding: 0.55rem 0.75rem;
+		padding: var(--space-2) 0.75rem;
 		border: 1px solid var(--border);
 		border-radius: 6px;
 		background: var(--surface);
@@ -122,11 +122,11 @@
 	.login__error {
 		margin: 0;
 		color: var(--error);
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 	}
 
 	button[type='submit'] {
-		padding: 0.65rem 1rem;
+		padding: var(--space-3) 1rem;
 		border: none;
 		border-radius: 8px;
 		background: var(--accent);
@@ -142,7 +142,7 @@
 
 	.login__signup {
 		margin: 0;
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 		color: var(--text-muted);
 	}
 </style>

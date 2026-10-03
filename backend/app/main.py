@@ -174,9 +174,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         dependencies=[Depends(optional_auth)],
     )
     # Adaptation endpoints require auth at the endpoint level
-    # (``get_current_user``); the router itself has no router-level
-    # gate so the require_adaptation_enabled dependency can still raise
-    # 503 in front of any other 401/403.
+    # (``get_current_user``); the kill-switch (``require_adaptation_enabled``)
+    # is declared on the adaptations router itself, not here, so it stays a
+    # single source of truth and still answers 503 ahead of any 401/403.
     app.include_router(
         adaptations.router,
         prefix=settings.api_prefix,
@@ -238,6 +238,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(
         internal_adaptations.router,
+        prefix="/internal",
+    )
+
+    # Internal cleanup endpoint for the refresh-token retention sweeper.
+    # Same shape as the adaptation sweeper: no router-level auth, a
+    # per-endpoint BACKEND_API_KEY check inside the handler, mounted at
+    # /internal (no /v1 prefix) so the cron keeps calling
+    # POST /internal/auth/refresh-tokens/cleanup.
+    from app.api.v1.internal import refresh_tokens as internal_refresh_tokens
+
+    app.include_router(
+        internal_refresh_tokens.router,
         prefix="/internal",
     )
 

@@ -124,7 +124,7 @@ async def _insert_pending_row(
             parent_cv_id=cv_id,
             owner_user_id=owner_user_id,
             jd_text_hash=jd_hash,
-            jd_text_encrypted=jd_text.encode("utf-8"),
+            jd_text=jd_text.encode("utf-8"),
             adapted_cv_json={},
             status=status,
         )
@@ -472,7 +472,7 @@ class TestAdaptationRunnerIdempotency:
                 parent_cv_id=cv.id,
                 owner_user_id=user.id,
                 jd_text_hash=compute_jd_text_hash("ignored"),
-                jd_text_encrypted=b"ignored",
+                jd_text=b"ignored",
                 adapted_cv_json={"full_name": "AlreadyDone"},
                 status="completed",
                 completed_at=datetime.now(UTC),

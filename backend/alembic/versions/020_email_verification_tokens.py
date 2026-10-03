@@ -1,7 +1,7 @@
 """Add email_verification_tokens table for the C3 verify-email flow (issue #46).
 
-Revision ID: 019_email_verification_tokens
-Revises: 018_audit_claim_policy
+Revision ID: 020_email_verification_tokens
+Revises: 019_rename_adaptations_jd_text
 Create Date: 2026-09-30
 
 Why
@@ -34,8 +34,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "019_email_verification_tokens"
-down_revision: str | Sequence[str] | None = "018_audit_claim_policy"
+revision: str = "020_email_verification_tokens"
+down_revision: str | Sequence[str] | None = "019_rename_adaptations_jd_text"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

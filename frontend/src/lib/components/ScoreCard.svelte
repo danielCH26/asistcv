@@ -28,10 +28,10 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		padding: 1rem 1.75rem;
-		border-radius: 12px;
-		color: #fff;
-		font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+		padding: var(--space-4) var(--space-6);
+		border-radius: var(--radius-panel);
+		color: var(--color-on-score-fill);
+		font-family: var(--font-sans);
 		min-width: 140px;
 	}
 
@@ -48,21 +48,21 @@
 	}
 
 	.score-card__label {
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
+		letter-spacing: var(--tracking-wide);
 		opacity: 0.85;
 	}
 
 	.score-card__value {
-		font-size: 3.5rem;
+		font-size: var(--text-6xl);
 		font-weight: 700;
-		line-height: 1;
-		margin: 0.25rem 0;
+		line-height: var(--leading-tight);
+		margin: var(--space-1) 0;
 	}
 
 	.score-card__suffix {
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		opacity: 0.85;
 	}
 </style>

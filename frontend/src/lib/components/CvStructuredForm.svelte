@@ -106,47 +106,66 @@
 	.cv-form {
 		display: flex;
 		flex-direction: column;
-		gap: 0.9rem;
+		gap: var(--space-4);
 	}
 
 	.cv-form label {
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
-		font-size: 0.9rem;
-		color: var(--text);
+		gap: var(--space-1);
+		font-size: var(--text-sm);
+		color: var(--color-ink);
 	}
 
 	.cv-form small {
-		color: var(--text-muted);
+		color: var(--color-ink-muted);
 	}
 
 	.cv-form input,
 	.cv-form textarea {
-		padding: 0.5rem 0.7rem;
-		border: 1px solid var(--border);
+		padding: var(--space-2) var(--space-3);
+		border: 1px solid var(--color-line);
 		border-radius: 6px;
-		background: var(--surface);
-		color: var(--text-strong);
+		background: var(--clay-fill);
+		color: var(--color-ink-strong);
 		font-family: inherit;
 		resize: vertical;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.cv-form input:focus-visible,
+	.cv-form textarea:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
 	}
 
 	.cv-form__row {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 0.9rem;
+		gap: var(--space-4);
 	}
 
 	button[type='submit'] {
 		align-self: flex-start;
-		padding: 0.55rem 1.1rem;
+		padding: var(--space-2) var(--space-5);
 		border: none;
 		border-radius: 8px;
-		background: var(--accent);
-		color: var(--accent-contrast);
+		background: var(--color-action);
+		color: var(--color-on-action);
 		font-weight: 600;
 		cursor: pointer;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	button[type='submit']:hover:not(:disabled) {
+		box-shadow: var(--clay-lifted);
+	}
+
+	button[type='submit']:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
 	}
 
 	button[type='submit']:disabled {

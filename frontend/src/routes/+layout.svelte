@@ -86,17 +86,17 @@
 	.app-shell__header {
 		display: flex;
 		align-items: center;
-		gap: 1.5rem;
-		padding: 1rem 1.5rem;
-		background: var(--surface);
-		border-bottom: 1px solid var(--border);
+		gap: var(--space-5);
+		padding: var(--space-4) var(--space-5);
+		background: var(--color-surface);
+		border-bottom: var(--border-width) solid var(--color-line);
 	}
 
 	.app-shell__brand {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.65rem;
-		color: var(--text-strong);
+		gap: var(--space-3);
+		color: var(--color-ink-strong);
 	}
 
 	.app-shell__brand:hover {
@@ -107,92 +107,157 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 2rem;
-		height: 2rem;
-		background: var(--text-strong);
-		color: var(--surface);
-		border-radius: 6px;
+		width: var(--space-6);
+		height: var(--space-6);
+		background: var(--color-ink-strong);
+		color: var(--color-surface);
+		border-radius: var(--radius-control);
 		font-weight: 700;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 	}
 
 	.app-shell__title {
 		display: flex;
 		flex-direction: column;
-		line-height: 1.1;
+		line-height: var(--leading-tight);
 	}
 
 	.app-shell__title strong {
-		font-size: 1rem;
+		font-size: var(--text-md);
 	}
 
 	.app-shell__title small {
-		font-size: 0.75rem;
-		color: var(--text-muted);
+		font-size: var(--text-xs);
+		color: var(--color-ink-muted);
 	}
 
 	.app-shell__nav {
 		display: flex;
-		gap: 0.75rem;
+		/* The nav is the one part of the shell whose width is CONTENT-driven:
+		   it grows with the number of links (3 logged out, 6 for a recruiter)
+		   and with the label length of the active locale. Below 640px it is
+		   given `width: 100%` on its own row, and 6 links do not fit a 327px
+		   row -- they overflowed the page sideways. Letting the links wrap
+		   inside the nav is what keeps that row from becoming a scrollbar.
+		   The links keep their own padding and gap; only their line breaking
+		   changes. */
+		flex-wrap: wrap;
+		gap: var(--space-3);
 		margin-left: auto;
-		margin-right: 1rem;
+		margin-right: var(--space-4);
 	}
 
+	/* A nav link is a destination, not a control the person operates, so it
+	   stays flat. The accent fill on .is-active is the state, not the material. */
 	.app-shell__link {
-		padding: 0.4rem 0.75rem;
-		border-radius: 6px;
-		color: var(--text);
-		font-size: 0.9rem;
+		padding: var(--space-2) 0.75rem;
+		border-radius: var(--radius-control);
+		color: var(--color-ink);
+		font-size: var(--text-sm);
 	}
 
 	.app-shell__link:hover {
-		background: var(--surface-alt);
+		background: var(--color-surface-alt);
 		text-decoration: none;
 	}
 
 	.app-shell__link.is-active {
-		background: var(--accent);
-		color: var(--accent-contrast);
+		background: var(--color-action);
+		color: var(--color-on-action);
 	}
 
 	.app-shell__actions {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--space-2);
 	}
 
 	.app-shell__signup {
-		background: var(--accent);
-		color: var(--accent-contrast);
+		background: var(--color-action);
+		color: var(--color-on-action);
 		font-weight: 600;
 	}
 
+	/* A real <button>: control, so clay. */
 	.app-shell__session {
-		padding: 0.4rem 0.75rem;
-		border: 1px solid var(--border);
-		border-radius: 6px;
-		background: transparent;
-		color: var(--text);
-		font-size: 0.9rem;
+		padding: var(--space-2) 0.75rem;
+		border: var(--border-width) solid var(--color-line);
+		border-radius: var(--radius-control);
+		background: var(--clay-fill);
+		color: var(--color-ink);
+		font-size: var(--text-sm);
 		cursor: pointer;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.app-shell__session:hover {
+		box-shadow: var(--clay-lifted);
+	}
+
+	.app-shell__session:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
 	}
 
 	.app-shell__main {
 		flex: 1;
 		width: 100%;
-		max-width: 880px;
+		max-width: var(--layout-content-max);
 		margin: 0 auto;
-		padding: 2rem 1.5rem;
+		padding: var(--space-6) var(--space-5);
 	}
 
 	.app-shell__footer {
 		text-align: center;
-		padding: 1rem;
-		color: var(--text-muted);
-		border-top: 1px solid var(--border);
+		padding: var(--space-4);
+		color: var(--color-ink-muted);
+		border-top: var(--border-width) solid var(--color-line);
 	}
 
-	@media (max-width: 640px) {
+	/* -------------------------------------------------------------------------
+	   Header wrap threshold.
+
+	   880px stays a LITERAL on purpose: var() in a media condition silently
+	   drops the whole block. See the note on --breakpoint-sm in app.css.
+
+	   This was 640px, which was measured to be the WORST possible place for it.
+	   The header is a single `nowrap` flex row above the threshold, so the layout
+	   gets worse the instant it stops wrapping -- and then stays broken.
+
+	   MEASURED (Chromium, 900px tall viewport, recruiter session = 6 nav links,
+	   the widest nav the app can produce; overflow = documentElement.scrollWidth
+	   - clientWidth, i.e. real sideways page scroll):
+
+	     viewport   375    640    700    768    800    819    820    860    880
+	     EN (px)     0     194    135     66     35     15      0      0      0
+	     ES (px)     0     230    171    102     71     51     51      0      0
+
+	   Two separate defects, and 640px sat exactly on the seam between them:
+
+	   1. The one-row header needs 820px in English and 860px in Spanish
+	   ("Auditoría gratis" / "Mi perfil" are wider than their English
+	   counterparts). Above 640px nothing wrapped, so from 641px to 859px the
+	   page scrolled sideways -- up to 230px of it. The nav labels did not stay
+	   on one line either: they wrapped inside the nav, taking the header from
+	   67px to 89px tall.
+
+	   2. Below 640px the nav was given `width: 100%` on its own row, but 6
+	   links need 444px and the row is only 327px at a 375px viewport, so it
+	   overflowed again. `flex-wrap: wrap` on .app-shell__nav fixes that half.
+
+	   880px, not 820px or 860px: the requirement above is CONTENT-dependent, so
+	   pinning the threshold to the exact measured pixel would regress the moment
+	   a nav item is added or 	   a locale ships with longer labels -- and the whole
+	   scale is rem-based, so it also moves with the reader's browser font
+	   size. 880px is --layout-content-max: below the measure, the viewport is
+	   narrower than the content column and the header stacks; above it there is
+	   guaranteed room. It clears the measured worst case (860px ES) with margin.
+
+	   640px is NOT removed. It stays the breakpoint for the two-column grids
+	   that collapse to one column; only the shell's header needed the wider one.
+	   -------------------------------------------------------------------------- */
+	@media (max-width: 880px) {
 		.app-shell__header {
 			flex-wrap: wrap;
 		}

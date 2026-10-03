@@ -13,6 +13,16 @@ All endpoints require JWT auth (job_seeker or recruiter). Service
 context (API key) is rejected for the user-facing endpoints; the
 internal sweeper endpoint has its own auth.
 
+Kill-switch
+-----------
+``require_adaptation_enabled`` is declared ONCE, on the router, so
+``ADAPTATION_ENABLED=false`` makes every route in this module answer
+503 ``FEATURE_DISABLED`` — the POST and both GETs alike. Reads of
+already-generated adaptations stop with the writes; a database session
+is never even opened. FastAPI resolves router-level dependencies
+before the route's own ``Depends()`` parameters, so the switch answers
+ahead of 401/403.
+
 Status machine
 --------------
 pending → completed  (success)
@@ -67,7 +77,17 @@ from app.services.tier_limits import check_limit
 
 logger = get_logger("app.api.adaptations")
 
-router = APIRouter(prefix="/adaptations", tags=["adaptations"])
+router = APIRouter(
+    prefix="/adaptations",
+    tags=["adaptations"],
+    # Single source of truth for the kill-switch. Declared here (not per
+    # route) so a new endpoint added under this prefix is gated by
+    # default instead of by whoever remembers to remember. The sweeper
+    # lives on a separate router (app.api.v1.internal.adaptations) and is
+    # therefore unaffected — it must keep purging rows while the feature
+    # is off.
+    dependencies=[Depends(require_adaptation_enabled)],
+)
 
 
 # === Request / response schemas ===
@@ -177,10 +197,7 @@ async def _resolve_cv_for_user(
 # === Endpoints
 
 
-@router.post(
-    "",
-    dependencies=[Depends(require_adaptation_enabled)],
-)
+@router.post("")
 async def create_adaptation(
     payload: AdaptationCreateRequest,
     response: Response,
@@ -197,7 +214,7 @@ async def create_adaptation(
         3. Cache check — 200 with cached payload on hit (no row
            created, no LLM call).
         4. Row creation — insert a pending ``CVAdaptation`` row with
-           the JD text stored as UTF-8 bytes in ``jd_text_encrypted``.
+           the JD text stored as raw UTF-8 bytes in ``jd_text``.
         5. Spawn the runner via ``asyncio.create_task`` and return 202.
 
     Args:
@@ -213,9 +230,11 @@ async def create_adaptation(
     """
     settings = get_settings()
     if not settings.adaptation_enabled:
-        # Belt-and-suspenders: require_adaptation_enabled already 503'd,
-        # but the boolean re-check is cheap and protects tests that
-        # override the dependency.
+        # Belt-and-suspenders. The router-level ``require_adaptation_enabled``
+        # already 503'd before auth or ``get_db`` ran, so on the request path
+        # this is unreachable; it is kept because it is the only guard left
+        # when a test (or a future refactor) overrides the dependency itself,
+        # and reading one bool costs nothing next to the write it protects.
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="FEATURE_DISABLED",
@@ -262,13 +281,16 @@ async def create_adaptation(
         response.status_code = status.HTTP_200_OK
         return _row_to_detail(cached)
 
-    # Create the pending row. JD text stored as UTF-8 bytes in
-    # jd_text_encrypted — encryption wiring is a follow-up.
+    # Create the pending row. The JD text is stored as raw UTF-8 bytes
+    # in ``jd_text`` — plaintext, consistent with the rest of the schema
+    # (``users_cvs.raw_text``, ``audit_uploads.cv_text``). The column was
+    # renamed from ``jd_text_encrypted`` in migration 019 because the old
+    # name claimed a protection that was never implemented.
     row = CVAdaptation(
         parent_cv_id=cv.id,
         owner_user_id=current_user.id,
         jd_text_hash=jd_hash,
-        jd_text_encrypted=payload.jd_text.encode("utf-8"),
+        jd_text=payload.jd_text.encode("utf-8"),
         adapted_cv_json={},
         status="pending",
     )

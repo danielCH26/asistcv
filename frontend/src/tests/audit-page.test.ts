@@ -28,6 +28,12 @@ beforeEach(() => {
 	auditStore.reset();
 });
 
+// Localizado por placeholder, no por el label. El placeholder distingue este
+// campo del textarea del CV ("texto de tu hoja de vida") y no es la cadena que
+// se retoca al cambiar la redacción. Buscarlo por label ataba el test al texto
+// en ingles de una etiqueta que la app nunca mostro en espanol.
+const JD_PLACEHOLDER = /descripci(o|ó)n (completa )?del puesto|descripci(o|ó)n completa de la vacante|full job description|job description/i;
+
 async function expandJd() {
 	const toggle = screen.getByRole('button', { name: /vacante en mente|job opening/i });
 	await fireEvent.click(toggle);
@@ -35,7 +41,7 @@ async function expandJd() {
 
 async function fillJd() {
 	await expandJd();
-	const jd = screen.getByLabelText(/job description/i);
+	const jd = screen.getByPlaceholderText(JD_PLACEHOLDER);
 	await fireEvent.input(jd, { target: { value: 'x'.repeat(60) } });
 }
 
@@ -87,10 +93,10 @@ describe('audit page — JD opcional', () => {
 	it('la sección de JD está colapsada por defecto', async () => {
 		render(AuditPage);
 
-		expect(screen.queryByLabelText(/job description/i)).toBeNull();
+		expect(screen.queryByPlaceholderText(JD_PLACEHOLDER)).toBeNull();
 
 		await expandJd();
-		expect(screen.getByLabelText(/job description/i)).toBeTruthy();
+		expect(screen.getByPlaceholderText(JD_PLACEHOLDER)).toBeTruthy();
 	});
 
 	it('sin JD el submit es exitoso y no envía jd_text', async () => {

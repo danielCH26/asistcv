@@ -42,9 +42,10 @@ El backend está **live** en `https://asistcv-backend.onrender.com`. Se verific�
 
 **Acción inmediata recomendada, por orden:**
 
-1. ~~**Rotar `JWT_SECRET` en Render inmediatamente**~~ — **HECHO (2026-09-29).** Verificado: un token firmado con `dev-secret-change-in-production` ahora devuelve `401 Invalid credentials`. Queda pendiente el fix estructural (guarda de fail-closed) en el issue #44, para que un deploy futuro no repita el problema.
-2. Corregir S3 (`claim_audit` sin auth) — **PR #52 abierto, CI en verde, migración 018 ya aplicada.** Sigue abierto hasta el merge.
-3. Tratar S2 como hardening de diseño, no como urgencia operativa.
+1. ~~**Rotar `JWT_SECRET` en Render inmediatamente**~~ — **HECHO (2026-09-29).** Verificado: un token firmado con `dev-secret-change-in-production` ahora devuelve `401 Invalid credentials`.
+2. ~~Guard fail-closed~~ — **HECHO (PR #53, issue #44).** `Settings` se niega a arrancar si el secreto resuelto es el default, o un string vacío/whitespace. Sin excepción de desarrollo: un `APP_ENV` sin setear se leería como `"development"` y desactivaría el guard en silencio.
+3. ~~S3 (`claim_audit` sin auth)~~ — **HECHO (PR #52).** Mergeado, migración 018 aplicada, deploy verificado en producción: el claim sin credencial devuelve `401` y el funnel duplicado en la raíz devuelve `404`.
+4. Tratar S2 como hardening de diseño, no como urgencia operativa.
 
 ### Nota: `JWT_SECRET` ≠ `BACKEND_API_KEY`
 
@@ -142,9 +143,8 @@ Cuatro fases, ordenadas por *blast radius decreciente y dependencia ascendente*.
 
 | ID | Título | Severidad | Fase | Estado en producción |
 |---|---|---|---|---|
-| S1 | `jwt_secret` con default público y sin guarda | P0 | 0 | ✅ **REMEDIADO** — rotado 2026-09-29, verificado 401. Falta el guard de fail-closed (#44) |
-| S2 | Modo abierto devuelve un service super-principal sin verificar credencial | P0 | 0 | 🟡 Mitigado por config (`BACKEND_API_KEY` seteada); sigue siendo riesgo de diseño |
-| S3 | IDOR en claim de audit (escribe cross-user, sin auth) | P0 | 0 | 🔴 Sigue explotable (sin auth, independiente de la key) |
+| S1 | `jwt_secret` con default público y sin guarda | P0 | 0 | ✅ **CERRADO** — rotado 2026-09-29 (verificado 401) + guard fail-closed merged (#44/#53) |
+| S2 | Modo abierto devuelve un service super-principal sin verificar credencial | P0 | 0 | 🟡 Mitigado por config (`BACKEND_API_KEY` seteada); sigue siendo riesgo de diseño || S3 | IDOR en claim de audit (escribe cross-user, sin auth) | P0 | 0 | 🔴 Sigue explotable (sin auth, independiente de la key) |
 | S4 | Router de audit montado dos veces + kill-switch incompleto | P0 | 0 | 🟠 Sigue presente (cada ruta en dos paths) |
 | F1 | Billing checkout/portal 500: lee atributos que `CurrentUser` no tiene | P0 | 1 | Sin verificar en prod |
 | F2 | El audit "CV vs JD" nunca manda el CV al LLM | P0 | 1 | Sin verificar en prod |

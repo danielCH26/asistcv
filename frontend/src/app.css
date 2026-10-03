@@ -1,37 +1,484 @@
+/* =============================================================================
+   AsistCV — design token foundation
+   -----------------------------------------------------------------------------
+   Direction: "Swiss structure + clay surfaces".
+   Swiss  -> strict grid, deliberate type scale, generous whitespace.
+   Clay   -> soft tactile elevation, reserved for interactive elements
+             (buttons, cards, inputs) so they read as "this can be touched".
+
+   This file is TOKENS AND PRIMITIVES ONLY. It introduces no new global element
+   rules and changes no component markup. The pre-existing html/body/a/button
+   rules at the bottom are unchanged except for two declarations that now point
+   at tokens whose resolved values are byte-identical to what they were.
+
+   Layering: each layer answers one question.
+     0. mode-invariant primitives   -- colours that must NOT change per mode
+     1. clay elevation              -- how a surface sits above its parent
+     2. swiss structure             -- spacing, type, font
+     3. sober palette               -- semantic colour, one place to change it
+     4. motion                      -- duration, easing, reduced-motion
+   ========================================================================== */
+
 :root {
 	color-scheme: light dark;
 
-	--bg: #f8fafc;
-	--surface: #ffffff;
-	--surface-alt: #f1f5f9;
-	--text: #1f2937;
-	--text-strong: #0f172a;
-	--text-muted: #64748b;
-	--border: #e2e8f0;
-	--accent: #0ea5e9;
-	--accent-contrast: #ffffff;
-	--warn: #d97706;
-	--error: #b91c1c;
-	--error-bg: #fef2f2;
+	/* =========================================================================
+	   LAYER 0 — MODE-INVARIANT PRIMITIVES
+	   -------------------------------------------------------------------------
+	   These literals are deliberately NOT re-declared in the dark block, so
+	   they resolve to the exact same value in both colour schemes.
+
+	   DO NOT "simplify" these into var() chains.
+
+	   A var() reference is not indirection from a mode override: var() resolves
+	   against the CASCADED value of the referenced token, and the cascade is
+	   what the dark @media block changes. So the moment one of these reads
+	   var(--color-danger) -- and --color-danger IS overridden in dark -- the dark
+	   value silently wins and drags this token with it. There is no warning and
+	   no visual bug to trace back here; the token just quietly becomes mode
+	   dependent again.
+
+	   --score-low/mid/high are FILLS. They sit behind a hardcoded white label
+	   (ScoreCard.svelte:33, HistoryList.svelte:91), so they are tuned so that
+	   WHITE passes 4.5:1 on them. That target is the same in both schemes, so
+	   the fills must not move per mode. Their text counterparts live in
+	   --score-*-ink below and are the tokens that DO change per mode.
+	   ========================================================================= */
 	--score-low: #dc2626;
-	--score-mid: #eab308;
-	--score-high: #10b981;
+	--score-mid: #92400e;
+	--score-high: #047857;
+
+	/* -------------------------------------------------------------------------
+	   --color-on-score-fill — the LABEL ink for the three fills above.
+	   Used by ScoreCard.svelte and HistoryList.svelte, which sit a white number
+	   and a white label directly on the fill.
+
+	   MEASURED (WCAG 2.1 relative luminance), #ffffff against each fill:
+	     --score-low  #dc2626   4.83:1
+	     --score-mid  #92400e   7.09:1
+	     --score-high #047857   5.48:1
+	   All three clear AA for normal text (4.5:1). Those are the light-mode
+	   numbers AND the dark-mode numbers, and the fact that they are the same is
+	   the entire justification for this token existing: the fills are Layer 0,
+	   so they do not move, so a mode-invariant ink holds in both schemes.
+
+	   DO NOT re-point this at --color-on-action / --color-on-success /
+	   --color-on-danger. Those are mode-scoped and resolve to DARK ink in the
+	   dark block. Measured on the same three fills, dark ink #0f172a lands at
+	   3.70:1 / 2.52:1 / 3.26:1 — two of the three below AA for normal text.
+	   The failure is silent: the token exists, it resolves, nothing errors.
+
+	   Equally, do not treat this as a general "light ink on a dark thing". White
+	   is 1.00:1 against --color-surface and 1.05:1 against --color-canvas. It is
+	   legible HERE because these three fills stay deep in both modes, and only
+	   here. That is why it is named for the score fills and not --color-on-*.
+	   ------------------------------------------------------------------------- */
+	--color-on-score-fill: #ffffff;
+
+	/* =========================================================================
+	   LAYER 3 — SOBER PALETTE (light)
+   -------------------------------------------------------------------------
+	   Semantic names only. No numeric ramp: this product needs to read as
+	   restrained, and a 50-step scale invites drift. Every colour below is
+	   written exactly once; the legacy names further down are pure aliases.
+
+	   Every text-on-surface pair below was measured at >= 4.5:1 (light and
+	   dark) when this layer was written. There is no automated check for it
+	   yet, so re-measure after any edit that changes a colour value, a pair,
+	   or a mode. A previous revision of this comment cited a
+	   `contrast-audit.mjs` that was never committed; the script is still
+	   missing and the claim was doing more harm than the omission.
+	   ========================================================================= */
+	/* canvas + surfaces */
+	--color-canvas: #f8fafc;
+	--color-surface: #ffffff;
+	--color-surface-alt: #f1f5f9;
+	--color-line: #e2e8f0;
+	/* Opt-in 3:1 boundary for WCAG 1.4.11 (form fields, focusable controls).
+	   --color-line is deliberately left untouched: it is a hairline that
+	   currently measures 1.23:1 against --surface, and darkening it would
+	   restyle every card and input on every screen. Adopt this one where the
+	   boundary is the only cue that a control exists. Measured 4.55:1 on
+	   --color-canvas and 4.76:1 on --color-surface. */
+	--color-line-strong: #64748b;
+
+	/* ink */
+	--color-ink: #1f2937;
+	--color-ink-strong: #0f172a;
+	--color-ink-muted: #475569;
+
+	/* action / primary */
+	--color-action: #0369a1;
+	--color-on-action: #ffffff;
+	--color-action-muted: #e0f2fe;
+
+	/* success */
+	--color-success: #047857;
+	--color-on-success: #ffffff;
+	--color-success-muted: #ecfdf5;
+
+	/* warning — used as TEXT at JdForm.svelte:121 and StrengthsGapsList.svelte:62,
+	   so it is held to 4.5:1, not the 3:1 a decorative tint would need */
+	--color-warning: #92400e;
+	--color-on-warning: #ffffff;
+	--color-warning-muted: #fffbeb;
+
+	/* danger */
+	--color-danger: #b91c1c;
+	--color-on-danger: #ffffff;
+	--color-danger-muted: #fef2f2;
+
+	/* info */
+	--color-info: #0369a1;
+	--color-on-info: #ffffff;
+	--color-info-muted: #e0f2fe;
+
+	/* -------------------------------------------------------------------------
+	   SCORE INKS — the text half of the score pair.
+
+	   --score-low/mid/high are fills (Layer 0) and must stay put across modes.
+	   These are their text counterparts, used for LABELS: EnergyBadge.svelte:36/41/46,
+	   StrengthsGapsList.svelte:58, profile/+page.svelte:768.
+
+	   One token cannot be both a fill tuned for white-on-it and a text tuned for
+	   contrast-against-it, which is why the same hue failed in both directions.
+	   Keep the pair: fill on background, -ink on text. -ink is mode-scoped, so it
+	   IS legitimate for it to chain -- it is the fill that must never chain.
+	   ------------------------------------------------------------------------- */
+	--score-low-ink: #b91c1c;
+	--score-mid-ink: #92400e;
+	--score-high-ink: #065f46;
+
+	/* =========================================================================
+	   LEGACY ALIASES — the names the components already use.
+
+	   Kept so that no component has to change today, and re-pointed through
+	   var() so a colour is still changed in exactly one place.
+	   ========================================================================= */
+	--bg: var(--color-canvas);
+	--surface: var(--color-surface);
+	--surface-alt: var(--color-surface-alt);
+	--text: var(--color-ink);
+	--text-strong: var(--color-ink-strong);
+	--text-muted: var(--color-ink-muted);
+	--border: var(--color-line);
+	--accent: var(--color-action);
+	--accent-contrast: var(--color-on-action);
+	--warn: var(--color-warning);
+	--error: var(--color-danger);
+	--error-bg: var(--color-danger-muted);
+
+	/* =========================================================================
+	   LAYER 1 — CLAY ELEVATION (light)
+
+	   Three depths, named by what they mean rather than by number, so
+	   "raised" reads as "more elevated" than "flat". Each depth is three parts:
+	   a light shadow, a dark shadow and an inner highlight, plus a composed
+	   value for direct use.
+
+	   Light surfaces are LIT, so the light shadow does real work: it is the
+	   bounce that makes the form read as convex. Offsets stay small and blurs
+	   stay wide on purpose. Hard offsets and tight blurs are what turn this into
+	   a 2000s Web 2.0 button; the softness IS the material.
+	   ========================================================================= */
+	--clay-fill: #eef1f6;
+
+	--clay-raised-shadow-light: -3px -3px 7px rgba(255, 255, 255, 0.9);
+	--clay-raised-shadow-dark: 3px 3px 7px rgba(163, 177, 198, 0.38);
+	--clay-raised-rim: inset 1.5px 1.5px 2px rgba(255, 255, 255, 0.75);
+	--clay-raised: var(--clay-raised-shadow-dark) var(--clay-raised-shadow-light) var(--clay-raised-rim);
+
+	--clay-lifted-shadow-light: -5px -5px 11px rgba(255, 255, 255, 0.92);
+	--clay-lifted-shadow-dark: 5px 5px 11px rgba(163, 177, 198, 0.44);
+	--clay-lifted-rim: inset 1.5px 1.5px 2.5px rgba(255, 255, 255, 0.8);
+	--clay-lifted: var(--clay-lifted-shadow-dark) var(--clay-lifted-shadow-light) var(--clay-lifted-rim);
+
+	--clay-floating-shadow-light: -8px -8px 18px rgba(255, 255, 255, 0.95);
+	--clay-floating-shadow-dark: 8px 8px 18px rgba(148, 163, 184, 0.48);
+	--clay-floating-rim: inset 2px 2px 3px rgba(255, 255, 255, 0.85);
+	--clay-floating: var(--clay-floating-shadow-dark) var(--clay-floating-shadow-light) var(--clay-floating-rim);
+
+	--clay-focus-ring: 0 0 0 3px rgba(3, 105, 161, 0.45);
+
+	/* =========================================================================
+	   LAYER 2 — SWISS STRUCTURE
+
+	   Spacing is a 4px grid that doubles then widens, so every gap is a
+	   multiple of the same base step. Type tightens as it grows: that pairing
+	   of a falling line-height with a negative tracking is the single strongest
+	   Swiss signal, and it is what stops large headings reading as generic web.
+	   ========================================================================= */
+	--space-0: 0;
+	--space-1: 0.25rem;
+	--space-2: 0.5rem;
+	--space-3: 0.75rem;
+	--space-4: 1rem;
+	--space-5: 1.5rem;
+	--space-6: 2rem;
+	--space-7: 3rem;
+	--space-8: 4rem;
+	--space-9: 6rem;
+	--space-10: 8rem;
+
+	/* -------------------------------------------------------------------------
+	   RADIUS — named by what the shape IS, not by its number, so a form reads
+	   as "more contained" than its neighbour without anyone having to remember
+	   which pixel value that was.
+
+	   The four pixel steps are a genuine monotone scale (6 / 8 / 10 / 12), and
+	   the last two are not points on it: a pill is a BADGE, not a large card,
+	   and a circle is a DOT, not a rounded card. Keeping them in the same block
+	   is a readability choice, not a scale claim.
+
+	   Values are byte-identical to the 78 literals they replace across src
+	   (8px x35, 6px x17, 12px x12, 10px x6, 999px x5, 50% x3), so adopting
+	   these is a pure rename with zero visual change.
+
+	   There is deliberately no --radius-none. Nothing in src sets a zero
+	   radius; the places that want "no rounding" say `border: none` instead,
+	   which is a different thing and already a token-free literal.
+	   ------------------------------------------------------------------------- */
+	--radius-control: 6px; /* input, small button */
+	--radius-card: 8px; /* default button, list row, inline card */
+	--radius-card-lg: 10px; /* larger card, block that sits on the canvas */
+	--radius-panel: 12px; /* the page's main panel */
+	--radius-pill: 999px; /* badge, status chip */
+	--radius-circle: 50%; /* spinner, avatar */
+
+	/* -------------------------------------------------------------------------
+	   BORDER WIDTH — three steps, all three in use (1px x58, 2px x1, 3px x1).
+	   Written as longhands rather than in a `border:` shorthand so a component
+	   can change width without also having to restate style and colour. */
+	--border-width: 1px; /* hairline: the default boundary */
+	--border-width-thick: 2px; /* emphasised boundary, spinnable arc */
+	--border-width-heavy: 3px; /* the arc of a large spinner */
+
+	/* type scale */
+	--text-2xs: 0.6875rem;
+	--text-xs: 0.75rem;
+	--text-sm: 0.875rem;
+	--text-md: 1rem;
+	--text-lg: 1.125rem;
+	--text-xl: 1.25rem;
+	--text-2xl: 1.5rem;
+	--text-3xl: 1.875rem;
+	--text-4xl: 2.25rem;
+	--text-5xl: 3rem;
+	--text-6xl: 3.75rem;
+
+	/* line-height: tighter the larger the size */
+	--leading-tight: 1.1;
+	--leading-snug: 1.25;
+	--leading-normal: 1.5;
+	--leading-relaxed: 1.65;
+
+	/* tracking: negative on display sizes, positive only on small caps labels */
+	--tracking-tighter: -0.03em;
+	--tracking-tight: -0.02em;
+	--tracking-snug: -0.01em;
+	--tracking-normal: 0;
+	--tracking-wide: 0.04em;
+	--tracking-widest: 0.08em;
+
+	/* Inter is the stack the app already shipped. Exposed, not replaced. */
+	--font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+	/* -------------------------------------------------------------------------
+	   RESPONSIVE
+
+	   *** READ THIS BEFORE USING EITHER TOKEN IN AN @media QUERY ***
+
+	   `--breakpoint-sm` is a RECORDED VALUE, not a consumable one. It cannot be
+	   used in a media condition:
+
+	     @media (max-width: var(--breakpoint-sm))   <-- SILENTLY DOES NOTHING
+
+	   Verified in Chromium at a 500px viewport against a control: the literal
+	   `@media (max-width: 640px)` matched, the `var()` form did not. A media
+	   query is evaluated against the device before custom properties are
+	   substituted, so the condition is invalid and the whole block is dropped.
+	   There is no warning and no error — svelte-check passes, vitest passes,
+	   `vite build` passes. The only symptom is that every mobile layout in the
+	   app stops collapsing.
+
+	   So @media preludes in this codebase keep the literal 640px, on purpose.
+	   This token exists so the value has one documented home and so a future
+	   second breakpoint is added in a consistent place. Do not "tidy" the
+	   preludes to reference it.
+
+	   `--layout-content-max`, by contrast, is a normal declaration value and
+	   works normally: `max-width: var(--layout-content-max)`.
+
+	   --layout-content-max is deliberately NOT a breakpoint. It is the measure
+	   of the centred content column and never switches a layout. It is a
+	   container width, and filing it under the breakpoint namespace would imply
+	   a viewport rule that does not exist.
+	   ------------------------------------------------------------------------- */
+	--breakpoint-sm: 640px;
+	--layout-content-max: 880px;
+
+	/* =========================================================================
+	   LAYER 4 — MOTION
+
+	   Durations are short and the default easing is decelerating, which suits a
+	   layout that is mostly static. Nothing here animates by itself; these are
+	   values a component opts into.
+	   ========================================================================= */
+	--duration-instant: 80ms;
+	--duration-fast: 140ms;
+	--duration-base: 220ms;
+	--duration-slow: 340ms;
+
+	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
+	--ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+	--ease-in: cubic-bezier(0.4, 0, 1, 1);
+	--ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+/* =============================================================================
+   DARK SCHEME
+
+   A genuinely different material, not the light palette with the values
+   inverted. Each layer states what changed and why.
+   ========================================================================= */
 @media (prefers-color-scheme: dark) {
 	:root {
-		--bg: #0f172a;
-		--surface: #1e293b;
-		--surface-alt: #334155;
-		--text: #e2e8f0;
-		--text-strong: #f8fafc;
-		--text-muted: #94a3b8;
-		--border: #334155;
-		--accent: #38bdf8;
-		--error-bg: #7f1d1d;
+		/* --- LAYER 3: palette, re-pointed not re-picked -----------------
+		   Surfaces stay on the same slate ramp. Ink flips to the light end and
+		   gets LIGHTER, because contrast on a dark canvas comes from
+		   luminance above the surface, not from a different hue. */
+		--color-canvas: #0f172a;
+		--color-surface: #1e293b;
+		--color-surface-alt: #334155;
+		--color-line: #334155;
+		--color-line-strong: #94a3b8; /* measured 6.96:1 on --color-canvas */
+
+		--color-ink: #e2e8f0;
+		--color-ink-strong: #f8fafc;
+		--color-ink-muted: #cbd5e1; /* #94a3b8 was 4.04:1 on --surface-alt */
+
+		/* The action colour is LIGHT here, so its label must be DARK.
+		   --color-on-action flips with it: a white label on this blue measured
+		   2.14:1. Paired the other way round the same pair measures 8.33:1. */
+		--color-action: #38bdf8;
+		--color-on-action: #0f172a;
+		--color-action-muted: #0c4a6e;
+
+		--color-success: #6ee7b7;
+		--color-on-success: #042f2e;
+		--color-success-muted: #022c22;
+
+		/* --color-warning had NO dark override, so a light-mode amber was
+		   being rendered on a dark surface. It needs one. */
+		--color-warning: #fbbf24;
+		--color-on-warning: #422006;
+		--color-warning-muted: #451a03;
+
+		/* --color-danger also had no dark override. --error on --error-bg
+		   measured 1.55:1 in dark because both ends were dark; lifting the
+		   text end to rose and leaving the fill dark clears it at 5.28:1. */
+		--color-danger: #fca5a5;
+		--color-on-danger: #450a0a;
+		--color-danger-muted: #7f1d1d;
+
+		--color-info: #38bdf8;
+		--color-on-info: #0c4a6e;
+		--color-info-muted: #0c4a6e;
+
+		/* Score INKS flip to the light end. The FILLS in Layer 0 are
+		   intentionally absent from this block — see the note there. */
+		--score-low-ink: #fca5a5;
+		--score-mid-ink: #fde047;
+		--score-high-ink: #6ee7b7;
+
+		/* --- legacy names, kept and re-pointed (as in the original) ----- */
+		--bg: var(--color-canvas);
+		--surface: var(--color-surface);
+		--surface-alt: var(--color-surface-alt);
+		--text: var(--color-ink);
+		--text-strong: var(--color-ink-strong);
+		--text-muted: var(--color-ink-muted);
+		--border: var(--color-line);
+		--accent: var(--color-action);
+		--error-bg: var(--color-danger-muted);
+
+		/* =====================================================================
+		   LAYER 1: CLAY ELEVATION (dark)
+
+		   READ THIS BEFORE EDITING THE VALUES ABOVE.
+
+		   On a light surface the light shadow is a real bounce: light comes
+		   from the top-left, the surface below-right is lit by the environment,
+		   and the element reads as convex. On a DARK surface that bounce has
+		   nothing to come from. The background is already near the bottom of
+		   the range, so a strong white shadow has no gradient left to sit in —
+		   all it produces is a hard glowing outline, which looks like a stroke,
+		   not like light. Pushed further it looks like a cheap neon border.
+
+		   So the treatment is not "the same shadows, darker". The light shadow
+		   COLLAPSES to a faint rim: a sub-0.1-alpha inset that only says
+		   "this edge catches light" without outlining the element. Depth is
+		   then carried entirely by the DARK shadow, which is why it is pushed
+		   much further here than in light mode — 0.75-0.85 alpha against
+		   0.38-0.48, with a wider blur to keep it soft. The two are read
+		   together: a soft dark occlusion for mass, a whisper of a rim for
+		   direction.
+
+		   Collapsing the light shadow to a stronger white outline, or matching
+		   the light-mode alphas, destroys the material. Do not harmonise these
+		   two blocks to look tidy.
+		   ===================================================================== */
+		--clay-fill: #24314a;
+
+		--clay-raised-shadow-light: -2px -2px 5px rgba(255, 255, 255, 0.05);
+		--clay-raised-shadow-dark: 3px 3px 10px rgba(2, 6, 23, 0.75);
+		--clay-raised-rim: inset 1px 1px 1.5px rgba(255, 255, 255, 0.06);
+		--clay-raised: var(--clay-raised-shadow-dark) var(--clay-raised-shadow-light) var(--clay-raised-rim);
+
+		--clay-lifted-shadow-light: -3px -3px 7px rgba(255, 255, 255, 0.055);
+		--clay-lifted-shadow-dark: 5px 5px 14px rgba(2, 6, 23, 0.8);
+		--clay-lifted-rim: inset 1px 1px 2px rgba(255, 255, 255, 0.07);
+		--clay-lifted: var(--clay-lifted-shadow-dark) var(--clay-lifted-shadow-light) var(--clay-lifted-rim);
+
+		--clay-floating-shadow-light: -4px -4px 10px rgba(255, 255, 255, 0.06);
+		--clay-floating-shadow-dark: 8px 8px 22px rgba(2, 6, 23, 0.85);
+		--clay-floating-rim: inset 1.5px 1.5px 2.5px rgba(255, 255, 255, 0.08);
+		--clay-floating: var(--clay-floating-shadow-dark) var(--clay-floating-shadow-light) var(--clay-floating-rim);
+
+		--clay-focus-ring: 0 0 0 3px rgba(56, 189, 248, 0.5);
 	}
 }
 
+/* =============================================================================
+   LAYER 4 — REDUCED MOTION
+
+   The durations collapse to 0.01ms, NOT to 0. A 0s transition is removed from
+   the transition list entirely, so `transitionend` never fires and any code
+   waiting on it hangs forever. A tiny non-zero duration still completes
+   immediately but still dispatches the event. This is the standard pattern and
+   the reason it is spelled out here.
+
+   This block is mode-agnostic by design: reduced motion is about the person's
+   preference, not the colour scheme, so it must apply identically in both.
+   ========================================================================= */
+@media (prefers-reduced-motion: reduce) {
+	:root {
+		--duration-instant: 0.01ms;
+		--duration-fast: 0.01ms;
+		--duration-base: 0.01ms;
+		--duration-slow: 0.01ms;
+	}
+}
+
+/* -----------------------------------------------------------------------------
+   Pre-existing element rules. Unchanged in behaviour.
+   font-family and line-height now read from tokens whose resolved values are
+   identical to the literals they replaced, so nothing renders differently.
+   font-size stays a literal on purpose: --text-md is 1rem, and 1rem would
+   change how the page responds to a user's browser font-size setting, which
+   16px does not. That swap would be a real behaviour change.
+   -------------------------------------------------------------------------- */
 html,
 body {
 	margin: 0;
@@ -39,9 +486,9 @@ body {
 	min-height: 100vh;
 	background: var(--bg);
 	color: var(--text);
-	font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	font-family: var(--font-sans);
 	font-size: 16px;
-	line-height: 1.5;
+	line-height: var(--leading-normal);
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
 }

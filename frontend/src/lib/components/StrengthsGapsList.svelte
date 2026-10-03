@@ -37,42 +37,42 @@
 	.strengths-gaps {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 1rem;
+		gap: var(--space-4);
 	}
 
 	.strengths-gaps__panel {
-		background: var(--surface);
-		border: 1px solid var(--border);
+		background: var(--color-surface);
+		border: 1px solid var(--color-line);
 		border-radius: 10px;
-		padding: 1rem;
+		padding: var(--space-4);
 	}
 
 	.strengths-gaps__heading {
-		margin: 0 0 0.5rem;
-		font-size: 0.95rem;
+		margin: 0 0 var(--space-2);
+		font-size: var(--text-sm);
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
+		letter-spacing: var(--tracking-wide);
 	}
 
 	.strengths-gaps__heading--strength {
-		color: var(--score-high);
+		color: var(--score-high-ink);
 	}
 
 	.strengths-gaps__heading--gap {
-		color: var(--warn);
+		color: var(--color-warning);
 	}
 
 	.strengths-gaps__list {
 		margin: 0;
-		padding-left: 1.1rem;
+		padding-left: var(--space-4);
 		display: flex;
 		flex-direction: column;
-		gap: 0.35rem;
+		gap: var(--space-1);
 	}
 
 	.strengths-gaps__empty {
 		margin: 0;
-		color: var(--text-muted);
+		color: var(--color-ink-muted);
 	}
 
 	@media (max-width: 640px) {

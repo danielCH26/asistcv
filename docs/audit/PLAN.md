@@ -77,7 +77,7 @@ El orden **no** es por severidad individual: es por radio de daño y dependencia
 Estas son del maintainer. No las tomo yo.
 
 1. **Cómo se declara "producción"** para los guards fail-closed (afecta #44). Opción A: flag explícito de entorno. Opción B: fail-closed por defecto, que obliga a definir el secret en el `.env` de dev local. B es más segura pero más invasiva para el flujo local.
-2. **`jd_text_encrypted`**: implementar el cifrado o renombrar la columna (afecta #45). Renombrar es más barato y honesto; cifrar cumple lo que el nombre promete.
+2. ~~**`jd_text_encrypted`**: implementar el cifrado o renombrar la columna (afecta #45)~~. **DECIDIDO: renombrar.** La columna nunca estuvo cifrada (guarda UTF-8 crudo, como `users_cvs.raw_text` y `audit_uploads.cv_text`); el nombre afirmaba una protección inexistente. La migración `019_rename_adaptations_jd_text` la renombra a `jd_text`. Cifrar sigue siendo una decisión abierta para el futuro, pero ya no está implícita en el schema.
 3. **Tolerancia numérica del validador** (afecta #49). Verificar el número exacto rompe por redondeo y reformato; matching por valor necesita normalización de moneda y separadores. La vía segura es *rechazar* si no aparece en alguna forma normalizada y dejar que el reintento con instrucción estricta lo resuelva.
 4. **Ciclo de vida de la adaptación** (afecta #48): extender la caché a 90 días, hacer que el sweeper elimine `completed` más viejos que la ventana de caché, o cambiar el índice único para incluir `created_at`.
 5. **Outreach y Tracking Pipeline**: ¿entran al roadmap o salen de la lista de capacidades del README? Hoy el README anuncia tres y solo existen dos (afecta #51).

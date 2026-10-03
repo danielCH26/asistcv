@@ -165,7 +165,7 @@
 	}
 
 	.detail__back {
-		padding: 0.4rem 0.75rem;
+		padding: var(--space-2) 0.75rem;
 		border: 1px solid var(--border);
 		border-radius: 6px;
 		background: var(--surface);
@@ -180,7 +180,7 @@
 	.detail__card {
 		display: flex;
 		flex-direction: column;
-		gap: 1.25rem;
+		gap: var(--space-5);
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: 12px;
@@ -198,19 +198,19 @@
 	.detail__meta {
 		display: flex;
 		flex-direction: column;
-		gap: 0.4rem;
+		gap: var(--space-2);
 		align-items: flex-end;
 	}
 
 	.detail__date {
 		margin: 0;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-muted);
 	}
 
 	.detail__jd h3 {
-		margin: 0 0 0.4rem;
-		font-size: 0.85rem;
+		margin: 0 0 var(--space-2);
+		font-size: var(--text-sm);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: var(--text-muted);
@@ -220,7 +220,7 @@
 		margin: 0;
 		white-space: pre-wrap;
 		font-family: ui-monospace, 'JetBrains Mono', SFMono-Regular, monospace;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text);
 	}
 
@@ -228,7 +228,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
-		padding: 1rem 1.25rem;
+		padding: 1rem var(--space-5);
 		background: var(--error-bg);
 		color: var(--error);
 		border: 1px solid var(--error);
@@ -243,7 +243,7 @@
 	.detail__error-back {
 		align-self: flex-start;
 		margin-top: 0.5rem;
-		padding: 0.4rem 0.75rem;
+		padding: var(--space-2) 0.75rem;
 		border: 1px solid var(--error);
 		border-radius: 6px;
 		background: transparent;
@@ -317,7 +317,7 @@
 		margin: 0;
 		text-align: center;
 		color: var(--text-muted);
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
 	}
 
 	@keyframes skeleton-shimmer {

@@ -49,28 +49,41 @@
 <style>
 	.history-list {
 		width: 100%;
-		border-collapse: collapse;
-		background: var(--surface);
-		border: 1px solid var(--border);
+		/* `separate` + zero spacing, NOT `collapse`.
+		   A `<table>` is not a block container, so `overflow: hidden` does not
+		   give it a clipping context: under `border-collapse: collapse` the
+		   radius and the overflow are both ignored for the CELLS, and the
+		   `th` background paints a square corner straight over the rounded
+		   one. Verified in Chromium at a 40px radius -- the collapse version
+		   renders a hard 90-degree corner, the separate version renders the
+		   curve. `separate` makes the table a real box that `overflow: hidden`
+		   can clip; `border-spacing: 0` keeps the rows visually flush, so
+		   this costs no spacing token.
+		   Keep the radius in sync with the collapse mode: reverting to
+		   `collapse` silently brings the square corner back. */
+		border-collapse: separate;
+		border-spacing: 0;
+		background: var(--color-surface);
+		border: 1px solid var(--color-line);
 		border-radius: 10px;
 		overflow: hidden;
 	}
 
 	.history-list th {
 		text-align: left;
-		font-size: 0.8rem;
+		font-size: var(--text-xs);
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--text-muted);
-		padding: 0.6rem 1rem;
-		background: var(--surface-alt);
-		border-bottom: 1px solid var(--border);
+		letter-spacing: var(--tracking-wide);
+		color: var(--color-ink-muted);
+		padding: var(--space-2) var(--space-4);
+		background: var(--color-surface-alt);
+		border-bottom: 1px solid var(--color-line);
 	}
 
 	.history-list td {
-		padding: 0.7rem 1rem;
-		border-bottom: 1px solid var(--border);
-		font-size: 0.9rem;
+		padding: var(--space-3) var(--space-4);
+		border-bottom: 1px solid var(--color-line);
+		font-size: var(--text-sm);
 	}
 
 	.history-list tr:last-child td {
@@ -79,16 +92,16 @@
 
 	.history-list__cell--id {
 		font-variant-numeric: tabular-nums;
-		color: var(--text-muted);
+		color: var(--color-ink-muted);
 		width: 4ch;
 	}
 
 	.history-list__score {
 		display: inline-block;
-		min-width: 2.5rem;
-		padding: 0.15rem 0.5rem;
-		border-radius: 999px;
-		color: #fff;
+		min-width: var(--space-7);
+		padding: var(--space-1) var(--space-2);
+		border-radius: var(--radius-pill);
+		color: var(--color-on-score-fill);
 		font-weight: 600;
 		text-align: center;
 		font-variant-numeric: tabular-nums;
