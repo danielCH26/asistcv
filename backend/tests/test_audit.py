@@ -70,6 +70,16 @@ VALID_CV_TEXT = (
 )
 PDF_TEXT = "John Doe. Experienced Python developer with six years of experience in Django FastAPI and AWS platforms."
 
+# A phrase that exists nowhere in the JD, the mock profile JSON, or any
+# parser output, so "did the CV reach the prompt?" is answerable exactly.
+CV_MARKER = "quantum-tipped idempotent ledger reconciler"
+
+CV_WITH_MARKER = (
+    "John Doe. Experienced Python developer with six years of experience "
+    "in Django, FastAPI and AWS platforms. Notable project: "
+    f"{CV_MARKER} shipped across three regions."
+)
+
 CLAIM_JD = "Looking for a senior backend engineer with strong Postgres and Python skills."
 CLAIM_CV = "Senior backend engineer with 6 years of Python and Postgres experience."
 CLAIM_RESULT = {
@@ -169,17 +179,6 @@ def mock_llm_provider():
         provider.generate_cv_audit = AsyncMock(return_value=CV_AUDIT_RESPONSE)
         mock.return_value = provider
         yield provider
-
-
-@pytest.fixture
-def mock_retrieval():
-    """Mock retrieval service."""
-    with patch("app.services.audit_runner.retrieve_profile_context") as mock:
-        mock.return_value = MagicMock(
-            mode="complete",
-            text="Test profile context"
-        )
-        yield mock
 
 
 class TestAuditRateLimit:
@@ -309,7 +308,7 @@ class TestAuditEndpoint:
 
     @pytest.mark.asyncio
     async def test_audit_anonymous_requires_jd_min_length(
-        self, client, mock_llm_provider, mock_retrieval
+        self, client, mock_llm_provider
     ):
         """POST /v1/audit/anonymous rejects short JD."""
         response = client.post(
@@ -321,7 +320,7 @@ class TestAuditEndpoint:
 
     @pytest.mark.asyncio
     async def test_audit_anonymous_returns_result(
-        self, client, mock_llm_provider, mock_retrieval
+        self, client, mock_llm_provider
     ):
         """POST /v1/audit/anonymous returns analysis result."""
         response = client.post(
@@ -345,7 +344,7 @@ class TestAuditEndpoint:
 
     @pytest.mark.asyncio
     async def test_audit_rate_limit_response_includes_retry_after(
-        self, client, mock_llm_provider, mock_retrieval
+        self, client, mock_llm_provider
     ):
         """Rate limited response includes Retry-After header."""
         # This test would require setting up 3+ audits first
@@ -358,7 +357,7 @@ class TestAuditCvOnly:
 
     @pytest.mark.asyncio
     async def test_pdf_without_jd_returns_cv_only(
-        self, client, mock_llm_provider, mock_retrieval
+        self, client, mock_llm_provider
     ):
         """PDF upload without jd_text runs the CV-only audit and returns 200."""
         response = client.post(
@@ -391,7 +390,7 @@ class TestAuditCvOnly:
 
     @pytest.mark.asyncio
     async def test_pdf_without_jd_persists_mode_and_null_jd(
-        self, client, mock_llm_provider, mock_retrieval
+        self, client, mock_llm_provider
     ):
         """The stored audit_result_json carries the cv_only discriminator; jd_text is NULL."""
         from sqlalchemy import select
@@ -420,7 +419,7 @@ class TestAuditCvOnly:
 
     @pytest.mark.asyncio
     async def test_cv_text_without_jd_returns_cv_only(
-        self, client, mock_llm_provider, mock_retrieval
+        self, client, mock_llm_provider
     ):
         """Pasted cv_text without jd_text runs the CV-only audit and returns 200."""
         response = client.post(
@@ -438,7 +437,7 @@ class TestAuditCvOnly:
         mock_llm_provider.generate_match.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_short_jd_still_rejected_with_cv(self, client, mock_llm_provider, mock_retrieval):
+    async def test_short_jd_still_rejected_with_cv(self, client, mock_llm_provider):
         """jd_text < 50 chars is rejected even when a CV is present."""
         response = client.post(
             "/v1/audit/anonymous",
@@ -449,7 +448,7 @@ class TestAuditCvOnly:
         assert response.json()["detail"]["code"] == "JD_TOO_SHORT"
 
     @pytest.mark.asyncio
-    async def test_no_jd_and_no_cv_rejected(self, client, mock_llm_provider, mock_retrieval):
+    async def test_no_jd_and_no_cv_rejected(self, client, mock_llm_provider):
         """Without jd_text the CV requirement still applies (422 CV_REQUIRED)."""
         response = client.post(
             "/v1/audit/anonymous",
@@ -460,7 +459,7 @@ class TestAuditCvOnly:
 
     @pytest.mark.asyncio
     async def test_cv_only_llm_malformed_json_returns_503(
-        self, client, mock_llm_provider, mock_retrieval
+        self, client, mock_llm_provider
     ):
         """LLM returning unparseable JSON surfaces as documented 503 SERVICE_ERROR."""
         mock_llm_provider.generate_cv_audit = AsyncMock(
@@ -987,7 +986,7 @@ class TestAuditPdfUpload:
             await session.commit()
 
     @pytest.mark.asyncio
-    async def test_pdf_upload_success(self, client, mock_llm_provider, mock_retrieval):
+    async def test_pdf_upload_success(self, client, mock_llm_provider):
         """Valid small PDF + valid JD returns 200 with audit_token."""
         response = client.post(
             "/v1/audit/anonymous",
@@ -1009,7 +1008,7 @@ class TestAuditPdfUpload:
         assert response.headers["Cache-Control"] == "no-store"
 
     @pytest.mark.asyncio
-    async def test_scanned_pdf_rejected(self, client, mock_llm_provider, mock_retrieval):
+    async def test_scanned_pdf_rejected(self, client, mock_llm_provider):
         """PDF with no meaningful text (scanned) returns 422 PDF_NO_TEXT."""
         response = client.post(
             "/v1/audit/anonymous",
@@ -1022,7 +1021,7 @@ class TestAuditPdfUpload:
 
     @pytest.mark.asyncio
     async def test_oversized_pdf_rejected(
-        self, client, mock_llm_provider, mock_retrieval, monkeypatch
+        self, client, mock_llm_provider, monkeypatch
     ):
         """PDF above the size cap returns 413 (cap patched small for speed)."""
         from app.api.v1 import audit as audit_module
@@ -1038,7 +1037,7 @@ class TestAuditPdfUpload:
         assert response.json()["detail"]["code"] == "FILE_TOO_LARGE"
 
     @pytest.mark.asyncio
-    async def test_non_pdf_file_rejected(self, client, mock_llm_provider, mock_retrieval):
+    async def test_non_pdf_file_rejected(self, client, mock_llm_provider):
         """text/plain upload (.txt) returns 415 UNSUPPORTED_MEDIA_TYPE."""
         response = client.post(
             "/v1/audit/anonymous",
@@ -1050,7 +1049,7 @@ class TestAuditPdfUpload:
         assert response.json()["detail"]["code"] == "UNSUPPORTED_MEDIA_TYPE"
 
     @pytest.mark.asyncio
-    async def test_garbage_pdf_rejected(self, client, mock_llm_provider, mock_retrieval):
+    async def test_garbage_pdf_rejected(self, client, mock_llm_provider):
         """PDF bytes neither parser can read return 503 PDF_PARSE_FAILED."""
         response = client.post(
             "/v1/audit/anonymous",
@@ -1062,7 +1061,7 @@ class TestAuditPdfUpload:
         assert response.json()["detail"]["code"] == "PDF_PARSE_FAILED"
 
     @pytest.mark.asyncio
-    async def test_missing_cv_rejected(self, client, mock_llm_provider, mock_retrieval):
+    async def test_missing_cv_rejected(self, client, mock_llm_provider):
         """Neither cv_file nor cv_text returns 422 CV_REQUIRED."""
         response = client.post(
             "/v1/audit/anonymous",
@@ -1073,7 +1072,7 @@ class TestAuditPdfUpload:
         assert response.json()["detail"]["code"] == "CV_REQUIRED"
 
     @pytest.mark.asyncio
-    async def test_cv_text_too_short_rejected(self, client, mock_llm_provider, mock_retrieval):
+    async def test_cv_text_too_short_rejected(self, client, mock_llm_provider):
         """cv_text below minimum length returns 422 CV_TOO_SHORT."""
         response = client.post(
             "/v1/audit/anonymous",
@@ -1084,7 +1083,7 @@ class TestAuditPdfUpload:
         assert response.json()["detail"]["code"] == "CV_TOO_SHORT"
 
     @pytest.mark.asyncio
-    async def test_rate_limit_applies_to_pdf_path(self, client, mock_llm_provider, mock_retrieval):
+    async def test_rate_limit_applies_to_pdf_path(self, client, mock_llm_provider):
         """Rate limit (3/IP/day) also blocks the PDF upload path."""
         ip = "203.0.113.18"
         await self._seed_audits(ip, 3)
@@ -1097,3 +1096,138 @@ class TestAuditPdfUpload:
         )
         assert response.status_code == 429
         assert response.json()["detail"]["code"] == "RATE_LIMITED"
+
+
+class TestAuditJDDirectedUsesCV:
+    """jd_directed must score the JD against the uploaded CV, not an empty profile.
+
+    Regression cover for the bug where `run_audit` handed the LLM the text of
+    a synthetic `Profile` (id=0, empty experience/skills/preferences). That
+    profile serializes to 6 chars, so `retrieve_profile_context` always
+    short-circuited to mode="complete" and returned the empty profile's own
+    JSON -- overwriting the `cv_text` fallback and making the audit a match
+    between the JD and nothing.
+
+    These tests assert on the arguments the provider actually received, not
+    on the score: the score comes from a non-deterministic LLM, the call
+    arguments do not.
+    """
+
+    @pytest.mark.asyncio
+    async def test_jd_directed_sends_uploaded_cv_text_to_provider(
+        self, client, mock_llm_provider
+    ):
+        """The pasted CV text reaches generate_match as the profile context."""
+        response = client.post(
+            "/v1/audit/anonymous",
+            data={"jd_text": VALID_JD, "cv_text": CV_WITH_MARKER},
+            headers={"X-Forwarded-For": "203.0.113.31"},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["mode"] == "jd_directed"
+
+        mock_llm_provider.generate_match.assert_awaited_once()
+        kwargs = mock_llm_provider.generate_match.await_args.kwargs
+        assert kwargs["jd_text"] == VALID_JD
+
+        profile_context = kwargs["profile_context"]
+        assert CV_MARKER in str(profile_context), (
+            "the uploaded CV never reached the match prompt"
+        )
+        assert profile_context["retrieval_context"] == CV_WITH_MARKER
+
+    @pytest.mark.asyncio
+    async def test_jd_directed_sends_uploaded_pdf_cv_text_to_provider(
+        self, client, mock_llm_provider
+    ):
+        """Same guarantee for the PDF upload path, where the CV is parsed."""
+        response = client.post(
+            "/v1/audit/anonymous",
+            data={"jd_text": VALID_JD},
+            files={
+                "cv_file": (
+                    "cv.pdf",
+                    _build_pdf(
+                        "Jane Roe. Backend engineer. Led the "
+                        f"{CV_MARKER} project on AWS for three years."
+                    ),
+                    "application/pdf",
+                )
+            },
+            headers={"X-Forwarded-For": "203.0.113.32"},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["mode"] == "jd_directed"
+
+        mock_llm_provider.generate_match.assert_awaited_once()
+        profile_context = mock_llm_provider.generate_match.await_args.kwargs[
+            "profile_context"
+        ]
+        assert CV_MARKER in str(profile_context), (
+            "the parsed PDF text never reached the match prompt"
+        )
+
+    @pytest.mark.asyncio
+    async def test_cv_only_audits_the_cv_and_never_matches_a_jd(
+        self, client, mock_llm_provider
+    ):
+        """cv_only keeps its own provider call and does not touch generate_match."""
+        response = client.post(
+            "/v1/audit/anonymous",
+            data={"cv_text": CV_WITH_MARKER},
+            headers={"X-Forwarded-For": "203.0.113.33"},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["mode"] == "cv_only"
+
+        mock_llm_provider.generate_cv_audit.assert_awaited_once()
+        mock_llm_provider.generate_match.assert_not_awaited()
+        assert mock_llm_provider.generate_cv_audit.await_args.args[0] == CV_WITH_MARKER
+
+    @pytest.mark.asyncio
+    async def test_both_modes_send_genuinely_different_context(
+        self, client, mock_llm_provider
+    ):
+        """Same CV, two modes, two different provider payloads.
+
+        jd_directed wraps the CV in the match prompt's profile-context dict and
+        pairs it with the JD; cv_only hands the bare CV to generate_cv_audit
+        and never sees a JD. If these ever converge, the mode discriminator is
+        not doing anything.
+        """
+        jd_response = client.post(
+            "/v1/audit/anonymous",
+            data={"jd_text": VALID_JD, "cv_text": CV_WITH_MARKER},
+            headers={"X-Forwarded-For": "203.0.113.34"},
+        )
+        cv_response = client.post(
+            "/v1/audit/anonymous",
+            data={"cv_text": CV_WITH_MARKER},
+            headers={"X-Forwarded-For": "203.0.113.35"},
+        )
+        assert jd_response.json()["mode"] == "jd_directed"
+        assert cv_response.json()["mode"] == "cv_only"
+
+        mock_llm_provider.generate_match.assert_awaited_once()
+        mock_llm_provider.generate_cv_audit.assert_awaited_once()
+
+        match_kwargs = mock_llm_provider.generate_match.await_args.kwargs
+        cv_audit_arg = mock_llm_provider.generate_cv_audit.await_args.args[0]
+
+        # jd_directed: a profile-context dict scoped to a specific JD.
+        assert isinstance(match_kwargs["profile_context"], dict)
+        assert match_kwargs["profile_context"]["retrieval_context"] == CV_WITH_MARKER
+        assert VALID_JD in match_kwargs["jd_text"]
+
+        # cv_only: the bare CV, judged on its own.
+        assert isinstance(cv_audit_arg, str)
+        assert cv_audit_arg == CV_WITH_MARKER
+
+        # The two payloads are not interchangeable: jd_directed wraps the CV in
+        # the match prompt's profile-context dict and pairs it with a JD, while
+        # cv_only hands the same text over bare to the CV-quality prompt and
+        # never sees a JD.
+        assert match_kwargs["profile_context"] != cv_audit_arg
+        assert match_kwargs["profile_context"] != CV_WITH_MARKER
+        assert mock_llm_provider.generate_cv_audit.await_args.kwargs == {}
+        assert VALID_JD not in mock_llm_provider.generate_cv_audit.await_args.args
