@@ -17,6 +17,7 @@ import pytest
 
 from app.services.adaptation_validator import (
     ValidationResult,
+    _extract_numeric_claims,
     normalize,
     validate_adaptation,
 )
@@ -430,3 +431,395 @@ class TestValidateAdaptationEdgeCases:
 def test_normalize_parametric(raw: str, expected: str) -> None:
     """Parametric sanity check matching the spec's normalize tests."""
     assert normalize(raw) == expected
+
+
+# === Numeric claim provenance ===
+#
+# The length filter (``_MIN_TOKEN_LEN = 3``) used to skip every 1-2 char
+# token, which is exactly the shape of a fabricated metric: ``40%``, ``2M``,
+# ``5x``. These tests pin the rule that replaced it: every numeric claim in
+# an adapted bullet must be reconstructible from the source bullets, under a
+# defined normalization (separators, currency, magnitude suffixes/words,
+# spelled-out numbers, unit dropping).
+
+
+# A realistic senior-backend CV. Every number in it is a real one, and the
+# vocabulary is wide enough that a fabrication can be expressed *without*
+# inventing any word — which is how a competent model actually drifts: it
+# reuses the source's language and swaps in a punchier number.
+_METRIC_DESC = (
+    "Increased revenue by 18% year over year. "
+    "Served 300k monthly active users. "
+    "Grew the team 3x in eighteen months. "
+    "Led a team of 5 engineers. "
+    "Reduced infrastructure spend to $40k per month. "
+    "Reduced p99 latency from 900ms to 120ms. "
+    "Built Python services on AWS Lambda."
+)
+
+
+def _cv_with_description(description: str) -> dict:
+    """Minimal CV envelope around one experience bullet."""
+    return {
+        "full_name": "Jane Doe",
+        "experience": [
+            {
+                "title": "Senior Backend Engineer",
+                "company": "Acme",
+                "dates": "2020-2024",
+                "description": description,
+            }
+        ],
+        "skills": ["Python", "AWS", "PostgreSQL"],
+        "education": [],
+        "languages": ["English"],
+    }
+
+
+def _source() -> dict:
+    return _cv_with_description(_METRIC_DESC)
+
+
+def _rewrite(description: str) -> dict:
+    """Adaptation identical to the source except for the rewritten bullet."""
+    adapted = _cv_with_description(_METRIC_DESC)
+    adapted["experience"][0]["description"] = description
+    return adapted
+
+
+def _metric_violations(result: ValidationResult) -> list[str]:
+    """Violations raised by the numeric rule (not the token rule)."""
+    return [v for v in result.violations if "metric" in v]
+
+
+class TestFabricatedMetricsRejected:
+    """A number that the source never claimed must fail loudly."""
+
+    def test_fabricated_percentage_rejected_and_named(self) -> None:
+        """``40%`` replaces the real ``18%`` → rejected, violation names 40."""
+        adapted = _rewrite("Increased revenue by 40% year over year.")
+        result = validate_adaptation(_source(), adapted)
+
+        assert result.ok is False
+        metrics = _metric_violations(result)
+        assert metrics, result.violations
+        # The message must name the offending number so the retry prompt
+        # (and the log line) point at something actionable.
+        assert any("40" in v for v in metrics), metrics
+
+    def test_fabricated_metric_violation_is_its_own_type(self) -> None:
+        """The numeric rule is distinguishable from the token-leak rule."""
+        adapted = _rewrite("Increased revenue by 40% year over year.")
+        result = validate_adaptation(_source(), adapted)
+
+        assert result.ok is False
+        assert _metric_violations(result), result.violations
+        # Nothing but the number is wrong here: no token leak at all.
+        assert not [v for v in result.violations if "leaks token" in v]
+
+    def test_fabricated_substitute_number_rejected(self) -> None:
+        """Swapping a real number for a bigger one is the common drift."""
+        adapted = _rewrite("Reduced p99 latency from 900ms to 40ms.")
+        result = validate_adaptation(_source(), adapted)
+
+        assert result.ok is False
+        assert any("40" in v for v in _metric_violations(result))
+
+    def test_fabricated_inflated_count_rejected(self) -> None:
+        """``25`` engineers where the source says ``5`` → rejected."""
+        adapted = _rewrite("Led a team of 25 engineers.")
+        result = validate_adaptation(_source(), adapted)
+
+        assert result.ok is False
+        assert any("25" in v for v in _metric_violations(result))
+
+    def test_fabricated_magnitude_rejected(self) -> None:
+        """``2M`` users where the source says ``300k`` → rejected."""
+        adapted = _rewrite("Served 2M monthly active users.")
+        result = validate_adaptation(_source(), adapted)
+
+        assert result.ok is False
+        metrics = _metric_violations(result)
+        assert metrics, result.violations
+        # Reported in the form the model wrote it, so the retry can find
+        # the string to fix. The canonical value it expands to (2000000) is
+        # pinned by ``test_values_extracted``.
+        assert any("2M" in v for v in metrics), metrics
+
+    def test_fabricated_multiplier_rejected(self) -> None:
+        """``10x`` growth where the source says ``3x`` → rejected."""
+        adapted = _rewrite("Grew the team 10x in eighteen months.")
+        result = validate_adaptation(_source(), adapted)
+
+        assert result.ok is False
+        assert any("10" in v for v in _metric_violations(result))
+
+    def test_fabricated_multiplier_from_real_plain_number_rejected(self) -> None:
+        """A real *value* re-labelled as a multiplier is still a fabrication.
+
+        The source claims ``5`` (engineers) and ``3x`` (growth). Re-using the
+        real number 5 with a new unit attaches a claim the source never made,
+        so it must fail.
+        """
+        adapted = _rewrite("Grew the team 5x in eighteen months.")
+        result = validate_adaptation(_source(), adapted)
+
+        assert result.ok is False
+        assert any("5" in v for v in _metric_violations(result))
+
+    def test_fabricated_percentage_from_real_plain_number_rejected(self) -> None:
+        """Same rule for percent: ``18%`` cannot be borrowed from a plain ``18``.
+
+        Both CVs use identical wording and the same value; the only
+        difference is the unit the adaptation attaches to it.
+        """
+        source = _cv_with_description(
+            "Increased revenue by 18. Led a team of 18 engineers."
+        )
+        adapted = _cv_with_description(
+            "Increased revenue by 18%. Led a team of 18 engineers."
+        )
+        result = validate_adaptation(source, adapted)
+
+        assert result.ok is False
+        assert _metric_violations(result), result.violations
+
+
+class TestHonestMetricsAllowed:
+    """Real numbers, and legitimate reformatting of them, must pass."""
+
+    def test_reused_source_number_passes(self) -> None:
+        """Reusing the source's own metric verbatim is honest."""
+        adapted = _rewrite("Increased revenue by 18% year over year.")
+        result = validate_adaptation(_source(), adapted)
+        assert result.ok is True, result.violations
+
+    def test_reused_multiplier_passes(self) -> None:
+        """The source's real ``3x`` stays valid when the bullet is reordered."""
+        adapted = _rewrite(
+            "Led a team of 5 engineers. Grew the team 3x in eighteen months."
+        )
+        result = validate_adaptation(_source(), adapted)
+        assert result.ok is True, result.violations
+
+    def test_thousands_separator_reformat_passes(self) -> None:
+        """``300k`` → ``300,000`` is a reformat, not a new claim.
+
+        Before the numeric rule this was *rejected*: the token check saw the
+        normalized token ``300000`` and looked for it in a blob that only
+        contained ``300k``.
+        """
+        adapted = _rewrite("Served 300,000 monthly active users.")
+        result = validate_adaptation(_source(), adapted)
+        assert result.ok is True, result.violations
+
+    def test_currency_symbol_dropped_by_normalizer_passes(self) -> None:
+        """``$40k`` → ``40000`` (symbol and magnitude suffix reformatted)."""
+        adapted = _rewrite("Reduced infrastructure spend to 40000 per month.")
+        result = validate_adaptation(_source(), adapted)
+        assert result.ok is True, result.violations
+
+    def test_magnitude_expansion_passes(self) -> None:
+        """``2M`` in the source, ``2000000`` in the adaptation → same value."""
+        source = _cv_with_description("Served 2M monthly active users.")
+        adapted = _cv_with_description("Served 2000000 monthly active users.")
+        result = validate_adaptation(source, adapted)
+        assert result.ok is True, result.violations
+
+    def test_spelled_out_number_passes(self) -> None:
+        """``18%`` → ``eighteen percent`` is a reformat of a real number."""
+        adapted = _rewrite("Increased revenue by eighteen percent year over year.")
+        result = validate_adaptation(_source(), adapted)
+        assert result.ok is True, result.violations
+
+    def test_magnitude_word_expansion_passes(self) -> None:
+        """``2M`` → ``two million`` keeps the value and introduces no claim."""
+        source = _cv_with_description("Served 2M monthly active users.")
+        adapted = _cv_with_description("Served two million monthly active users.")
+        result = validate_adaptation(source, adapted)
+        assert result.ok is True, result.violations
+
+    def test_dropped_unit_passes(self) -> None:
+        """Dropping the ``%`` is a reformat; the value is still the source's."""
+        source = _cv_with_description("Increased revenue by 18 percent.")
+        adapted = _cv_with_description("Increased revenue by 18.")
+        result = validate_adaptation(source, adapted)
+        assert result.ok is True, result.violations
+
+    def test_value_split_across_phrase_passes(self) -> None:
+        """The same value written as a magnitude *word* is still the same value."""
+        source = _cv_with_description("Served 300k monthly active users.")
+        adapted = _cv_with_description("Served 300 thousand monthly active users.")
+        result = validate_adaptation(source, adapted)
+        assert result.ok is True, result.violations
+
+    def test_rounding_within_same_integer_part_passes(self) -> None:
+        """``3.11`` → ``3`` is truncation to a whole number, not a new claim."""
+        source = _cv_with_description("Upgraded the runtime to Python 3.11.")
+        adapted = _cv_with_description("Upgraded the runtime to Python 3.")
+        result = validate_adaptation(source, adapted)
+        assert result.ok is True, result.violations
+
+    def test_thousands_separator_becomes_whitespace_passes(self) -> None:
+        """``300,000`` → ``300 000``: the separator the model chose is irrelevant."""
+        source = _cv_with_description("Served 300,000 monthly active users.")
+        adapted = _cv_with_description("Served 300 000 monthly active users.")
+        result = validate_adaptation(source, adapted)
+        assert result.ok is True, result.violations
+
+    def test_spaced_percent_sign_passes(self) -> None:
+        """``18%`` → ``18 %`` is still a percentage."""
+        source = _cv_with_description("Grew revenue by 18%.")
+        adapted = _cv_with_description("Grew revenue by 18 %.")
+        result = validate_adaptation(source, adapted)
+        assert result.ok is True, result.violations
+
+    def test_spelled_out_spanish_number_passes(self) -> None:
+        """A Spanish CV writes ``500`` and ``quinientos`` interchangeably."""
+        source = _cv_with_description("Atendimos a 500 clientes.")
+        adapted = _cv_with_description("Atendimos a quinientos clientes.")
+        result = validate_adaptation(source, adapted)
+        assert result.ok is True, result.violations
+
+    def test_spelled_out_spanish_percent_passes(self) -> None:
+        """``30%`` → ``treinta por ciento`` — the joined marker is not a claim."""
+        source = _cv_with_description("Reducimos la latencia un 30%.")
+        adapted = _cv_with_description("Reducimos la latencia un treinta por ciento.")
+        result = validate_adaptation(source, adapted)
+        assert result.ok is True, result.violations
+
+    def test_dash_range_is_not_summed_into_one_claim(self) -> None:
+        """``50-200`` is two numbers, and reformatting it as ``50 to 200`` is fine."""
+        source = _cv_with_description("Handled 50-200 rps.")
+        adapted = _cv_with_description("Handled 50 to 200 rps.")
+        result = validate_adaptation(source, adapted)
+        assert result.ok is True, result.violations
+
+    def test_empty_source_description_skips_numeric_check(self) -> None:
+        """No source text to check against → the numeric rule abstains."""
+        source = _cv_with_description("")
+        adapted = _cv_with_description("Served 2M monthly active users.")
+        result = validate_adaptation(source, adapted)
+        assert result.ok is True, result.violations
+
+
+class TestRoundingIsNotAFreePass:
+    """The truncation leniency must not become a substitution loophole."""
+
+    def test_different_decimal_rejected(self) -> None:
+        """``3.11`` → ``3.12`` is a different runtime, not a rounding."""
+        source = _cv_with_description("Ran the runtime on Python 3.11.")
+        adapted = _cv_with_description("Ran the runtime on Python 3.12.")
+        result = validate_adaptation(source, adapted)
+
+        assert result.ok is False
+        assert _metric_violations(result), result.violations
+
+    def test_rounding_a_percentage_up_rejected(self) -> None:
+        """``12.5%`` → ``13%`` inflates the claim by 4%, so it fails."""
+        source = _cv_with_description("Cut infrastructure spend by 12.5%.")
+        adapted = _cv_with_description("Cut infrastructure spend by 13%.")
+        result = validate_adaptation(source, adapted)
+
+        assert result.ok is False
+        assert _metric_violations(result), result.violations
+
+
+class TestNumericCheckIsNotALengthFilter:
+    """The rule is value-based, not ``len(token) >= 3`` in disguise."""
+
+    def test_one_and_two_character_source_numbers_allowed(self) -> None:
+        """``5`` (1 char) and ``18`` (2 chars) both exist in the source."""
+        source = _cv_with_description("Led a team of 5 engineers over 18 months.")
+        adapted = _cv_with_description("Led a team of 5 engineers over 18 months.")
+        result = validate_adaptation(source, adapted)
+        assert result.ok is True, result.violations
+
+    def test_one_and_two_character_fabricated_numbers_rejected(self) -> None:
+        """The same lengths, absent from the source, are both rejected."""
+        source = _cv_with_description("Led a team of 5 engineers over 18 months.")
+        adapted = _cv_with_description("Led a team of 7 engineers over 40 months.")
+        result = validate_adaptation(source, adapted)
+
+        assert result.ok is False
+        metrics = _metric_violations(result)
+        assert any("7" in v for v in metrics), metrics
+        assert any("40" in v for v in metrics), metrics
+
+    def test_length_alone_does_not_decide(self) -> None:
+        """A 2-char number can pass or fail depending only on the source.
+
+        The adapted bullet and both source bullets use identical wording; the
+        only difference is whether the value ``12`` appears in the source.
+        That is the proof this is provenance, not a length threshold.
+        """
+        adapted = _cv_with_description("Led a team of 12 engineers.")
+        with_number = validate_adaptation(
+            _cv_with_description("Led a team of 12 engineers."),
+            adapted,
+        )
+        without_number = validate_adaptation(
+            _cv_with_description("Led a team of 5 engineers."),
+            adapted,
+        )
+        assert with_number.ok is True, with_number.violations
+        assert without_number.ok is False
+        assert any("12" in v for v in _metric_violations(without_number))
+
+
+class TestNumericClaimExtraction:
+    """Focused tests on the canonicalization itself."""
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            # Plain digit runs.
+            ("led 5 engineers", {5}),
+            ("900ms to 120ms", {900, 120}),
+            # Grouping separators collapse; a short group is a decimal.
+            ("300,000 users", {300000}),
+            ("1.5 million", {1500000}),
+            ("1,5 millones", {1500000}),
+            # Magnitude suffixes and symbols.
+            ("2M users", {2000000}),
+            ("300k users", {300000}),
+            ("$1.2M", {1200000}),
+            # A dash or a slash ends a number; a space can be a separator.
+            ("50-200 rps", {50, 200}),
+            ("2020-2024", {2020, 2024}),
+            ("1/2 of traffic", {1, 2}),
+            ("300 000 users", {300000}),
+            # Words and composition.
+            ("forty percent", {40}),
+            ("treinta por ciento", {30}),
+            ("quinientos clientes", {500}),
+            ("two hundred fifty", {250}),
+            ("two million five hundred thousand", {2500000}),
+            ("one hundred and fifty", {150}),
+            ("five hundred thousand", {500000}),
+            # Digits glued to identifiers are not claims.
+            ("sha256 and p99", set()),
+            ("utf8 runtime", set()),
+        ],
+    )
+    def test_values_extracted(self, text: str, expected: set[int]) -> None:
+        """Canonical values, so a future reader can predict the extractor."""
+        claims = _extract_numeric_claims(text)
+        assert {int(c.value) for c in claims} == expected
+
+    @pytest.mark.parametrize(
+        "text,kind",
+        [
+            ("40% of traffic", "percent"),
+            ("forty percent of traffic", "percent"),
+            ("grew 5x", "multiplier"),
+            ("5 veces", "multiplier"),
+            ("served 2M users", "plain"),
+            ("led 5 engineers", "plain"),
+        ],
+    )
+    def test_units_extracted(self, text: str, kind: str) -> None:
+        """``percent``/``multiplier`` are tracked; magnitude is formatting."""
+        claims = _extract_numeric_claims(text)
+        assert claims
+        assert claims[-1].unit == kind
