@@ -18,7 +18,7 @@ Los jobs corren en paralelo:
 | `test-backend` | Migraciones + pytest con cobertura, contra Postgres+pgvector real | `alembic upgrade head`, `pytest --cov=app` |
 | `test-mcp` | pytest del adapter (sin DB) | `uv run pytest` |
 | `docker-build` | Verifica que la imagen del backend compila (sin push) | `docker build -t asistcv-backend:ci ./backend` |
-| `frontend-i18n-parity` | Paridad de claves entre `es.json` y `en.json` del frontend (spec match-ui) | `npm ci && node scripts/check-i18n-keys.mjs` en `frontend/` |
+| `frontend-i18n-parity` | Paridad de claves entre `es.json` y `en.json` (spec match-ui), guard de API key, **tests unitarios** y **typecheck** del frontend | `npm ci`, `node scripts/check-i18n-keys.mjs`, `npm run test`, `npm run check` en `frontend/` |
 
 Detalles importantes:
 
@@ -26,6 +26,20 @@ Detalles importantes:
 - **test-backend** usa un service container `pgvector/pgvector:pg16` con health check `pg_isready`. GitHub Actions espera a que el servicio esté sano antes de correr los steps, así que no hay que "dormir" nada. El job exporta `DATABASE_URL=postgresql://asistcv_test:asistcv_test@localhost:5432/asistcv_test`.
 - **docker-build** está condicionado a que exista `backend/Dockerfile` (`hashFiles`). Si el Dockerfile no está en el branch, el job se saltea solo.
 - `concurrency` con `cancel-in-progress`: pushes sucesivos al mismo branch cancelan el run anterior (ahorra minutos).
+- **frontend-i18n-parity** hace `npm ci` una sola vez y **reutiliza ese `node_modules`** para los pasos siguientes; no hay un segundo install. Además de la paridad i18n y el guard de API key, el job corre `npm run test` (vitest) y `npm run check` (`svelte-kit sync` + `svelte-check`). Los dos comandos se midieron en verde antes de cablearlos. Su `timeout-minutes` subió de 10 a 15: `svelte-check` sobre un runner frío es lento, y un timeout mata el job con un ✗ sin salida útil.
+
+## Permisos del token (`GITHUB_TOKEN`)
+
+Los cuatro workflows declaran `permissions:` de forma explícita, así el `GITHUB_TOKEN` no hereda el scope por defecto del repo ni de la organización:
+
+| Workflow | `permissions:` | Por qué |
+|---|---|---|
+| `ci.yml` | `contents: read` | Los 6 jobs corren `actions/checkout`. Es el piso justo: leer el código y nada más. |
+| `adaptation-sweeper.yml` | `{}` | Sin checkout, sin API de GitHub: no usa ningún scope. |
+| `audit-retention.yml` | `{}` | Ídem. |
+| `refresh-token-sweeper.yml` | `{}` | Ídem. |
+
+Los tres sweepers no necesitan scope alguno: hacen un `curl` a un endpoint propio del backend autenticado con `secrets.*` y `vars.*`, que se leen **con independencia** del scope del token. `permissions: {}` les deja el token sin scopes en lugar de confiar en el default.
 
 ## Branch protection (configuración manual en GitHub)
 
@@ -39,9 +53,11 @@ Para que no se pueda mergear a `main` con CI rojo:
    - `Typecheck (mypy)`
    - `Tests (backend)`
    - `Tests (mcp-adapter)`
-   - `Frontend i18n parity`
+   - `Frontend i18n parity + API key guard`
 
    > Los nombres de check son los `name:` de cada job. Si preferís referirte por job id, son `lint`, `typecheck`, `test-backend`, `test-mcp`, `frontend-i18n-parity`.
+   >
+   > El job de frontend expone **un solo** check aunque corra tests y typecheck adentro, así que la lista de required checks no crece al agregarlos.
 5. Opcional pero recomendado:
    - **Require branches to be up to date before merging** (evita mergear código que pasó CI sobre un `main` distinto).
    - **Require a pull request before merging** si querés forzar revisión.

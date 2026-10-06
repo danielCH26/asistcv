@@ -10,6 +10,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Lint (ruff)
@@ -141,7 +144,7 @@ jobs:
   frontend-i18n-parity:
     name: Frontend i18n parity + API key guard
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -164,3 +167,11 @@ jobs:
             echo "::error::PUBLIC_BACKEND_API_KEY found in frontend/src — auth must be JWT session only"
             exit 1
           fi
+
+      - name: Test frontend (vitest)
+        run: npm run test
+        working-directory: frontend
+
+      - name: Typecheck frontend (svelte-check)
+        run: npm run check
+        working-directory: frontend
