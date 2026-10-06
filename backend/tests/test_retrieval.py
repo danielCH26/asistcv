@@ -23,6 +23,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlmodel import select
 
 import app.api.v1.match as match_module
 from app.core.config import Settings, get_settings
@@ -556,7 +557,28 @@ def patch_match_db_for_profiles(clean_db, monkeypatch):
 async def test_create_profile_computes_initial_embedding(
     async_client, clean_db, override_get_session, patch_match_db_for_profiles, monkeypatch
 ):
-    """POST /v1/profiles genera embedding inicial."""
+    """POST /v1/profiles genera embedding inicial.
+
+    Since issue #85 the endpoint requires a real JWT principal and stamps
+    `owner_user_id`; an unowned profile would be invisible to every user,
+    so the test creates an authenticated owner and asserts the stamp.
+    """
+    from app.core.security import create_access_token
+    from app.db.models import User
+
+    async with clean_db.session_factory() as session:
+        owner = User(
+            email="retrieval-owner@test.com",
+            password_hash="x",
+            role="job_seeker",
+            full_name="Retrieval Owner",
+        )
+        session.add(owner)
+        await session.commit()
+        await session.refresh(owner)
+
+    token = create_access_token({"sub": str(owner.id), "role": owner.role})
+
     provider = _make_provider()
     monkeypatch.setattr(
         "app.api.v1.profiles.get_llm_provider", lambda: provider
@@ -571,6 +593,7 @@ async def test_create_profile_computes_initial_embedding(
             "skills": {"programming": ["Python", "Go"]},
             "preferences": {"locations": ["Remote"]},
         },
+        headers={"Authorization": f"Bearer {token}"},
     )
 
     assert response.status_code == 201, response.text
@@ -578,6 +601,14 @@ async def test_create_profile_computes_initial_embedding(
     assert body["name"] == "New Profile"
     assert body["id"] is not None
     assert provider.generate_embedding.await_count >= 1
+
+    async with clean_db.session_factory() as session:
+        row = (
+            await session.execute(
+                select(Profile).where(Profile.id == body["id"])
+            )
+        ).scalar_one()
+        assert row.owner_user_id == owner.id
 
 
 async def test_get_profile_returns_detail(

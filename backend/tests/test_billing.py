@@ -449,7 +449,7 @@ async def test_match_under_limit_200_and_increments(
     """seeker_monthly usage 0 -> match OK -> usage_counters.matches_used == 1."""
     user = await _create_user(clean_db, email="under-limit@test.com")
     await _create_subscription(clean_db, user.id, "job_seeker_monthly")
-    profile = await create_profile(name="Under Limit")
+    profile = await create_profile(name="Under Limit", owner_user_id=user.id)
     provider = _make_provider()
     monkeypatch.setattr(match_module, "get_llm_provider", lambda: provider)
     match_auth(user)
@@ -484,7 +484,7 @@ async def test_match_failed_does_not_consume(
     """LLM failure -> 502 and usage unchanged (increment only on success)."""
     user = await _create_user(clean_db, email="failed-match@test.com")
     await _create_subscription(clean_db, user.id, "job_seeker_monthly")
-    profile = await create_profile(name="Failed Match")
+    profile = await create_profile(name="Failed Match", owner_user_id=user.id)
     provider = _make_provider()
     provider.generate_match = AsyncMock(side_effect=ValueError("LLM exploded"))
     monkeypatch.setattr(match_module, "get_llm_provider", lambda: provider)
@@ -522,7 +522,7 @@ async def test_agency_unlimited_never_402(
     user = await _create_user(clean_db, email="agency@test.com", role="recruiter")
     await _create_subscription(clean_db, user.id, "recruiter_agency")
     await _create_usage(clean_db, user.id, matches_used=999)
-    profile = await create_profile(name="Agency User")
+    profile = await create_profile(name="Agency User", owner_user_id=user.id)
     provider = _make_provider()
     monkeypatch.setattr(match_module, "get_llm_provider", lambda: provider)
     match_auth(user)
@@ -765,7 +765,7 @@ async def test_usage_period_rollover(
         )
         await session.commit()
 
-    profile = await create_profile(name="Rollover User")
+    profile = await create_profile(name="Rollover User", owner_user_id=user.id)
     provider = _make_provider()
     monkeypatch.setattr(match_module, "get_llm_provider", lambda: provider)
     match_auth(user)
