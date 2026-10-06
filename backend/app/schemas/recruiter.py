@@ -70,8 +70,10 @@ class CandidateMatchResponse(BaseModel):
     """Response for candidate match."""
     candidate_id: int
     score: int | None = None
-    strengths: dict | None = None
-    gaps: dict | None = None
+    # ``RecruiterAnalysis.strengths``/``.gaps`` are JSON columns holding the
+    # ``list[str]`` emitted by ``app.llm.schemas.MatchAnalysis``.
+    strengths: list[str] | None = None
+    gaps: list[str] | None = None
     reasoning: str | None = None
     created_at: datetime
 

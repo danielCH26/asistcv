@@ -364,7 +364,10 @@ async def create_adaptation(
             adaptation_id=inflight.id, status="pending"
         )
 
-    await db.refresh(row)
+    # No refresh: expire_on_commit=False keeps the instance current, and
+    # re-reading after COMMIT would lose the transaction-scoped RLS GUC (#50).
+    # Reaching here means the INSERT committed, so ``row.id`` came back via
+    # RETURNING; the dedup branch above returns from inside the except.
 
     logger.info(
         "adaptation_row_created",

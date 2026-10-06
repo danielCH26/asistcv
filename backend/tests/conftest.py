@@ -604,3 +604,30 @@ def settings():
     """Get application settings."""
     from app.core.config import get_settings
     return get_settings()
+
+
+# === Production-faithful RLS lane (issue #50, second half)
+#
+# The machinery lives in tests/conftest_rls.py; only this shim is here
+# because `pytest_plugins` may not be declared in a conftest that is not the
+# rootdir's, and tests/ is not rootdir. Keeping the lane importable as a
+# fixture from tests/conftest_rls.py is what makes it reusable by any test
+# module without touching this file's guard, its listener, or its fixtures.
+# Do NOT move the body here: conftest.py is the fail-closed DB-safety guard
+# and the reviewer should be able to audit the lane without reading it.
+
+
+@pytest.fixture
+async def rls_lane(clean_db):
+    """The active production-faithful RLS lane (see tests/conftest_rls.py).
+
+    Removes the ``_bind_service_rls`` after_begin listener and forces the
+    app's own engine to run every connection as the NON-superuser,
+    NOBYPASSRLS role, restoring both on teardown. Requires ``clean_db`` so
+    the schema, the role and the grants exist before the lane asserts it
+    is faithful.
+    """
+    from tests.conftest_rls import production_rls_lane
+
+    async with production_rls_lane() as lane:
+        yield lane

@@ -240,7 +240,8 @@ async def create_audit(
         session.add(event)
 
         await session.commit()
-        await session.refresh(audit)
+        # No refresh: expire_on_commit=False keeps the instance current, and
+        # re-reading after COMMIT would lose the transaction-scoped RLS GUC (#50).
 
     # Set anti-scraping headers
     response.headers["Cache-Control"] = "no-store"

@@ -520,10 +520,13 @@ class RecruiterAnalysis(SQLModel, table=True):
     )
     jd_text: str = Field(sa_column=Column(Text), description="Job description text used")
     score: int | None = Field(default=None, ge=0, le=100, description="Match score 0-100")
-    strengths: dict | None = Field(
+    # Stored as JSON. The producer is ``app.llm.schemas.MatchAnalysis``, whose
+    # ``strengths``/``gaps`` are ``list[str]``, and this model is populated from
+    # it verbatim -- so the value is a list, not a mapping.
+    strengths: list[str] | None = Field(
         default=None, sa_column=Column(JSON), description="Identified strengths"
     )
-    gaps: dict | None = Field(
+    gaps: list[str] | None = Field(
         default=None, sa_column=Column(JSON), description="Identified gaps"
     )
     reasoning: str | None = Field(

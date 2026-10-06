@@ -93,7 +93,8 @@ async def give_consent(
         )
 
         await db.commit()
-        await db.refresh(existing_consent)
+        # No refresh: expire_on_commit=False keeps the instance current, and
+        # re-reading after COMMIT would lose the transaction-scoped RLS GUC (#50).
         return ConsentResponse(
             accepted_at=existing_consent.accepted_at,
             tos_version=existing_consent.tos_version,
@@ -119,7 +120,8 @@ async def give_consent(
     )
 
     await db.commit()
-    await db.refresh(consent)
+    # No refresh: expire_on_commit=False keeps the instance current, and
+    # re-reading after COMMIT would lose the transaction-scoped RLS GUC (#50).
 
     return ConsentResponse(
         accepted_at=consent.accepted_at,

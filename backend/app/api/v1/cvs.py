@@ -104,7 +104,8 @@ async def upload_cv(
 
     db.add(cv)
     await db.commit()
-    await db.refresh(cv)
+    # No refresh: expire_on_commit=False keeps the instance current, and
+    # re-reading after COMMIT would lose the transaction-scoped RLS GUC (#50).
 
     return CVUploadResponse(
         cv_id=cv.id,
@@ -136,7 +137,8 @@ async def create_structured_cv(
 
     db.add(cv)
     await db.commit()
-    await db.refresh(cv)
+    # No refresh: expire_on_commit=False keeps the instance current, and
+    # re-reading after COMMIT would lose the transaction-scoped RLS GUC (#50).
 
     return CVUploadResponse(
         cv_id=cv.id,
@@ -264,7 +266,8 @@ async def update_cv(
     await recalc_embedding(cv, db)
 
     await db.commit()
-    await db.refresh(cv)
+    # No refresh: expire_on_commit=False keeps the instance current, and
+    # re-reading after COMMIT would lose the transaction-scoped RLS GUC (#50).
 
     return cv
 

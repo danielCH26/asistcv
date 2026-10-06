@@ -174,7 +174,8 @@ async def create_candidate(
     )
 
     await db.commit()
-    await db.refresh(candidate)
+    # No refresh: expire_on_commit=False keeps the instance current, and
+    # re-reading after COMMIT would lose the transaction-scoped RLS GUC (#50).
 
     return CandidateResponse(
         id=candidate.id,
@@ -390,7 +391,8 @@ async def update_candidate(
     _audit_log(db, current_user.id, "candidate_updated", candidate.id)
 
     await db.commit()
-    await db.refresh(candidate)
+    # No refresh: expire_on_commit=False keeps the instance current, and
+    # re-reading after COMMIT would lose the transaction-scoped RLS GUC (#50).
 
     return CandidateResponse(
         id=candidate.id,
@@ -543,7 +545,8 @@ async def match_candidate(
     _audit_log(db, current_user.id, "candidate_matched", candidate.id)
 
     await db.commit()
-    await db.refresh(analysis)
+    # No refresh: expire_on_commit=False keeps the instance current, and
+    # re-reading after COMMIT would lose the transaction-scoped RLS GUC (#50).
 
     # Increment usage counter ONLY after successful match
     # This ensures credits are consumed only for successful matches
