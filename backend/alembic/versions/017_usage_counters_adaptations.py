@@ -12,7 +12,7 @@ varying(32)`` on the UPDATE that stamps the new revision. The shorter
 slug kept the table-level intent (``adaptations_used`` is what lands
 on the table) without touching the historical schema.
 
-Mirrors ``openspec/changes/sprint-adapt-cv-outreach/specs/adaptation-billing/spec.md``
+Mirrors ``openspec/changes/archive/2026-10-06-sprint-adapt-cv-outreach/specs/adaptation-billing/spec.md``
 (Requirement: "Conteo vía usage_counters").
 
 Behavior

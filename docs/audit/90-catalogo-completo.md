@@ -112,7 +112,7 @@
 | A55 | `.env.example` del backend documenta 12 de 26 variables: faltan `JWT_SECRET`, `AUDIT_CLEANUP_TOKEN`, `ADAPTATION_ENABLED`, `FRONTEND_URL`, 4× `STRIPE_PRICE_*` y 3× de retrieval | `backend/.env.example` | P1 |
 | A56 | `infra/.env.example` declara el puerto de DB como 5432 cuando docker-compose usa 5433 | `infra/.env.example`; `infra/docker-compose.yml` | P2 |
 | A57 | El `.env.example` del frontend documenta `PUBLIC_BACKEND_API_KEY`, que el build prohíbe usar | `frontend/.env.example` | P2 |
-| A58 | El cambio SDD activo `sprint-adapt-cv-outreach` muestra 0 de 37 tasks marcadas, aunque sus 4 PRs están mergeadas, y no tiene verify-report | `openspec/changes/sprint-adapt-cv-outreach/` | P2 |
+| A58 | ~~El cambio SDD activo `sprint-adapt-cv-outreach` muestra 0 de 37 tasks marcadas, aunque sus 4 PRs están mergeadas, y no tiene verify-report~~ **RESUELTO 2026-10-06**: verificado y archivado. La causa era que se implementó sin fase `apply`. La verificación encontró 3 CRITICAL (#81 `content_version` inexistente, #82 `sanitize_jd` nunca implementado, #83 `jd_text` ≥1 y no ≥50) y 11 WARNING (#84) | `openspec/changes/archive/2026-10-06-sprint-adapt-cv-outreach/` | P2 → cerrado |
 | A59 | No hay specs de outreach ni de tracking pipeline: la búsqueda en `openspec/specs/` confirma el gap de feature completo | `openspec/specs/` | P2 |
 
 ---

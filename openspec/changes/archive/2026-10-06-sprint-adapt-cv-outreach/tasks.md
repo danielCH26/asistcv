@@ -4,6 +4,43 @@ Cadena de 3 PRs apilados a main (locked en design §10.3). Trazabilidad: cada ta
 el requirement de spec que la origina (`cv-adaptation` = cvA, `adaptation-billing` = bill,
 `adaptation-experience` = exp, `cv-management` = cvM).
 
+## Estado real verificado (2026-10-06)
+
+**Este change se implementó sin pasar por la fase `apply`.** El trabajo entró como
+cuatro commits directos (`aaf8cf9` PR1, `b426374` PR2a, `9fca36c` PR2b, `12dc7da` PR3),
+por eso los checkboxes de abajo quedaron en `0/37`.
+
+**Los checkboxes son históricos y NO son autoritativos.** La tabla siguiente sí lo es,
+y sale de [`verify-report.md`](./verify-report.md), que contrastó cada tarea contra el
+código. Dejar los `- [ ]` sin tocar es intencional: marcarlos todos sería tan falso como
+dejarlos en cero.
+
+| Estado | N | Tareas |
+|---|---|---|
+| `SHIPPED` | 18 | PR1.1, PR1.3, PR1.4 · PR2.2, PR2.6, PR2.11, PR2.12, PR2.15 · PR3.1, PR3.2, PR3.5, PR3.6, PR3.7, PR3.9 |
+| `PARTIAL` | 15 | PR1.2, PR1.5, PR1.6, PR1.7 · PR2.3, PR2.4, PR2.5, PR2.7, PR2.8, PR2.9, PR2.10, PR2.13, PR2.16 · PR3.3, PR3.4, PR3.11 |
+| `NOT SHIPPED` | 4 | PR2.1 (tests de paridad match/audit — los archivos no existen) · PR2.18 (E2E) · PR3.8 (tests de componente) · PR3.10 (tests de fases de polling) |
+| `SUPERSEDED` | 2 | PR2.14 (sweeper inlineado y rediseñado a *delete*) · PR2.17 (los tests RLS quedaron repartidos en 3 archivos) |
+| `UNVERIFIABLE` | 1 | PR1.8 (validación sobre el branch de Neon — externo) |
+
+**Patrón.** PR1 y billing salieron como se diseñaron. La capa de contrato de datos de
+PR2 y la capa de inyección salieron reducidas. Los tests de frontend de PR3 y los guards
+de bundle/i18n nunca salieron.
+
+**Los 3 CRITICAL del verify-report están todos en la capa de contrato de PR2** — la capa
+que se saltó al implementar por commits directos. Ver `verify-report.md` §3.
+
+### Hallazgos que sobreviven al cierre de este change
+
+| Severidad | Resumen | Tracking |
+|---|---|---|
+| CRITICAL | `content_version` no existe como columna; la invalidación de caché es una tautología y su test es tautológico | #81 |
+| CRITICAL | `sanitize_jd` no existe: el JD crudo entra al prompt sin delimitar (`cvA-R4` sin implementar) | #82 |
+| CRITICAL | `jd_text` valida ≥1 carácter, no ≥50: un JD de 1 carácter llega al LLM de pago y cobra slot | #83 |
+| WARNING (11) | Divergencia de contrato de respuesta, `outreach`/`brief` ausentes en vez de `null`, `adaptation_enabled` en `False` por defecto, alias del validador admite 23 de 26 letras sueltas, entre otros | #84 |
+
+---
+
 ## Review Workload Forecast
 
 | Field | Value |

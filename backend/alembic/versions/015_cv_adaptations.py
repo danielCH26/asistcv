@@ -5,7 +5,7 @@ Revises: 014_users_cvs_content_version
 Create Date: 2026-09-27
 
 Slice A foundation (PR1). Mirrors the table described in
-``openspec/changes/sprint-adapt-cv-outreach/specs/cv-adaptation/spec.md``
+``openspec/changes/archive/2026-10-06-sprint-adapt-cv-outreach/specs/cv-adaptation/spec.md``
 (Requirement: "Modelo CVAdaptation y aislamiento RLS"). The table is
 intentionally minimal in PR1 — additional operational columns
 (``content_version``, ``score_estimated``, ``retry_attempts``,
