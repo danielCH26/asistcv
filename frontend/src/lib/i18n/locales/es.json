@@ -23,7 +23,8 @@
 		"heading": "Pegá una descripción del puesto",
 		"intro": "Pegá el texto de la descripción del puesto (mínimo 50 caracteres) y obtené una coincidencia honesta contra tu perfil.",
 		"profileLabel": "Perfil activo",
-		"profileDefault": "Perfil por defecto (#1)"
+		"profileMissing": "Todavía no tenés un perfil propio.",
+		"profileMissingCta": "Configurá tu perfil"
 	},
 	"form": {
 		"placeholder": "Pegá acá el texto completo de la descripción del puesto…",

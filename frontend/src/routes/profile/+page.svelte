@@ -163,25 +163,31 @@
 		}
 	}
 
-	/** Garantiza un Profile para el contexto del match; lo crea desde el CV si falta. */
+	/** Garantiza un Profile propio para el contexto del match; lo crea desde el CV si falta. */
 	async function ensureProfile(): Promise<number> {
 		const current = get(profileStore);
-		try {
-			await apiClient.getProfile(current);
-			return current;
-		} catch {
-			const cvDetail = selectedCvId !== null ? await apiClient.getCv(selectedCvId) : null;
-			const structured = cvDetail?.structured ?? {};
-			const created = await apiClient.createProfile({
-				name: typeof structured.full_name === 'string' && structured.full_name ? structured.full_name : user?.full_name || 'CV',
-				headline: null,
-				experience: { items: structured.experience ?? [] },
-				skills: { items: structured.skills ?? [] },
-				preferences: { location: structured.location ?? null }
-			});
-			profileStore.set(created.id);
-			return created.id;
+		if (current !== null) {
+			try {
+				await apiClient.getProfile(current);
+				return current;
+			} catch {
+				// 404 = no existe o es de otro usuario. En ambos casos el id
+				// cacheado es inservible: olvidarlo antes de crear evita
+				// apuntar otra vez al perfil de alguien más (issue #85).
+				profileStore.forget();
+			}
 		}
+		const cvDetail = selectedCvId !== null ? await apiClient.getCv(selectedCvId) : null;
+		const structured = cvDetail?.structured ?? {};
+		const created = await apiClient.createProfile({
+			name: typeof structured.full_name === 'string' && structured.full_name ? structured.full_name : user?.full_name || 'CV',
+			headline: null,
+			experience: { items: structured.experience ?? [] },
+			skills: { items: structured.skills ?? [] },
+			preferences: { location: structured.location ?? null }
+		});
+		profileStore.set(created.id);
+		return created.id;
 	}
 
 	async function runMatch() {

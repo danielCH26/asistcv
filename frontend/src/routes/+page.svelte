@@ -34,7 +34,11 @@
 	}
 
 	async function handleSubmit(event: CustomEvent<{ jdText: string }>) {
+		// Sin un perfil propio no hay contra qué medir el match: el backend
+		// responde 404 para un perfil ajeno, y esta pantalla no crea perfiles
+		// — eso vive en /profile, que tiene el CV con el que armarlo.
 		const profileId = get(profileStore);
+		if (profileId === null) return;
 		await analysisStore.submit(event.detail.jdText, profileId);
 	}
 
@@ -51,9 +55,16 @@
 	<header class="home__intro">
 		<h1>{$_('home.heading')}</h1>
 		<p>{$_('home.intro')}</p>
-		<p class="home__profile">
-			{$_('home.profileLabel')}: <strong>#{$profileStore}</strong>
-		</p>
+		{#if $profileStore !== null}
+			<p class="home__profile">
+				{$_('home.profileLabel')}: <strong>#{$profileStore}</strong>
+			</p>
+		{:else}
+			<p class="home__profile" data-testid="home-no-profile">
+				{$_('home.profileMissing')}
+				<a href="/profile">{$_('home.profileMissingCta')}</a>
+			</p>
+		{/if}
 		{#if $isAuthenticated && usageLabel()}
 			<p class="home__usage">{usageLabel()}</p>
 		{/if}

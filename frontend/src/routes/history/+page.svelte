@@ -10,7 +10,10 @@
 	const pageSize = 20;
 
 	async function refresh() {
-		const profileId = get(profileStore);
+		// Sin perfil resuelto no hay filtro: el historial se scopea al
+		// usuario en el backend, así que omitir el filtro muestra sus
+		// análisis en vez de los de otro (issue #85).
+		const profileId = get(profileStore) ?? undefined;
 		await historyStore.load({ limit: pageSize, offset: pageIndex * pageSize, profileId });
 	}
 
