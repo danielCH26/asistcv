@@ -2,19 +2,28 @@
 
 import asyncio
 import signal
+import sys
 
-import mcp.server.stdio
 import structlog
 
 from .config import get_settings
 from .http_client import BackendClient
 from .server import create_server
 
-# Configurar structlog
+# Configurar structlog. CRÍTICO: el stdout de este proceso ES el canal stdio
+# del protocolo MCP — loguear ahí corrompe los mensajes JSON-RPC. Los logs
+# van a stderr como JSON (issue #59: web_search_call con query, provider,
+# latency_ms, num_results, cache_hit).
 structlog.configure(
     wrapper_class=structlog.make_filtering_bound_logger(
         getattr(structlog, get_settings().log_level.upper(), structlog.INFO)
     ),
+    logger_factory=structlog.WriteLoggerFactory(file=sys.stderr),
+    processors=[
+        structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer(),
+    ],
 )
 
 logger = structlog.get_logger(__name__)
@@ -41,14 +50,10 @@ async def main() -> None:
     signal.signal(signal.SIGTERM, signal_handler)
 
     try:
-        # Iniciar con transporte stdio (estándar para MCP)
-        async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
-            logger.info("MCP server running on stdio")
-            await server.run(
-                read_stream,
-                write_stream,
-                server.create_initialization_options(),
-            )
+        # Iniciar con transporte stdio (estándar para MCP). MCPServer (2.x)
+        # gestiona los streams internamente en run_stdio_async.
+        logger.info("MCP server running on stdio")
+        await server.run_stdio_async()
     except asyncio.CancelledError:
         logger.info("Server cancelled")
     except Exception as e:
