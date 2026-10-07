@@ -502,7 +502,7 @@
 	}
 
 	.candidate__actions button {
-		padding: var(--space-1) 0.75rem;
+		padding: var(--space-1) var(--space-3);
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-control);
 		background: var(--clay-fill);

@@ -102,32 +102,32 @@
 
 	.history__empty {
 		text-align: center;
-		padding: 2rem;
+		padding: var(--space-6);
 		background: var(--surface);
 		border: 1px dashed var(--border);
-		border-radius: 10px;
+		border-radius: var(--radius-card-lg);
 		color: var(--text-muted);
 	}
 
 	.history__error {
-		padding: 1rem var(--space-5);
+		padding: var(--space-4) var(--space-5);
 		background: var(--error-bg);
 		color: var(--error);
 		border: 1px solid var(--error);
-		border-radius: 8px;
+		border-radius: var(--radius-card);
 	}
 
 	.history__pagination {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		gap: 0.75rem;
+		gap: var(--space-3);
 	}
 
 	.history__pagination button {
 		padding: var(--space-2) var(--space-4);
 		border: 1px solid var(--border);
-		border-radius: 6px;
+		border-radius: var(--radius-control);
 		background: var(--surface);
 		color: var(--text);
 		cursor: pointer;

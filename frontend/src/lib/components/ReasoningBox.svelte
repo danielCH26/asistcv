@@ -13,7 +13,7 @@
 	.reasoning {
 		background: var(--color-surface);
 		border: 1px solid var(--color-line);
-		border-radius: 10px;
+		border-radius: var(--radius-card-lg);
 		padding: var(--space-4) var(--space-5);
 	}
 

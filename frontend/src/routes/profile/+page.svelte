@@ -625,7 +625,7 @@
 
 	.profile__jd {
 		width: 100%;
-		padding: var(--space-2) 0.75rem;
+		padding: var(--space-2) var(--space-3);
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-card);
 		background: var(--clay-fill);
@@ -698,7 +698,7 @@
 	}
 
 	.profile__adapt-field select {
-		padding: var(--space-2) 0.75rem;
+		padding: var(--space-2) var(--space-3);
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-card);
 		background: var(--clay-fill);

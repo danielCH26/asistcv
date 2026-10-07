@@ -125,7 +125,7 @@
 	.cv-form textarea {
 		padding: var(--space-2) var(--space-3);
 		border: 1px solid var(--color-line);
-		border-radius: 6px;
+		border-radius: var(--radius-control);
 		background: var(--clay-fill);
 		color: var(--color-ink-strong);
 		font-family: inherit;
@@ -150,7 +150,7 @@
 		align-self: flex-start;
 		padding: var(--space-2) var(--space-5);
 		border: none;
-		border-radius: 8px;
+		border-radius: var(--radius-card);
 		background: var(--color-action);
 		color: var(--color-on-action);
 		font-weight: 600;

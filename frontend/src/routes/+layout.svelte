@@ -150,7 +150,7 @@
 	/* A nav link is a destination, not a control the person operates, so it
 	   stays flat. The accent fill on .is-active is the state, not the material. */
 	.app-shell__link {
-		padding: var(--space-2) 0.75rem;
+		padding: var(--space-2) var(--space-3);
 		border-radius: var(--radius-control);
 		color: var(--color-ink);
 		font-size: var(--text-sm);
@@ -180,7 +180,7 @@
 
 	/* A real <button>: control, so clay. */
 	.app-shell__session {
-		padding: var(--space-2) 0.75rem;
+		padding: var(--space-2) var(--space-3);
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-control);
 		background: var(--clay-fill);
