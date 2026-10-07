@@ -83,4 +83,15 @@ Static tool descriptions can't carry a fresh date (staleness), and MCP servers c
 
 ### L3 — Evidence / commits (appended as work progresses)
 
-- TBD per task.
+**T1 (S2,S3,S7 — client + cache) — DONE**
+- RED: 11 tests failed on missing modules. GREEN: `search_client.py` (TavilyClient + taxonomía de errores) + `ttl_cache.py` (TTL con `now_fn` inyectable) + 2 campos en `config.py`.
+- Fixture aprendizajes: `get_settings.cache_clear` no existe tras el monkeypatch (guard con getattr); el httpx inyectado necesita `base_url` propio para paths relativos.
+- 11/11 · ruff · mypy strict ✅.
+
+**T2+T3 (S1,S4,S5,S6,S7 — tool + logging + grounding) — DONE, con hallazgo mayor**
+- **BUG DE PRODUCCIÓN descubierto y arreglado**: el lock de `mcp` es 2.2.0, que **eliminó la API de decoradores** del `Server` low-level (`@server.list_tools()` → AttributeError; los `type: ignore` lo ocultaban de mypy). El adapter **no podía ni construirse** con el lock actual. Además se descubrió que `uv run pytest` corría contra el **mcp del sistema** (el venv no tenía pytest — los dev-deps son extras; CI usa `uv sync --all-extras`) — los tests históricos nunca probaron el mcp del lock.
+- Migración: `server.py` reescrito sobre **`MCPServer`** (el renombre de FastMCP en 2.x): tools declaradas con `@mcp.tool()` tipado (schemas generados por pydantic, `Field(ge=1, le=10)` para max_results), `run_stdio_async()` en `__main__`, todo mypy-strict sin ignores.
+- **S6 date grounding**: `MCPServer(instructions=...)` acepta la fecha de hoy calculada al construir — verificado con test (`today in server.instructions`).
+- **S4 logging**: structlog configurado con `WriteLoggerFactory(sys.stderr)` + `JSONRenderer` — el stdout es el canal stdio del protocolo; los eventos `web_search_call` (query, provider, latency_ms, num_results, cache_hit) van a stderr JSON.
+- **S5 env**: `WEB_SEARCH_PROVIDER`/`TAVILY_API_KEY` en adapter config + `.env.example` documentadas.
+- Verificado contra el mcp REAL del lock: 49/49 · ruff · mypy strict ✅.
