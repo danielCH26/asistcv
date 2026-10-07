@@ -86,4 +86,19 @@ The issue's numbers (radius 4/8/12, motion 100/200/400, shadows sm/md/lg/xl) pre
 
 ### L4 — Evidence / commits (appended as work progresses)
 
-- TBD per task.
+**T1 (S1-S4 — TS token layer + machine checks) — DONE**
+- RED: `tokens.test.ts` (14 parity/coverage tests) + `contrast.test.ts` (13 WCAG tests) failed on missing modules.
+- GREEN: 6 files in `frontend/src/lib/tokens/` (colors/typography/spacing/radius/shadow/motion), values verbatim from `app.css :root`. The contrast suite recomputes WCAG 2.1 ratios and its pinned score-fill ratios (4.83/7.09/5.48 ±0.05) matched the documented measurements on first run — the formula agrees with the year-old manual audit.
+- Stale `app.css` comment ("no automated check for it yet", cited an uncommitted `contrast-audit.mjs`) replaced with a pointer at the test.
+- Fix during GREEN: `import.meta.url` is not a `file:` URL under the esm-env alias — CSS resolved from `process.cwd()` instead.
+- Verified: vitest 78/78 (10 files), svelte-check 0 errors.
+
+**T2–T5 (S5 — literal migration) — DONE (delegated writer)**
+- 85 substitutions, all byte-identical renames: radius 37, spacing 44, font-size 4. Zero UNMAPPED — every literal had an exact token.
+- T2 `20a1e66` history/[id] (19) · T3 `e2d07eb` billing (14) · T4 `2dedf17` signup+login (20) · T5 `a828347` layout+audit+recruiter+profile+history + 9 components (32).
+- Excluded as legitimate (documented): 29× `1px` borders, 16× width/height-family dims, 5× `@media` preludes (silent-no-op trap), ~20× bare `0` (repo convention, `--space-0` not substituted).
+- Verified after every group: vitest 78/78, svelte-check 0 errors, final audit grep **0 / 0 / 0** across routes+components.
+
+**T6 (S6 — final QA) — DONE**
+- `npm run build` green (check-env guard + vite build + static adapter, 5.6s).
+- Full verification matrix: vitest 10 files / 78 tests ✅ · svelte-check 0 errors ✅ · build ✅ · audit 0 literals ✅.
