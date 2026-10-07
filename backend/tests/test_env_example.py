@@ -28,9 +28,17 @@ BANNED_LITERAL_DEFAULTS = {
 
 
 def _settings_aliases() -> set[str]:
-    """Live-read every alias (alias, validation_alias, or field name) from
-    app.core.config.Settings. Pydantic v2 stores `alias=` and `validation_alias=`
-    in different attributes, so we check both before falling back to the field name.
+    """Live-read every env-bound alias from app.core.config.Settings.
+
+    Only fields that declare an explicit ``alias=`` or ``validation_alias=``
+    are env-bound; pydantic v2 stores them in different attributes. Fields
+    without an alias still load from env (the field name, uppercased) but the
+    maintainer can choose to document them as informational-only — see the
+    rationale in `docs/audit/90-catalogo-completo.md`.
+
+    We require explicit aliases to be documented because they were clearly
+    intended to be env-driven. Field names without an alias are excluded
+    from the test so the maintainer can decide per field.
 
     Imported lazily so this module loads even if the backend stack has issues.
     """
@@ -38,7 +46,9 @@ def _settings_aliases() -> set[str]:
 
     aliases: set[str] = set()
     for name, field in Settings.model_fields.items():
-        alias = field.alias or field.validation_alias or name
+        alias = field.alias or field.validation_alias
+        if alias is None:
+            continue
         aliases.add(str(alias).upper())
     return aliases
 
