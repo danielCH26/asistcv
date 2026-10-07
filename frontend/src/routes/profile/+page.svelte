@@ -3,7 +3,7 @@
 	import { _ } from 'svelte-i18n';
 	import { get } from 'svelte/store';
 	import { apiClient } from '$api/client';
-	import { ApiError, type CVSummary, type MatchAnalysis, type CVStructuredData, type AdaptationSummary } from '$api/types';
+	import { ApiError, type AuditAnonymousResult, type CVSummary, type MatchAnalysis, type CVStructuredData, type AdaptationSummary } from '$api/types';
 	import { profileStore } from '$stores/profile';
 	import { adaptationStore } from '$stores/adaptation';
 	import {
@@ -20,6 +20,18 @@
 	// 'cv_only' = auditoría del CV sin JD (auditAnonymous sin jd_text).
 	type AnalysisTab = 'jd' | 'cv_only';
 	let activeTab: AnalysisTab = 'jd';
+
+	// Solo CV (tab cv_only): misma llamada que el funnel anónimo pero desde
+	// una página autenticada; estado local para no sangrar al funnel /audit.
+	let soloMode: 'pdf' | 'text' = 'pdf';
+	let soloFile: File | null = null;
+	let soloFileName = '';
+	let soloFileSize = 0;
+	let soloText = '';
+	let soloRunning = false;
+	let soloResult: AuditAnonymousResult | null = null;
+	let soloError = '';
+	let soloErrorCode = '';
 
 	const ONBOARDING_STEP_KEY = 'asistcv.onboarding_step';
 	const MAX_PDF_BYTES = 10 * 1024 * 1024;
@@ -200,8 +212,7 @@
 		if (jdText.trim().length < 50) {
 			matchError = $_('form.validationShort');
 			return;
-		}
-		matching = true;
+		}		matching = true;
 		matchError = '';
 		matchResult = null;
 		planLimitReached = false;
@@ -218,6 +229,80 @@
 			}
 		} finally {
 			matching = false;
+		}
+	}
+
+	function handleSoloFile(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file) return;
+		soloError = '';
+		if (file.size > MAX_PDF_BYTES) {
+			soloError = $_('audit.fileTooLarge');
+			return;
+		}
+		soloFile = file;
+		soloFileName = file.name;
+		soloFileSize = file.size;
+	}
+
+	function clearSoloFile() {
+		soloFile = null;
+		soloFileName = '';
+		soloFileSize = 0;
+	}
+
+	function soloErrorMessage(): string {
+		switch (soloErrorCode) {
+			case 'PDF_NO_TEXT':
+				return $_('audit.pdfNoText');
+			case 'PDF_PARSE_FAILED':
+				return $_('audit.pdfParseFailed');
+			case 'UNSUPPORTED_MEDIA_TYPE':
+				return $_('audit.wrongFileType');
+			case 'CV_TOO_SHORT':
+				return $_('audit.cvTooShort');
+			case 'CV_REQUIRED':
+				return $_('audit.cvRequired');
+			default:
+				return $_('audit.genericError');
+		}
+	}
+
+	async function runSoloAudit() {
+		soloError = '';
+		soloErrorCode = '';
+		soloResult = null;
+		if (soloMode === 'pdf' && !soloFile) {
+			soloError = $_('audit.cvRequired');
+			return;
+		}
+		if (soloMode === 'text' && soloText.trim().length < 50) {
+			soloError = $_('audit.cvTooShort');
+			return;
+		}
+		soloRunning = true;
+		try {
+			soloResult = await apiClient.auditAnonymous({
+				cv_file: soloMode === 'pdf' ? (soloFile ?? undefined) : undefined,
+				cv_text: soloMode === 'text' ? soloText : undefined
+			});
+		} catch (err) {
+			if (err instanceof ApiError) {
+				if (err.retryAfter !== undefined) {
+					soloError = $_('audit.rateLimited', {
+						values: { minutes: Math.ceil(err.retryAfter / 60) }
+					});
+				} else {
+					soloErrorCode = err.code ?? '';
+					soloError = soloErrorMessage();
+				}
+			} else {
+				soloError = $_('audit.genericError');
+			}
+		} finally {
+			soloRunning = false;
 		}
 	}
 
@@ -427,6 +512,96 @@
 			{:else}
 				<div class="profile__panel" role="tabpanel">
 					<p class="profile__match-hint">{$_('profile.cvOnlyHint')}</p>
+
+					<div class="profile__solo-modes">
+						<button
+							type="button"
+							aria-pressed={soloMode === 'pdf'}
+							class:active={soloMode === 'pdf'}
+							on:click={() => (soloMode = 'pdf')}
+						>
+							{$_('audit.modePdf')}
+						</button>
+						<button
+							type="button"
+							aria-pressed={soloMode === 'text'}
+							class:active={soloMode === 'text'}
+							on:click={() => (soloMode = 'text')}
+						>
+							{$_('audit.modeText')}
+						</button>
+					</div>
+
+					{#if soloMode === 'pdf'}
+						<div class="profile__solo-file">
+							{#if soloFile}
+								<span>{soloFileName} · {Math.max(1, Math.round(soloFileSize / 1024))} KB</span>
+								<button type="button" on:click={clearSoloFile}>{$_('audit.fileClear')}</button>
+							{:else}
+								<label class="profile__solo-file-label">
+									{$_('audit.fileLabel')}
+									<input
+										type="file"
+										accept="application/pdf"
+										on:change={handleSoloFile}
+									/>
+								</label>
+							{/if}
+						</div>
+					{:else}
+						<textarea
+							class="profile__solo-text"
+							rows="8"
+							bind:value={soloText}
+							placeholder={$_('audit.cvPlaceholder')}
+						/>
+					{/if}
+
+					<button
+						type="button"
+						class="profile__solo-submit"
+						disabled={soloRunning || (soloMode === 'text' && soloText.trim().length < 50)}
+						on:click={runSoloAudit}
+					>
+						{soloRunning ? $_('audit.submitting') : $_('audit.submit')}
+					</button>
+
+					{#if soloError}
+						<p class="profile__error" role="alert">{soloError}</p>
+					{/if}
+
+					{#if soloResult}
+						<div class="profile__result">
+							<p class="profile__score">
+								{$_('result.scoreLabel')}: <strong>{soloResult.score}</strong>
+							</p>
+							<h3>{$_('result.problematicas')}</h3>
+							<ul class="profile__solo-issues">
+								{#each soloResult.problematicas ?? [] as issue}
+									<li>
+										<span class="profile__solo-severity profile__solo-severity--{issue.severidad}">
+											{issue.severidad}
+										</span>
+										<span><strong>{issue.seccion}:</strong> {issue.problema}</span>
+									</li>
+								{/each}
+							</ul>
+							<h3>{$_('result.recomendaciones')}</h3>
+							<ul>
+								{#each soloResult.recomendaciones ?? [] as item}
+									<li>{item}</li>
+								{/each}
+							</ul>
+							<h3>{$_('result.fortalezas')}</h3>
+							<ul>
+								{#each soloResult.strengths as item}
+									<li>{item}</li>
+								{/each}
+							</ul>
+							<h3>{$_('result.reasoning')}</h3>
+							<p class="profile__reasoning">{soloResult.reasoning}</p>
+						</div>
+					{/if}
 				</div>
 			{/if}
 		</section>
@@ -625,6 +800,153 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-3);
+	}
+
+	/* Solo CV (tab cv_only) — mode switch mirrors the tablist treatment at
+	   smaller scale; severity chips reuse the semantic palette. */
+	.profile__solo-modes {
+		display: flex;
+		gap: var(--space-1);
+	}
+
+	.profile__solo-modes button {
+		padding: var(--space-1) var(--space-3);
+		border: 1px solid var(--color-line);
+		border-radius: var(--radius-pill);
+		background: transparent;
+		color: var(--color-ink-muted);
+		font-size: var(--text-xs);
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.profile__solo-modes button.active {
+		background: var(--color-action-muted);
+		border-color: var(--color-action);
+		color: var(--color-action);
+	}
+
+	.profile__solo-modes button:focus-visible {
+		outline: 2px solid var(--color-action);
+		outline-offset: 1px;
+	}
+
+	.profile__solo-file-label {
+		display: inline-flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		color: var(--color-ink-muted);
+		font-size: var(--text-sm);
+	}
+
+	.profile__solo-file {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		font-size: var(--text-sm);
+		color: var(--color-ink);
+	}
+
+	.profile__solo-file button {
+		padding: var(--space-1) var(--space-2);
+		border: 1px solid var(--color-line);
+		border-radius: var(--radius-control);
+		background: var(--color-surface);
+		color: var(--color-danger);
+		font-size: var(--text-xs);
+		cursor: pointer;
+	}
+
+	.profile__solo-text {
+		width: 100%;
+		resize: vertical;
+		padding: var(--space-3);
+		border: 1px solid var(--color-line);
+		border-radius: var(--radius-card);
+		font-family: inherit;
+		font-size: var(--text-sm);
+		background: var(--clay-fill);
+		color: var(--color-ink);
+		box-shadow: var(--clay-raised);
+	}
+
+	.profile__solo-text:focus {
+		outline: 2px solid var(--color-action);
+		outline-offset: 1px;
+		border-color: var(--color-action);
+		box-shadow: var(--clay-lifted);
+	}
+
+	.profile__solo-submit {
+		align-self: flex-start;
+		padding: var(--space-2) var(--space-5);
+		border: none;
+		border-radius: var(--radius-card);
+		background: var(--color-action);
+		color: var(--color-on-action);
+		font-weight: 600;
+		font-size: var(--text-sm);
+		cursor: pointer;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.profile__solo-submit:hover:not(:disabled) {
+		filter: brightness(1.05);
+		box-shadow: var(--clay-lifted);
+	}
+
+	.profile__solo-submit:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
+	}
+
+	.profile__solo-submit:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.profile__solo-issues {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+
+	.profile__solo-issues li {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-2);
+		font-size: var(--text-sm);
+	}
+
+	.profile__solo-severity {
+		flex-shrink: 0;
+		padding: 0 var(--space-2);
+		border-radius: var(--radius-pill);
+		font-size: var(--text-2xs);
+		font-weight: 600;
+		text-transform: uppercase;
+	}
+
+	.profile__solo-severity--alta,
+	.profile__solo-severity--high {
+		background: var(--color-danger-muted);
+		color: var(--color-danger);
+	}
+
+	.profile__solo-severity--media,
+	.profile__solo-severity--medium {
+		background: var(--color-warning-muted);
+		color: var(--color-warning);
+	}
+
+	.profile__solo-severity--baja,
+	.profile__solo-severity--low {
+		background: var(--color-success-muted);
+		color: var(--color-success);
 	}
 
 	.profile__error {

@@ -34,10 +34,11 @@ vi.mock('$stores/session', async () => {
 });
 
 import { apiClient } from '$api/client';
-import type { MatchAnalysis } from '$api/types';
+import type { AuditAnonymousResult, MatchAnalysis } from '$api/types';
 import ProfilePage from '../routes/profile/+page.svelte';
 
 const mockedMatch = vi.mocked(apiClient.match);
+const mockedAudit = vi.mocked(apiClient.auditAnonymous);
 
 const MATCH_RESULT: MatchAnalysis = {
 	score: 72,
@@ -45,6 +46,19 @@ const MATCH_RESULT: MatchAnalysis = {
 	gaps: ['SQL'],
 	energy_level: 'high',
 	reasoning: 'Buen match.'
+};
+
+// Mismo shape que devuelve el funnel cv_only (AuditAnonymousResult).
+const CV_ONLY_RESULT: AuditAnonymousResult = {
+	audit_token: 'tok-123',
+	mode: 'cv_only',
+	score: 58,
+	strengths: ['Python'],
+	gaps: [],
+	energy_level: 'medium',
+	reasoning: 'CV razonable.',
+	problematicas: [{ seccion: 'experiencia', problema: 'Sin métricas', severidad: 'alta' }],
+	recomendaciones: ['Agregá números']
 };
 
 beforeEach(() => {
@@ -111,5 +125,66 @@ describe('profile page — tabs de análisis', () => {
 		await waitFor(() => expect(mockedMatch).toHaveBeenCalledTimes(1));
 		const payload = mockedMatch.mock.calls[0][0] as { jd_text: string };
 		expect(payload.jd_text).toBe('x'.repeat(60));
+	});
+});
+
+describe('profile page — tab Solo CV (audit cv_only)', () => {
+	async function goToSoloTab() {
+		render(ProfilePage);
+		await (await panel()).findByPlaceholderText(JD_PLACEHOLDER);
+		await fireEvent.click(screen.getByRole('tab', { name: TAB_CV_ONLY }));
+		return await screen.findByRole('tabpanel');
+	}
+
+	async function selectSoloPdf(name = 'cv.pdf') {
+		const panelEl = await screen.findByRole('tabpanel');
+		const fileInput = panelEl.querySelector('input[type="file"]') as HTMLInputElement;
+		const file = new File(['%PDF-1.4 test'], name, { type: 'application/pdf' });
+		await fireEvent.change(fileInput, { target: { files: [file] } });
+		return file;
+	}
+
+	it('con archivo seleccionado el submit NO envía jd_text (modo cv_only)', async () => {
+		mockedAudit.mockResolvedValueOnce(CV_ONLY_RESULT);
+		await goToSoloTab();
+
+		const file = await selectSoloPdf();
+		await fireEvent.click(screen.getByRole('button', { name: /auditar mi cv|audit my cv/i }));
+
+		await waitFor(() => expect(mockedAudit).toHaveBeenCalledTimes(1));
+		const payload = mockedAudit.mock.calls[0][0];
+		expect(payload.jd_text).toBeUndefined();
+		expect(payload.cv_file).toBe(file);
+		expect(payload.cv_text).toBeUndefined();
+	});
+
+	it('con texto pegado envía cv_text sin jd_text', async () => {
+		mockedAudit.mockResolvedValueOnce(CV_ONLY_RESULT);
+		await goToSoloTab();
+
+		await fireEvent.click(screen.getByRole('button', { name: /pegar texto|paste text/i }));
+		const cvText = screen.getByPlaceholderText(
+			/texto de tu hoja de vida|paste your cv|resume text/i
+		);
+		await fireEvent.input(cvText, { target: { value: 'x'.repeat(80) } });
+		await fireEvent.click(screen.getByRole('button', { name: /auditar mi cv|audit my cv/i }));
+
+		await waitFor(() => expect(mockedAudit).toHaveBeenCalledTimes(1));
+		const payload = mockedAudit.mock.calls[0][0];
+		expect(payload.jd_text).toBeUndefined();
+		expect(payload.cv_text).toBe('x'.repeat(80));
+		expect(payload.cv_file).toBeUndefined();
+	});
+
+	it('renderiza el resultado cv_only (score + problemáticas)', async () => {
+		mockedAudit.mockResolvedValueOnce(CV_ONLY_RESULT);
+		await goToSoloTab();
+
+		await selectSoloPdf();
+		await fireEvent.click(screen.getByRole('button', { name: /auditar mi cv|audit my cv/i }));
+
+		expect(await screen.findByText('58')).toBeTruthy();
+		expect(await screen.findByText(/sin m(e|é)tricas/i)).toBeTruthy();
+		expect(await screen.findByText(/agregá n(u|ú)meros|add numbers/i)).toBeTruthy();
 	});
 });
