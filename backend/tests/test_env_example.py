@@ -28,7 +28,9 @@ BANNED_LITERAL_DEFAULTS = {
 
 
 def _settings_aliases() -> set[str]:
-    """Live-read every validation_alias (or field name) from app.core.config.Settings.
+    """Live-read every alias (alias, validation_alias, or field name) from
+    app.core.config.Settings. Pydantic v2 stores `alias=` and `validation_alias=`
+    in different attributes, so we check both before falling back to the field name.
 
     Imported lazily so this module loads even if the backend stack has issues.
     """
@@ -36,19 +38,29 @@ def _settings_aliases() -> set[str]:
 
     aliases: set[str] = set()
     for name, field in Settings.model_fields.items():
-        alias = field.alias or name
-        aliases.add(alias.upper())
+        alias = field.alias or field.validation_alias or name
+        aliases.add(str(alias).upper())
     return aliases
 
 
 def _example_keys() -> set[str]:
-    """Parse backend/.env.example into a set of declared env var names."""
+    """Parse backend/.env.example into a set of declared env var names.
+
+    Counts both active (`KEY=value`) and commented (`# KEY=value`) lines, so
+    documentation that lives inside an optional / commented block still pins.
+    """
     assert ENV_EXAMPLE.is_file(), f"backend/.env.example not found at {ENV_EXAMPLE}"
     keys: set[str] = set()
-    for line in ENV_EXAMPLE.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
+    for raw_line in ENV_EXAMPLE.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line:
             continue
+        # Strip a leading "# " comment marker so documentation inside
+        # commented blocks still counts as a documented alias.
+        if line.startswith("#"):
+            line = line.lstrip("#").lstrip()
+            if not line:
+                continue
         # Accept `KEY=value` and ignore `export KEY=...`.
         m = re.match(r"^(?:export\s+)?([A-Z][A-Z0-9_]*)\s*=", line)
         if m:
