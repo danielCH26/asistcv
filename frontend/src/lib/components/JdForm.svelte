@@ -5,6 +5,12 @@
 	export let value = '';
 	export let loading = false;
 	export let minChars = 50;
+	/**
+	 * Copy keys are injectable so a host page can scope the intro text without
+	 * changing the home page's wording. Defaults keep the original behaviour.
+	 */
+	export let headingKey = 'home.heading';
+	export let introKey = 'home.intro';
 
 	const dispatch = createEventDispatcher<{ submit: { jdText: string } }>();
 
@@ -31,8 +37,8 @@
 </script>
 
 <form class="jd-form" on:submit={handleSubmit} novalidate>
-	<label class="jd-form__label" for="jd-text">{$_('home.heading')}</label>
-	<p class="jd-form__intro">{$_('home.intro')}</p>
+	<label class="jd-form__label" for="jd-text">{$_(headingKey)}</label>
+	<p class="jd-form__intro">{$_(introKey)}</p>
 
 	<textarea
 		id="jd-text"

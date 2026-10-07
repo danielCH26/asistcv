@@ -14,6 +14,12 @@
 	} from '$stores/session';
 	import CvStructuredForm from '$components/CvStructuredForm.svelte';
 	import AdaptationResult from '$components/AdaptationResult.svelte';
+	import JdForm from '$components/JdForm.svelte';
+
+	// Modos de análisis (issue #61): 'jd' = match contra JD (/v1/match),
+	// 'cv_only' = auditoría del CV sin JD (auditAnonymous sin jd_text).
+	type AnalysisTab = 'jd' | 'cv_only';
+	let activeTab: AnalysisTab = 'jd';
 
 	const ONBOARDING_STEP_KEY = 'asistcv.onboarding_step';
 	const MAX_PDF_BYTES = 10 * 1024 * 1024;
@@ -363,36 +369,64 @@
 		</section>
 
 		<section class="profile__match">
-			<h2>{$_('profile.matchHeading')}</h2>
-			<p class="profile__match-hint">
-				{activeCv
-					? $_('profile.matchWithCv', { values: { name: activeCv.original_filename } })
-					: $_('profile.matchNoCv')}
-			</p>
-			<textarea
-				class="profile__jd"
-				rows="6"
-				bind:value={jdText}
-				placeholder={$_('form.placeholder')}
-			/>
-			<button type="button" disabled={matching} on:click={runMatch}>
-				{matching ? $_('form.submitting') : $_('form.submit')}
-			</button>
+			<div class="profile__tabs" role="tablist" aria-label={$_('profile.matchHeading')}>
+				<button
+					type="button"
+					role="tab"
+					aria-selected={activeTab === 'jd'}
+					class:active={activeTab === 'jd'}
+					on:click={() => (activeTab = 'jd')}
+				>
+					{$_('profile.tabCvVsJd')}
+				</button>
+				<button
+					type="button"
+					role="tab"
+					aria-selected={activeTab === 'cv_only'}
+					class:active={activeTab === 'cv_only'}
+					on:click={() => (activeTab = 'cv_only')}
+				>
+					{$_('profile.tabCvOnly')}
+				</button>
+			</div>
 
-			{#if planLimitReached}
-				<div class="profile__upsell" role="alert">
-					<p>{$_('plan.limitReached')}</p>
-					<a href="/billing">{$_('plan.upgradeCta')}</a>
+			{#if activeTab === 'jd'}
+				<div class="profile__panel" role="tabpanel">
+					<p class="profile__match-hint">
+						{activeCv
+							? $_('profile.matchWithCv', { values: { name: activeCv.original_filename } })
+							: $_('profile.matchNoCv')}
+					</p>
+					<JdForm
+						bind:value={jdText}
+						loading={matching}
+						headingKey="profile.jdLabel"
+						introKey="profile.jdIntro"
+						on:submit={() => runMatch()}
+					/>
+
+					{#if planLimitReached}
+						<div class="profile__upsell" role="alert">
+							<p>{$_('plan.limitReached')}</p>
+							<a href="/billing">{$_('plan.upgradeCta')}</a>
+						</div>
+					{:else if matchError}
+						<p class="profile__error" role="alert">{matchError}</p>
+					{/if}
+
+					{#if matchResult}
+						<div class="profile__result">
+							<p class="profile__score">
+								{$_('result.scoreLabel')}: <strong>{matchResult.score}</strong>
+							</p>
+							<h3>{$_('result.reasoning')}</h3>
+							<p class="profile__reasoning">{matchResult.reasoning}</p>
+						</div>
+					{/if}
 				</div>
-			{:else if matchError}
-				<p class="profile__error" role="alert">{matchError}</p>
-			{/if}
-
-			{#if matchResult}
-				<div class="profile__result">
-					<p class="profile__score">{$_('result.scoreLabel')}: <strong>{matchResult.score}</strong></p>
-					<h3>{$_('result.reasoning')}</h3>
-					<p class="profile__reasoning">{matchResult.reasoning}</p>
+			{:else}
+				<div class="profile__panel" role="tabpanel">
+					<p class="profile__match-hint">{$_('profile.cvOnlyHint')}</p>
 				</div>
 			{/if}
 		</section>
@@ -543,6 +577,51 @@
 
 	.profile__cvs,
 	.profile__match {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+
+	/* Analysis-mode tabs (issue #61). Same tablist pattern as the audit page:
+	   flat buttons on the surface, the active one carrying the action colour.
+	   Pill radius reads as a mode switch, not a navigation bar. */
+	.profile__tabs {
+		display: flex;
+		gap: var(--space-1);
+		border-bottom: 1px solid var(--color-line);
+		padding-bottom: var(--space-2);
+	}
+
+	.profile__tabs button {
+		padding: var(--space-2) var(--space-4);
+		border: 1px solid transparent;
+		border-radius: var(--radius-pill);
+		background: transparent;
+		color: var(--color-ink-muted);
+		font-size: var(--text-sm);
+		font-weight: 600;
+		cursor: pointer;
+		transition:
+			color var(--duration-fast) var(--ease-standard),
+			background var(--duration-fast) var(--ease-standard);
+	}
+
+	.profile__tabs button:hover {
+		color: var(--color-ink-strong);
+	}
+
+	.profile__tabs button.active {
+		background: var(--color-action-muted);
+		border-color: var(--color-action);
+		color: var(--color-action);
+	}
+
+	.profile__tabs button:focus-visible {
+		outline: 2px solid var(--color-action);
+		outline-offset: 1px;
+	}
+
+	.profile__panel {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-3);
