@@ -223,7 +223,61 @@ Rationale: #51 is medium-sized but cohesive; it unblocks #33/#34 (also touched i
 ### L5 — Evidence / commits (appended as work progresses)
 
 **T1 (S1 — Makefile stubs) — DONE**
-- RED: 7 tests in `backend/tests/test_makefile.py::TestMakefile*`, all failed against the stubs (TODO echoes).
+- RED: 7 tests in `backend/tests/test_makefile.py`, all failed against the stubs (TODO echoes).
 - GREEN: rewrote `setup`/`test`/`lint` targets to call `uv sync` / `pytest` / `ruff` / `vitest` / `svelte-check` directly. Deleted `deploy:` target and its `.PHONY` entry. Added `frontend-lint:` target (calls `npm run check`).
 - Regression: 540 passed, 1 skipped, 1 deselected (pre-existing #80 Windows path failure on `test_cv_storage.py::test_store_creates_user_directory`, unrelated to this change).
 - Commits: `a5be57d` (feature doc) + `4767f55` (Makefile + test).
+
+**T2+T3+T4 (S2 — env example completeness) — DONE**
+- RED: `backend/tests/test_env_example.py` — 20 aliases missing (later refined to 16 env-bound aliases after filtering non-aliased fields), JWT_SECRET undocumented.
+- GREEN: added 16 documented vars (kill-switch, audit token, JWT trio, retrieval trio, Stripe quartet + secrets, FRONTEND_URL, APP_NAME). Dropped `API_PREFIX` (not honored — `config.py` hardcodes it, no validation_alias). Test refined to parse commented documentation blocks and only require explicit `validation_alias` fields.
+- Commits: `8a869a2` (RED test) + `8c3f9bf` (test refinement) + `3ab471c` (env complete).
+
+**T5 (S3 — infra port) — DONE**
+- RED: `backend/tests/test_infra_env.py` — example said 5432, compose publishes 5433.
+- GREEN: `infra/.env.example` now 5433 with comment. Commit `b656149`.
+
+**T6 (S4 — frontend env) — DONE**
+- RED: `backend/tests/test_frontend_env.py` — `PUBLIC_BACKEND_API_KEY=` present.
+- GREEN: entry replaced with historical note (JWT cookie session is the only auth since sprint 2; `check-env.mjs` fails the build if src/ references the key). Commit `9d17b8b`.
+
+**T7 (S5 — CORS docs) — DONE**
+- RED: `backend/tests/test_deploy_doc.py` — CSV example + no JSON explanation.
+- GREEN: troubleshooting bullet rewritten to JSON-array format with pydantic-settings rationale. Commit `e409da9`.
+
+**T8 (S6 — README) — DONE**
+- RED: 4 failures (sprint 0 status, license contradiction, GCP claims, capabilities drift).
+- GREEN: full rewrite — Render/Cloudflare/Neon/Groq/HF stack, capabilities = Match + Adaptación + MCP, outreach/tracking deferred to v2.0, license Apache 2.0 consistent, quick start with real targets. Commit `e757adc`.
+
+**T9 (S7 — PROJECT.md) — DONE**
+- RED: 4 failures (pending migration items, "arrancar slice 1", HF Spaces, license TBD).
+- GREEN: full rewrite — hitos #38–#43 + slices closed, v1.0 scope current, Render stack, Apache 2.0, ODD/openspec archive structure. Commit `1c32b0a`.
+
+**T10 (S8 — ROADMAP) — DONE**
+- RED: endpoint drift (`/jobs/evaluate` vs `/v1/match`, `/jobs/{id}/adapt` vs `/v1/adaptations`) + MCP tool drift (7 advertised tools vs 3 real).
+- GREEN: new "Endpoints y herramientas hoy en producción" table with the real surface; slice status updated (1/2 closed, 3 deferred to v2.0); free-tier migration section marked done. Test validates advertised paths against the live FastAPI route table and tool names against the adapter registry. Commit `fb600d2`.
+
+**T11 (S9 — STACK.md) — DONE**
+- RED: 3 failures (backend row says HF Spaces, topology no Render, secrets section no Render).
+- GREEN: TL;DR table → Render Web Service; topology + backend decision + CI/CD + secretos sections rewritten with historical note on why Render replaced HF Spaces; spec-store section switched from OpenSpec/SDD to ODD (Gentle-AI v4.0). Commit `ec5a43d`.
+
+**T12 (S10 — infra/README) — DONE**
+- RED: 2 failures (GCP claims, no .env.example mention).
+- GREEN: rewritten around docker-compose.yml + .env.example, host port 5433 documented, platform-managed deploy explained, GCP moved to blockquote historical footnote. Commit `39c48c6`.
+
+**T13 (S11 — dead code sweep) — DONE (delegated worker)**
+- Deleted (commit `d2c05b6`, +4/−323 lines, 10 files): A62 `cv_storage` service + orphaned test + dangling comments; A63 `init_db`/`close_db`; A64 `get_recruiter_consent`/`create_recruiter_consent` (`consume_token` already gone from #77/#78 rework); A65 unreachable `ROLE_IMMUTABLE` branch (actually lived in `users.py:76-80`, catalog said schemas.py); A66 `stripe_client.create_customer`; A68 `CHUNK_SIZE`/`validate_file_size`/`MAX_FILE_SIZE` + orphaned tests; A69 `_debug_safe_headers`.
+- Skipped ALIVE: A67 `Embedding.provider` — field is written by `huggingface_provider.py:106`, catalog entry invalid.
+- Skipped NEEDS-MAINTAINER-DECISION: A60 `TokenRevocation` + A61 `Payment` — tables created by migrations 003/009 (and referenced by 011/013 + RLS tests); dropping requires a drop-migration and a call on historical data. See L6.
+- Tests: backend 558 passed + 1 skipped; mcp-adapter 30 passed; ruff clean.
+
+**T14 (S12 — catalog paths) — DONE**
+- Fixed all 6 stale `backend/app/models.py` references → `backend/app/db/models.py` (A2, A7, A18, A22, A60, A61); A65 path corrected to users.py; A67 location corrected to llm/schemas.py.
+- Marked resolution state per A58 convention: A62/A63/A64/A65/A66/A68/A69 RESUELTO (`d2c05b6`), A67 inválido, A70 obsoleto (fixed by PR #86), A60/A61 pending maintainer decision.
+- Commit `76ffecb`.
+
+### L6 — Deferred to maintainer (cannot decide from here)
+
+**A60 (`token_revocation`) and A61 (`payments`) table drops.** Both tables are created by applied migrations and (in prod) may contain historical rows. Dropping them requires: (1) a new Alembic drop-migration, (2) a decision on whether prod data in `payments` must be archived first (v1.0 is about to charge early adopters via Stripe — billing history matters), and (3) updating RLS policies (011) and tz migrations (013) references. The models remain in `backend/app/db/models.py` until Daniel decides. Recommended follow-up issue.
+
+**Follow-up noted:** after A69 deletion, `_sanitize_headers` in `mcp-adapter/src/asistcv_mcp/http_client.py` lost its only production caller but is directly unit-tested — deliberate keep; deleting it is a separate decision.
