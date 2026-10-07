@@ -65,7 +65,7 @@
 		border-spacing: 0;
 		background: var(--color-surface);
 		border: 1px solid var(--color-line);
-		border-radius: 10px;
+		border-radius: var(--radius-card-lg);
 		overflow: hidden;
 	}
 

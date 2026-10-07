@@ -49,7 +49,7 @@
 		gap: var(--space-4);
 		padding: var(--space-5);
 		border: 1px solid var(--color-line);
-		border-radius: 12px;
+		border-radius: var(--radius-panel);
 		background: var(--color-surface);
 	}
 
@@ -97,7 +97,7 @@
 
 	.adaptation-result__tag {
 		padding: var(--space-1) var(--space-2);
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		background: var(--color-surface-alt);
 		border: 1px solid var(--color-line);
 		font-size: var(--text-sm);
@@ -116,7 +116,7 @@
 	.adaptation-result__experience-item {
 		padding: var(--space-3) var(--space-4);
 		border: 1px solid var(--color-line);
-		border-radius: 10px;
+		border-radius: var(--radius-card-lg);
 		background: var(--color-surface-alt);
 	}
 

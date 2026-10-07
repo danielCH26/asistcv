@@ -19,7 +19,7 @@
 		align-items: center;
 		gap: var(--space-2);
 		padding: var(--space-1) var(--space-3);
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		font-size: var(--text-sm);
 		font-weight: 600;
 	}
@@ -27,7 +27,7 @@
 	.energy__dot {
 		width: var(--space-2);
 		height: var(--space-2);
-		border-radius: 50%;
+		border-radius: var(--radius-circle);
 		background: currentColor;
 	}
 

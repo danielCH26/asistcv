@@ -149,25 +149,25 @@
 	.detail {
 		display: flex;
 		flex-direction: column;
-		gap: 1.5rem;
+		gap: var(--space-5);
 	}
 
 	.detail__header {
 		display: flex;
 		align-items: center;
-		gap: 1rem;
+		gap: var(--space-4);
 	}
 
 	.detail__header h1 {
 		margin: 0;
-		font-size: 1.5rem;
+		font-size: var(--text-2xl);
 		color: var(--text-strong);
 	}
 
 	.detail__back {
-		padding: var(--space-2) 0.75rem;
+		padding: var(--space-2) var(--space-3);
 		border: 1px solid var(--border);
-		border-radius: 6px;
+		border-radius: var(--radius-control);
 		background: var(--surface);
 		color: var(--text);
 		cursor: pointer;
@@ -183,8 +183,8 @@
 		gap: var(--space-5);
 		background: var(--surface);
 		border: 1px solid var(--border);
-		border-radius: 12px;
-		padding: 1.5rem;
+		border-radius: var(--radius-panel);
+		padding: var(--space-5);
 	}
 
 	.detail__top {
@@ -192,7 +192,7 @@
 		align-items: center;
 		justify-content: space-between;
 		flex-wrap: wrap;
-		gap: 1rem;
+		gap: var(--space-4);
 	}
 
 	.detail__meta {
@@ -227,12 +227,12 @@
 	.detail__error {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
-		padding: 1rem var(--space-5);
+		gap: var(--space-2);
+		padding: var(--space-4) var(--space-5);
 		background: var(--error-bg);
 		color: var(--error);
 		border: 1px solid var(--error);
-		border-radius: 8px;
+		border-radius: var(--radius-card);
 	}
 
 	.detail__error-title {
@@ -242,10 +242,10 @@
 
 	.detail__error-back {
 		align-self: flex-start;
-		margin-top: 0.5rem;
-		padding: var(--space-2) 0.75rem;
+		margin-top: var(--space-2);
+		padding: var(--space-2) var(--space-3);
 		border: 1px solid var(--error);
-		border-radius: 6px;
+		border-radius: var(--radius-control);
 		background: transparent;
 		color: var(--error);
 		font-weight: 600;
@@ -255,16 +255,16 @@
 	.detail__skeleton {
 		background: var(--surface);
 		border: 1px solid var(--border);
-		border-radius: 12px;
-		padding: 1.5rem;
+		border-radius: var(--radius-panel);
+		padding: var(--space-5);
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		gap: var(--space-4);
 	}
 
 	.detail__skeleton-row {
 		display: flex;
-		gap: 1rem;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 	}
 
@@ -286,7 +286,7 @@
 		);
 		background-size: 200% 100%;
 		animation: skeleton-shimmer 1.4s ease-in-out infinite;
-		border-radius: 8px;
+		border-radius: var(--radius-card);
 		min-height: 1.25rem;
 	}
 

@@ -171,12 +171,12 @@
 
 	.billing h1 {
 		margin: 0;
-		font-size: 1.5rem;
+		font-size: var(--text-2xl);
 		color: var(--text-strong);
 	}
 
 	.billing h2 {
-		margin: 0 0 0.5rem;
+		margin: 0 0 var(--space-2);
 		font-size: var(--text-lg);
 		color: var(--text-strong);
 	}
@@ -185,7 +185,7 @@
 	.billing__plans {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
+		gap: var(--space-3);
 	}
 
 	.billing__current p {
@@ -199,9 +199,9 @@
 
 	.billing__current button {
 		align-self: flex-start;
-		padding: 0.5rem 1rem;
+		padding: var(--space-2) var(--space-4);
 		border: 1px solid var(--border);
-		border-radius: 8px;
+		border-radius: var(--radius-card);
 		background: transparent;
 		color: var(--text);
 		cursor: pointer;
@@ -221,9 +221,9 @@
 
 	.billing__choose-cta {
 		align-self: flex-start;
-		padding: 0.5rem 1rem;
+		padding: var(--space-2) var(--space-4);
 		border: none;
-		border-radius: 8px;
+		border-radius: var(--radius-card);
 		background: var(--accent);
 		color: var(--accent-contrast);
 		font-weight: 600;
@@ -239,7 +239,7 @@
 	.billing__method {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
+		gap: var(--space-3);
 		font-size: var(--text-sm);
 		color: var(--text);
 	}
@@ -254,16 +254,16 @@
 	.billing__grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-		gap: 1rem;
+		gap: var(--space-4);
 	}
 
 	.plan-card {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: var(--space-2);
 		padding: var(--space-4);
 		border: 1px solid var(--border);
-		border-radius: 12px;
+		border-radius: var(--radius-panel);
 		background: var(--surface);
 	}
 
@@ -286,14 +286,14 @@
 		font-size: var(--text-sm);
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
+		gap: var(--space-1);
 	}
 
 	.plan-card button {
 		margin-top: auto;
-		padding: 0.5rem 1rem;
+		padding: var(--space-2) var(--space-4);
 		border: none;
-		border-radius: 8px;
+		border-radius: var(--radius-card);
 		background: var(--accent);
 		color: var(--accent-contrast);
 		font-weight: 600;

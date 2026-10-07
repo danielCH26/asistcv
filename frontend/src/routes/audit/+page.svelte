@@ -371,7 +371,7 @@
 
 	.audit__form .audit__file-clear {
 		margin-left: var(--space-2);
-		padding: var(--space-1) 0.5rem;
+		padding: var(--space-1) var(--space-2);
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-control);
 		background: var(--clay-fill);
@@ -399,7 +399,7 @@
 	}
 
 	.audit__form textarea {
-		padding: var(--space-2) 0.75rem;
+		padding: var(--space-2) var(--space-3);
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-card);
 		background: var(--clay-fill);
@@ -457,7 +457,7 @@
 
 	.audit__error button {
 		margin-left: var(--space-3);
-		padding: 0.25rem var(--space-2);
+		padding: var(--space-1) var(--space-2);
 		border: var(--border-width) solid var(--color-danger);
 		border-radius: var(--radius-control);
 		background: var(--clay-fill);
@@ -541,7 +541,7 @@
 	}
 
 	.audit__severity {
-		padding: var(--space-1) 0.5rem;
+		padding: var(--space-1) var(--space-2);
 		border-radius: var(--radius-pill);
 		font-size: var(--text-xs);
 		font-weight: 700;
@@ -617,7 +617,7 @@
 	.audit__capture-form input {
 		flex: 1;
 		max-width: 20rem;
-		padding: var(--space-2) 0.75rem;
+		padding: var(--space-2) var(--space-3);
 		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-card);
 		background: var(--clay-fill);

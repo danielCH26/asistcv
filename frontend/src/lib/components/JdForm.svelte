@@ -65,7 +65,7 @@
 		gap: var(--space-3);
 		background: var(--color-surface);
 		border: 1px solid var(--color-line);
-		border-radius: 12px;
+		border-radius: var(--radius-panel);
 		padding: var(--space-5);
 	}
 
@@ -87,7 +87,7 @@
 		resize: vertical;
 		padding: var(--space-3);
 		border: 1px solid var(--color-line);
-		border-radius: 8px;
+		border-radius: var(--radius-card);
 		font-family: inherit;
 		font-size: var(--text-sm);
 		background: var(--clay-fill);
@@ -127,7 +127,7 @@
 	.jd-form__submit {
 		padding: var(--space-2) var(--space-5);
 		border: none;
-		border-radius: 8px;
+		border-radius: var(--radius-card);
 		background: var(--color-action);
 		color: var(--color-on-action);
 		font-weight: 600;
@@ -155,7 +155,7 @@
 	.jd-form__error {
 		margin: 0;
 		padding: var(--space-2) var(--space-3);
-		border-radius: 6px;
+		border-radius: var(--radius-control);
 		background: var(--color-danger-muted);
 		color: var(--color-danger);
 		font-size: var(--text-sm);
