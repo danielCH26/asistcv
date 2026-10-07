@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser, get_db
+from app.api.deps import CurrentUser, get_current_user, get_db
 from app.db.models import RecruiterAuditLog, RecruiterConsent
 from app.schemas.recruiter import ConsentRequest, ConsentResponse
 
@@ -39,7 +39,7 @@ def _audit_log(
 async def give_consent(
     request: Request,
     body: ConsentRequest,
-    current_user: CurrentUser,
+    current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -131,7 +131,7 @@ async def give_consent(
 
 @router.get("", response_model=ConsentResponse)
 async def get_consent(
-    current_user: CurrentUser,
+    current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """

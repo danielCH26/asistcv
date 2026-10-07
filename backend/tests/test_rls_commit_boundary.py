@@ -116,26 +116,21 @@ def _auth_headers(user: User) -> dict[str, str]:
 
 
 def _consent_payload(user: User, tos_version: str) -> dict[str, Any]:
-    """The body POST /v1/recruiter/consent actually demands today.
+    """The body POST /v1/recruiter/consent accepts today (post-#78).
 
-    See the block comment above sites 5/6: because ``current_user`` is
-    declared without ``Depends``, FastAPI requires BOTH keys. A real client
-    cannot produce this. The ``current_user`` value is set to the caller's
-    own real id so the reproduction is honest -- the RLS GUC (bound from the
-    JWT by ``get_db``) and the identity the handler uses then agree.
+    With ``current_user`` wired through ``Depends(get_current_user)``
+    (``recruiter_consent.py:42``) the request shape collapses to ``ConsentRequest``
+    fields only -- no ``body`` wrapper, no client-supplied ``current_user``.
+    The handler pulls the acting principal from the JWT (header), so this
+    payload no longer needs the user's id to make the reproduction honest:
+    the JWT IS the identity source now. Sites 5 and 6 below already pass
+    a real JWT via ``_auth_headers(user)``; the body here is exactly what a
+    real frontend (``apiClient.giveConsent``) sends.
     """
     return {
-        "body": {
-            "accept_tos": True,
-            "good_faith_declaration": True,
-            "tos_version": tos_version,
-        },
-        "current_user": {
-            "id": user.id,
-            "name": user.full_name,
-            "role": user.role,
-            "auth_method": "jwt",
-        },
+        "accept_tos": True,
+        "good_faith_declaration": True,
+        "tos_version": tos_version,
     }
 
 
@@ -587,20 +582,19 @@ class TestCommitThenReadBoundaries:
 
     # -- site 5 / 6 --------------------------------------------------------
     #
-    # These two sites sit behind a SECOND, independent defect, and the tests
-    # have to satisfy it before the RLS boundary is even reachable:
-    # `recruiter_consent.py:42` declares `current_user: CurrentUser` with no
-    # `Depends(...)`, and `CurrentUser` is a plain dataclass -- so FastAPI
-    # treats it as a REQUIRED BODY FIELD. The endpoint's own OpenAPI contract
-    # is `{"body": {...ConsentRequest}, "current_user": {...CurrentUser}}`,
-    # and a real client sending a flat ConsentRequest gets 422.
+    # These two sites previously sat behind a SECOND, independent defect:
+    # `recruiter_consent.py:42` declared `current_user: CurrentUser` with no
+    # `Depends(...)`, so FastAPI treated it as a REQUIRED BODY FIELD. The
+    # endpoint's own OpenAPI contract was
+    # `{"body": {...ConsentRequest}, "current_user": {...CurrentUser}}` and
+    # a real client sending a flat ConsentRequest got 422 -- masking the
+    # second issue (#78), that the handler took the acting principal from
+    # a CLIENT-CONTROLLED body field rather than the JWT.
     #
-    # Sending the contract FastAPI actually asks for is what lets these two
-    # sites reproduce. It is not a workaround we should keep after the auth
-    # defect is fixed -- and while it stands, it also means the handler picks
-    # the acting identity out of a CLIENT-CONTROLLED body field, which is
-    # worth its own issue. Both facts are stated here so the fix phase does
-    # not read these tests as endorsing the shape.
+    # Both defects are now fixed: ``current_user: CurrentUser = Depends(...)``
+    # pulls from the JWT, and the body is just ``ConsentRequest`` fields. The
+    # payload helper ``_consent_payload`` above returns that shape. Sites 5
+    # and 6 below are now RLS-boundary tests, full stop.
 
     async def test_site5_post_recruiter_consent_update_returns_201(
         self, rls_lane, rls_http, clean_db
@@ -649,37 +643,24 @@ class TestCommitThenReadBoundaries:
 
     # -- site 7 ------------------------------------------------------------
 
-    @pytest.mark.xfail(
-        reason=(
-            "Issue #77: FastAPI 0.141.1 builds a multipart contract with a "
-            "required field literally named 'body', so the handler is "
-            "unreachable and returns 422 before any RLS boundary. Remove this "
-            "marker when #77 is fixed -- an XPASS means the blocker is gone."
-        ),
-        strict=False,
-    )
     async def test_site7_post_recruiter_candidate_returns_201(
         self, rls_lane, rls_http, clean_db
     ) -> None:
-        """POST /v1/recruiter/candidates -- recruiter_candidates.py:176-177.
+        """POST /v1/recruiter/candidates -- recruiter_candidates.py:184-186.
 
-        XFAIL (issue #77) -- the handler is UNREACHABLE today, so this test
-        cannot reach the RLS boundary. ``body: CandidateCreate`` (a Pydantic
-        model) sits next to ``file: UploadFile = File(None)``, and on FastAPI
-        0.141.1 that combination yields a multipart contract with a required
-        field nested under the literal name ``body``. Eight request shapes were
-        tried -- flat urlencoded, flat multipart, ``body[field]`` multipart,
-        ``body[field]`` urlencoded, ``body`` as a JSON string, the frontend's
-        own shape (flat fields + real PDF), the nested JSON body, and flat
-        JSON -- and all eight answer 422. There is no shape that reaches the
-        handler, which also means the real frontend
-        (``apiClient.createCandidate``) cannot create a candidate.
+        Success status is 201 (the decorator at ``recruiter_candidates.py:102``
+        declares ``status_code=201``). The handler uses no ``refresh()`` after
+        commit -- it relies on ``expire_on_commit=False`` to keep the inserted
+        instance current, the same fix that closed #50 on the other endpoints.
 
-        Marked ``xfail`` so CI stays green while #77 is open. Until that is
-        fixed it fails at 422, NOT at the RLS boundary -- do not read a 422
-        here as evidence about #50. The marker is ``strict=False``, so once
-        #77 is fixed this reports XPASS instead of failing, which is the signal
-        to delete it.
+        Previously ``XFAIL`` for issue #77: ``body: CandidateCreate`` next to
+        ``file: UploadFile = File(None)`` produced a multipart contract with a
+        required field literally named ``body`` on FastAPI 0.141.1. The
+        handler is reachable now -- the four flat candidate fields are read
+        individually with ``Form(...)`` (``recruiter_candidates.py:105-108``)
+        and the file with ``File(None)``. The marker was removed when #77
+        landed; if this test fails it must fail loudly, so the strict=False
+        xfail is gone and this test is plain ``async def``.
         """
         recruiter = await _seed_user(clean_db, "site7@test.com", role="recruiter")
         await _seed_consent(clean_db, recruiter.id)

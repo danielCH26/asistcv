@@ -6,7 +6,7 @@ CRUD operations for external candidates managed by recruiters.
 import hashlib
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,7 +20,6 @@ from app.db.models import (
 )
 from app.db.session import get_session_context
 from app.schemas.recruiter import (
-    CandidateCreate,
     CandidateListResponse,
     CandidateMatchRequest,
     CandidateMatchResponse,
@@ -102,7 +101,10 @@ async def _parse_pdf_cv(
 @router.post("", response_model=CandidateResponse, status_code=status.HTTP_201_CREATED)
 async def create_candidate(
     request: Request,
-    body: CandidateCreate,
+    full_name: str = Form(..., min_length=1, max_length=255),
+    email: str | None = Form(None, max_length=255),
+    phone: str | None = Form(None, max_length=50),
+    notes: str | None = Form(None),
     file: UploadFile | None = File(None),
     current_user: CurrentUser = Depends(check_recruiter_consent),
     db: AsyncSession = Depends(get_db),
@@ -110,17 +112,22 @@ async def create_candidate(
     """
     Create a new candidate in the recruiter's roster.
 
-    Accepts multipart with candidate data and optional PDF CV.
+    Accepts multipart with candidate data and optional PDF CV. Each candidate
+    field is read individually with `Form(...)` instead of a Pydantic body --
+    on FastAPI 0.141.1 the combination of `body: CandidateCreate` and
+    `file: UploadFile` produced a multipart contract with a required field
+    literally named ``body`` (#77), so the frontend's flat FormData shape
+    could not reach the handler.
     """
     # This endpoint uses the consent gate from main.py
     # The actual implementation will use RecruiterConsentDep
 
     # Check for duplicate email within this recruiter's roster
-    if body.email:
+    if email:
         result = await db.execute(
             select(RecruiterCandidate).where(
                 RecruiterCandidate.recruiter_id == current_user.id,
-                RecruiterCandidate.email == body.email.lower(),
+                RecruiterCandidate.email == email.lower(),
             )
         )
         existing = result.scalar_one_or_none()
@@ -150,10 +157,10 @@ async def create_candidate(
     # Create candidate
     candidate = RecruiterCandidate(
         recruiter_id=current_user.id,
-        full_name=body.full_name,
-        email=body.email.lower() if body.email else None,
-        phone=body.phone,
-        notes=body.notes,
+        full_name=full_name,
+        email=email.lower() if email else None,
+        phone=phone,
+        notes=notes,
         cv_id=cv_id,
     )
     db.add(candidate)
