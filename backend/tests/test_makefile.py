@@ -19,8 +19,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MAKEFILE = REPO_ROOT / "Makefile"
 
@@ -127,11 +125,11 @@ def test_make_deploy_target_is_removed_or_real() -> None:
         return
     # If still present, it must not be a stub.
     assert "TODO" not in body, (
-        f"`deploy:` target still exists as a TODO echo. Per #51's decision,\n"
-        f"either wire it to a real documented command or delete the target."
+        "`deploy:` target still exists as a TODO echo. Per #51's decision,\n"
+        "either wire it to a real documented command or delete the target."
     )
     assert "GCP" not in body, (
-        f"`deploy:` target still claims to deploy to GCP, but the backend is\n"
-        f"deployed to Render and the frontend to Cloudflare Pages. Update or\n"
-        f"remove this target."
+        "`deploy:` target still claims to deploy to GCP, but the backend is\n"
+        "deployed to Render and the frontend to Cloudflare Pages. Update or\n"
+        "remove this target."
     )

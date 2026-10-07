@@ -93,7 +93,7 @@ def test_env_example_covers_every_settings_alias() -> None:
 
     missing = sorted(aliases - documented)
     assert not missing, (
-        f"backend/.env.example does not document these Settings aliases:\n"
+        "backend/.env.example does not document these Settings aliases:\n"
         + "\n".join(f"  - {a}" for a in missing)
         + "\n\nAdd a line `<KEY>=<placeholder>` plus a description comment to "
         "backend/.env.example."
@@ -114,9 +114,9 @@ def test_env_example_does_not_echo_published_jwt_default() -> None:
     for line in text.splitlines():
         if line.lstrip().startswith("JWT_SECRET="):
             assert BANNED_LITERAL_DEFAULTS["JWT_SECRET"] not in line, (
-                f"backend/.env.example echoes the published JWT default literal. "
-                f"That value is in git history; example files must show an empty "
-                f"value with a comment instead."
+                "backend/.env.example echoes the published JWT default literal. "
+                "That value is in git history; example files must show an empty "
+                "value with a comment instead."
             )
 
 

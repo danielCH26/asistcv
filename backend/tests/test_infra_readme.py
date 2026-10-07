@@ -10,8 +10,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INFRA_README = REPO_ROOT / "infra" / "README.md"
 INFRA_DIR = REPO_ROOT / "infra"
@@ -92,6 +90,6 @@ def test_infra_readme_assets_referenced_exist() -> None:
             if not (INFRA_DIR / asset).is_file():
                 missing.append(asset)
     assert not missing, (
-        f"infra/README.md references files that don't exist in infra/:\n"
+        "infra/README.md references files that don't exist in infra/:\n"
         + "\n".join(f"  - {m}" for m in missing)
     )

@@ -12,8 +12,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INFRA_ENV = REPO_ROOT / "infra" / ".env.example"
 INFRA_DOCKER_COMPOSE = REPO_ROOT / "infra" / "docker-compose.yml"

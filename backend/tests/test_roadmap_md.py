@@ -20,8 +20,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROADMAP = REPO_ROOT / "ROADMAP.md"
 BACKEND_APP_DIR = REPO_ROOT / "backend" / "app"
@@ -114,7 +112,7 @@ def test_roadmap_endpoints_exist_in_backend() -> None:
         missing.append(path)
 
     assert not missing, (
-        f"ROADMAP.md advertises endpoints that don't exist in the backend:\n"
+        "ROADMAP.md advertises endpoints that don't exist in the backend:\n"
         + "\n".join(f"  - {p}" for p in missing)
         + f"\nActual backend routes: {sorted(actual)}"
     )
@@ -146,7 +144,7 @@ def test_roadmap_mcp_tools_exist_in_adapter() -> None:
                 break
 
     assert not suspicious, (
-        f"ROADMAP.md advertises MCP tools that don't exist in mcp-adapter:\n"
+        "ROADMAP.md advertises MCP tools that don't exist in mcp-adapter:\n"
         + "\n".join(f"  - {n}" for n in suspicious)
         + f"\nActual MCP tools: {sorted(actual)}"
     )

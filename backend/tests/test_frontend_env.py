@@ -44,9 +44,9 @@ def test_frontend_env_no_public_api_key() -> None:
     """
     bad = _public_api_key_lines()
     assert not bad, (
-        f"frontend/.env.example declares PUBLIC_*_API_KEY entries that the "
+        "frontend/.env.example declares PUBLIC_*_API_KEY entries that the "
         "SvelteKit build guard rejects. Remove them.\n"
-        + "\n".join(f"  - {l}" for l in bad)
+        + "\n".join(f"  - {line}" for line in bad)
     )
 
 

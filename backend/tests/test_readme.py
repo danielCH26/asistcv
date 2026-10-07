@@ -71,8 +71,8 @@ def test_readme_license_badge_and_body_match() -> None:
     )
     # Body must not say TBD.
     assert "tbd" not in body_license, (
-        f"README.md Licencia section still says 'TBD'. Pick a license and "
-        f"update both the badge and the body."
+        "README.md Licencia section still says 'TBD'. Pick a license and "
+        "update both the badge and the body."
     )
 
 

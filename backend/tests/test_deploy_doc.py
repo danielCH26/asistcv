@@ -10,8 +10,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEPLOY_DOC = REPO_ROOT / "docs" / "DEPLOY.md"
 
@@ -44,7 +42,7 @@ def test_deploy_md_cors_instructions_are_json_array() -> None:
         "Settings.cors_origins parses it as a JSON array (see app/core/config.py "
         "docstring). Update the troubleshooting example to use JSON-array "
         "syntax. Offending lines:\n"
-        + "\n".join(f"  - {l}" for l in bad_lines)
+        + "\n".join(f"  - {line}" for line in bad_lines)
     )
 
 

@@ -8,10 +8,7 @@ These tests pin the deploy destination table and the topology narrative.
 """
 from __future__ import annotations
 
-import re
 from pathlib import Path
-
-import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STACK = REPO_ROOT / "STACK.md"
@@ -32,7 +29,6 @@ def test_stack_md_backend_row_is_render() -> None:
     # The Backend row in the TL;DR table. Look for the first row that has
     # "backend" in column 1 — it should not have "huggingface spaces" in
     # column 3.
-    in_table = False
     backend_row = ""
     for raw in text.splitlines():
         if raw.startswith("|") and "backend" in raw and "fastapi" in raw:
