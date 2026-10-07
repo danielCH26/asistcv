@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     timeout_seconds: float = 60.0
 
+    # Búsqueda web (issue #59). Proveedor único en v1.0: "tavily".
+    web_search_provider: str = "tavily"
+    tavily_api_key: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:
