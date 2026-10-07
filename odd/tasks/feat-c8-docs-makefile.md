@@ -222,4 +222,8 @@ Rationale: #51 is medium-sized but cohesive; it unblocks #33/#34 (also touched i
 
 ### L5 — Evidence / commits (appended as work progresses)
 
-- TBD per task.
+**T1 (S1 — Makefile stubs) — DONE**
+- RED: 7 tests in `backend/tests/test_makefile.py::TestMakefile*`, all failed against the stubs (TODO echoes).
+- GREEN: rewrote `setup`/`test`/`lint` targets to call `uv sync` / `pytest` / `ruff` / `vitest` / `svelte-check` directly. Deleted `deploy:` target and its `.PHONY` entry. Added `frontend-lint:` target (calls `npm run check`).
+- Regression: 540 passed, 1 skipped, 1 deselected (pre-existing #80 Windows path failure on `test_cv_storage.py::test_store_creates_user_directory`, unrelated to this change).
+- Commits: `a5be57d` (feature doc) + `4767f55` (Makefile + test).
