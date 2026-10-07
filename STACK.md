@@ -11,20 +11,20 @@
 | Capa | Tecnología | Destino |
 |---|---|---|
 | Frontend | SvelteKit (static export) | Cloudflare Pages |
-| Backend | FastAPI sobre Python 3.12 | HuggingFace Spaces (SDK Docker) |
+| Backend | FastAPI sobre Python 3.12 | Render Web Service |
 | Base de datos | Postgres + pgvector | Neon (serverless) |
 | LLM | Llama 3.3 70B Versatile | Groq |
 | Embeddings | BGE-M3 | HuggingFace Inference API |
 | Adapter MCP | Python con SDK `mcp` oficial | Local / ejecución por usuario |
 | CI/CD | GitHub Actions | Pipelines por push y por PR |
-| Secretos | GitHub Secrets + env vars en HF Spaces | — |
-| Specs / artifacts | OpenSpec + Engram | Híbrido (local + persistente) |
+| Secretos | GitHub Secrets + env vars en Render / Cloudflare dashboard | — |
+| Specs / artifacts | ODD (Gentle-AI v4.0) | Engram + `odd/tasks/*.md` en repo |
 
 ---
 
 ## Topología
 
-El sistema se compone de un adapter MCP local que expone el producto como tools a clientes MCP (Claude Desktop, Cursor), un backend FastAPI empaquetado como imagen Docker y desplegado en HuggingFace Spaces que concentra la lógica de negocio y las llamadas a Groq y a la Inference API de HuggingFace, un frontend SvelteKit con export estático servido por Cloudflare Pages para la UI web, y una base Postgres con pgvector en Neon para persistir perfil, JDs evaluados, adaptaciones y aplicaciones. El usuario opera desde el cliente MCP o desde el frontend; el backend nunca expone UI propia y el frontend nunca llama a Groq ni a HuggingFace directo, siempre pasa por el backend.
+El sistema se compone de un adapter MCP local que expone el producto como tools a clientes MCP (Claude Desktop, Cursor), un backend FastAPI empaquetado como imagen Docker y desplegado en Render (Web Service free tier) que concentra la lógica de negocio y las llamadas a Groq y a la Inference API de HuggingFace, un frontend SvelteKit con export estático servido por Cloudflare Pages para la UI web, y una base Postgres con pgvector en Neon para persistir perfil, JDs evaluados y adaptaciones. El usuario opera desde el cliente MCP o desde el frontend; el backend nunca expone UI propia y el frontend nunca llama a Groq ni a HuggingFace directo, siempre pasa por el backend.
 
 ---
 
@@ -48,17 +48,20 @@ El sistema se compone de un adapter MCP local que expone el producto como tools 
 
 ### Backend — FastAPI sobre Python 3.12
 
-**Qué.** API REST en FastAPI, Python 3.12, empaquetada como imagen Docker y desplegada en HuggingFace Spaces con SDK Docker (recurso CPU).
+**Qué.** API REST en FastAPI, Python 3.12, empaquetada como imagen Docker y desplegada en Render como Web Service (free tier, recurso CPU compartido).
 
-**Por qué.** El dominio (procesamiento de texto, llamadas a LLM, embeddings) es cómodo en Python por el ecosistema. FastAPI ofrece validación de requests con Pydantic, OpenAPI automático y tipado estricto, todo lo necesario para mantener contratos claros con el frontend y con el adapter MCP. HuggingFace Spaces con SDK Docker permite correr cualquier contenedor en free tier real, sin tarjeta de crédito, y queda versionado por el repo de HuggingFace. El espacio CPU con sleep tras inactividad es suficiente para uso personal.
+**Por qué.** El dominio (procesamiento de texto, llamadas a LLM, embeddings) es cómodo en Python por el ecosistema. FastAPI ofrece validación de requests con Pydantic, OpenAPI automático y tipado estricto, todo lo necesario para mantener contratos claros con el frontend y con el adapter MCP. Render permite correr el contenedor en free tier real, sin tarjeta de crédito, con auto-deploy desde `main` y 750 horas/mes (suficiente para un único servicio). El plan Free tiene sleep tras ~15 min de inactividad (cold start de 30-50s) — aceptable para una herramienta personal de early adopters.
+
+**Histórico.** Antes de migrar (septiembre 2026), el backend iba a HuggingFace Spaces con SDK Docker. El proyecto cambió a Render porque HF Spaces no estaba soportando el `alembic upgrade head` que necesitamos contra Neon — la causa raíz se documenta en [`docs/DEPLOY.md`](./DEPLOY.md#why-render). Mantener la opción de HF Spaces sigue siendo válida técnicamente; Render es lo que está en producción hoy.
 
 **Alternativas consideradas.**
 
 - *FastAPI sobre Cloud Run (stack anterior).* Se descarta porque Cloud Run requiere billing habilitado en GCP, lo que implica tarjeta de crédito.
-- *Node + Express sobre HuggingFace Spaces.* Viable y compartiría runtime con el frontend. Se descarta porque el LLM, los embeddings y pgvector tienen mejor soporte y SDKs más maduros en Python; mantener dos lenguajes en el mismo proyecto aumenta la superficie a aprender y mantener.
+- *HuggingFace Spaces con SDK Docker (alternativa válida).* Cubría el caso antes del switch; se descartó por el motivo documentado en `docs/DEPLOY.md`.
+- *Node + Express.* Viable y compartiría runtime con el frontend. Se descarta porque el LLM, los embeddings y pgvector tienen mejor soporte y SDKs más maduros en Python; mantener dos lenguajes en el mismo proyecto aumenta la superficie a aprender y mantener.
 - *Cloud Functions por endpoint.* Suficiente para slices chicos pero se vuelve incómodo cuando hay estado compartido (cliente de DB, configuración de LLM, cache). Un contenedor único con FastAPI es más simple de razonar.
 
-**Costo.** $0 dentro del free tier de HuggingFace Spaces para CPU Spaces, sin tarjeta de crédito requerida.
+**Costo.** $0 dentro del free tier de Render Web Service, sin tarjeta de crédito requerida.
 
 ---
 
@@ -114,7 +117,7 @@ El sistema se compone de un adapter MCP local que expone el producto como tools 
 
 **Qué.** Servidor MCP escrito en Python usando el SDK `mcp` oficial, que expone las tools del backend al cliente MCP local del usuario (Claude Desktop, Cursor u otros).
 
-**Por qué.** El SDK oficial garantiza compatibilidad con la evolución del protocolo MCP y elimina la tentación de reimplementar el transporte. Python unifica el lenguaje con el backend y permite reutilizar los modelos Pydantic y los clientes HTTP. El adapter corre local como proceso del usuario: no expone endpoints públicos ni requiere autenticación adicional; el backend ya está protegido en HuggingFace Spaces.
+**Por qué.** El SDK oficial garantiza compatibilidad con la evolución del protocolo MCP y elimina la tentación de reimplementar el transporte. Python unifica el lenguaje con el backend y permite reutilizar los modelos Pydantic y los clientes HTTP. El adapter corre local como proceso del usuario: no expone endpoints públicos ni requiere autenticación adicional; el backend ya está protegido en Render.
 
 **Alternativas consideradas.**
 
@@ -127,46 +130,46 @@ El sistema se compone de un adapter MCP local que expone el producto como tools 
 
 ### CI/CD — GitHub Actions
 
-**Qué.** GitHub Actions conectado al repo de GitHub, con pipelines para backend (test + build de imagen Docker + push a HuggingFace) y frontend (build estático + deploy a Cloudflare Pages). Triggers por push a main y por PR.
+**Qué.** GitHub Actions conectado al repo de GitHub, con pipelines para backend (test + build de imagen Docker + push opcional a Docker Hub / GHCR) y los deploys del backend a Render y del frontend a Cloudflare Pages (ambos auto-deploy desde `main` vía webhook). Triggers por push a main y por PR.
 
 **Por qué.** El repo ya vive en GitHub; GitHub Actions corre en el mismo ecosistema sin credenciales de un proveedor cloud adicional y se factura solo por minutos de build dentro de un free tier generoso (2000 minutos mensuales para repos públicos). Los workflows son archivos YAML declarativos que viven en el repo y quedan bajo review como cualquier otro código. Es suficiente para un solo autor con trunk-based o branches cortas.
 
 **Alternativas consideradas.**
 
 - *Cloud Build con triggers desde GitHub (stack anterior).* Se descarta porque Cloud Build requiere billing habilitado en GCP, lo que implica tarjeta de crédito.
-- *HuggingFace Actions / Spaces build automático.* Viable para Spaces pero no cubre el deploy del frontend a Cloudflare Pages ni la ejecución de tests en el workflow. Se descarta por cobertura insuficiente.
+- *Render / Cloudflare build automático.* Sí se usa para el deploy final; GH Actions complementa con tests + lint + typecheck en PRs, que las plataformas de deploy no ofrecen gratis.
 - *Cloud Deploy.* Más sofisticado para escenarios multi-environment con promoción progresiva. Se descarta porque un solo environment es suficiente en esta fase.
 
 **Costo.** $0 dentro del free tier de GitHub Actions (repos públicos).
 
 ---
 
-### Secretos — GitHub Secrets + env vars en HuggingFace Spaces
+### Secretos — GitHub Secrets + env vars en Render y Cloudflare
 
-**Qué.** Secretos (claves de API de Groq y HuggingFace, URL de Neon, credenciales varias) almacenados en GitHub Secrets para los pipelines y como variables de entorno en la configuración del HuggingFace Space para el runtime del backend.
+**Qué.** Secretos (claves de API de Groq y HuggingFace, URL de Neon, credenciales varias) almacenados en GitHub Secrets para los pipelines de CI y como variables de entorno en los dashboards de Render (runtime del backend) y Cloudflare Pages (build del frontend).
 
-**Por qué.** GitHub Secrets está integrado con Actions sin proveedor adicional y forma parte del mismo ecosistema que el repo. Las variables de entorno en HuggingFace Spaces son el mecanismo soportado por la plataforma para inyectar configuración al contenedor. Ambos evitan archivos `.env` versionados y reducen el riesgo de leaks accidentales; el acceso queda auditado por la plataforma correspondiente.
+**Por qué.** GitHub Secrets está integrado con Actions sin proveedor adicional y forma parte del mismo ecosistema que el repo. Las variables de entorno en Render / Cloudflare son el mecanismo soportado por cada plataforma para inyectar configuración al contenedor / build. Ambos evitan archivos `.env` versionados y reducen el riesgo de leaks accidentales; el acceso queda auditado por la plataforma correspondiente.
 
 **Alternativas consideradas.**
 
 - *Secret Manager (stack anterior).* Se descarta porque requiere billing habilitado en GCP, lo que implica tarjeta de crédito.
-- *Variables de entorno en código del Space.* Más simple pero pierde auditoría y rotación. Se descarta por buenas prácticas.
+- *Variables de entorno en código de la app.* Más simple pero pierde auditoría y rotación. Se descarta por buenas prácticas.
 - *HashiCorp Vault.* Más potente pero requiere operar infraestructura adicional. Desproporcionado para este proyecto.
 
 **Costo.** $0 dentro de los free tiers.
 
 ---
 
-### Specs y planning — OpenSpec + Engram (híbrido)
+### Specs y planning — ODD (Gentle-AI v4.0)
 
-**Qué.** SDD se ejecuta con artifact store híbrido: OpenSpec para los artefactos commiteables y revisables en PRs (proposal, specs, design, tasks); Engram para el contexto persistente entre sesiones y entre compactaciones.
+**Qué.** Organic-Driven Development: features sustanciales se planean con un feature document por sprint (`odd/tasks/<feature>.md` con `## Specs`, `## Tasks`, `## Log`), siguiendo el protocolo de Gentle-AI v4.0 (reemplazo del antiguo flujo OpenSpec + SDD). Features pequeñas y entendidas no necesitan artefactos durables; los sprints históricos archivados viven en `openspec/changes/archive/`.
 
-**Por qué.** OpenSpec deja un rastro auditable en Git que sirve como portfolio del proceso de diseño, no solo del resultado. Engram cubre la fricción de retomar el proyecto después de pausas (el caso del autor, que usa el sistema durante una búsqueda de empleo con interrupciones). El modo híbrido los une: OpenSpec como fuente de verdad del artefacto, Engram como memoria de proceso.
+**Por qué.** ODD mantiene la exploración → implementación → check proporcional al pedido, sin planificación pesada para cambios chicos. El feature doc vive en el repo como rastro auditable y se actualiza con el commit hash de cada work-unit. La memoria entre sesiones / compactaciones la cubre Engram (topic `odd/<feature>/tasks`).
 
 **Alternativas consideradas.**
 
-- *Solo OpenSpec.* Sin memoria entre sesiones; cada reanudación implica releer specs. Pierde valor en un proyecto de un solo autor con uso intermitente.
-- *Solo Engram.* Sin artefactos commiteables; pierde el valor de portfolio del proceso SDD.
+- *Solo OpenSpec / SDD clásico.* Más artefactos por feature, más fricción para cambios chicos. Descartado en v4.0 de Gentle-AI; el repo conserva los sprints históricos archivados por trazabilidad.
+- *Sin planning.* Funciona para features chicos pero pierde el rastro auditable de los grandes. Descartado para mantener consistencia.
 
 **Costo.** $0 directo.
 
@@ -177,7 +180,7 @@ El sistema se compone de un adapter MCP local que expone el producto como tools 
 | Componente | Estimado | Notas |
 |---|---|---|
 | Cloudflare Pages (frontend) | $0 | Free tier, sin tarjeta requerida. |
-| HuggingFace Spaces CPU (backend) | $0 | Free tier, sin tarjeta requerida. |
+| Render Web Service (backend) | $0 | Free tier, sin tarjeta requerida. |
 | Neon Postgres | $0 | Free tier, sin tarjeta requerida. |
 | Groq (LLM) | $0 | Free tier, sin tarjeta requerida. |
 | HuggingFace Inference API | $0 | Free tier, sin tarjeta requerida. |
@@ -191,7 +194,7 @@ El sistema se compone de un adapter MCP local que expone el producto como tools 
 
 Estas decisiones están abiertas y se documentarán a medida que se cierren, en este mismo archivo bajo una sección de "Decisiones cerradas" con la fecha relativa del slice en que se tomaron.
 
-- **Autenticación.** Hoy el backend corre detrás de HuggingFace Spaces con tráfico solo del autor. Cuando se exponga más allá del single-user primario, hace falta auth en el adapter MCP y en el frontend. Candidatos a evaluar: API keys simples con rotación, OAuth contra un provider externo, o autenticación mutua entre adapter y backend. Decisión esperada durante Slice 2 o 3 si el alcance se expande.
+- **Autenticación.** Hoy el backend corre detrás de Render con tráfico solo del autor. Cuando se exponga más allá del single-user primario, hace falta auth en el adapter MCP y en el frontend. La auth ya implementada (issue #46 / C3) cubre el flujo cookie-session; el siguiente paso es exponer y exigirla en el adapter MCP y en el frontend público.
 - **Schema DB detallado.** Tablas, columnas, índices (incluido el índice de pgvector), políticas de retención y migraciones. Se documenta cuando se cierre el diseño del Slice 1 antes de implementar.
 - **Contratos API.** Forma final de los endpoints REST, schemas de request / response, versionado y manejo de errores. Se documenta al cerrar el diseño de Slice 1 y se actualiza con cada nuevo slice.
 - **Estrategia de prompts.** Versionado de prompts (archivos en repo con numeración), estrategias de cacheo, fallback entre modelos, y rúbrica del score de match. Se documenta cuando se itere la primera versión durante Slice 1.

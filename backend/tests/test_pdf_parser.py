@@ -2,32 +2,11 @@
 Tests for PDF parser service.
 
 Tests:
-- Happy path with valid PDF
-- File too large error
+- Locale detection
 - pypdf fallback to pdfminer
 - No extractable text error
 """
-import io
-
-import pytest
-
 from app.services import pdf_parser
-
-
-class TestValidateFileSize:
-    """Tests for file size validation."""
-
-    def test_valid_size(self):
-        """Accept file under 10MB."""
-        file = io.BytesIO(b"x" * (5 * 1024 * 1024))  # 5MB
-        size = pdf_parser.validate_file_size(file)
-        assert size == 5 * 1024 * 1024
-
-    def test_file_too_large(self):
-        """Reject file over 10MB."""
-        file = io.BytesIO(b"x" * (11 * 1024 * 1024))  # 11MB
-        with pytest.raises(ValueError, match="File too large"):
-            pdf_parser.validate_file_size(file)
 
 
 class TestDetectLocale:

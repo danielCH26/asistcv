@@ -90,7 +90,6 @@ async def upload_cv(
         )
 
     # Store file (optional for now - we store raw_blob in DB)
-    # file_path = cv_storage.store_cv(current_user.id, file.filename, content)
 
     # Create CV record
     cv = UserCV(
@@ -295,10 +294,6 @@ async def delete_cv(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="CV_NOT_FOUND"
         )
-
-    # Delete stored file if exists
-    # if cv.file_path:
-    #     cv_storage.delete_cv(cv.file_path)
 
     await db.delete(cv)
     await db.commit()

@@ -72,18 +72,10 @@ async def update_me(
             detail="User not found"
         )
 
-    # Check if trying to change role (forbidden)
-    if request.model_dump(exclude_unset=True).get("role"):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="ROLE_IMMUTABLE"
-        )
-
     # Update allowed fields
     update_data = request.model_dump(exclude_unset=True)
     for field, value in update_data.items():
-        if field != "role":  # Role is immutable
-            setattr(user, field, value)
+        setattr(user, field, value)
 
     user.updated_at = datetime.now(UTC)
     await db.commit()

@@ -129,5 +129,9 @@ from the service dashboard.
   `?sslmode=require&channel_binding=require` — our SQLAlchemy config strips
   libpq-only params for asyncpg automatically (see `app/db/session.py`).
 - ** CORS errors from the frontend**: add the Cloudflare Pages domain to
-  `CORS_ORIGINS` env var (comma-separated), e.g.
-  `CORS_ORIGINS=http://localhost:5173,https://asistcv-frontend.pages.dev`.
+  the `CORS_ORIGINS` env var. **The value MUST be a JSON array string** —
+  pydantic-settings parses list-typed fields as JSON, not CSV (see
+  `backend/app/core/config.py` for the field definition and parser note).
+  Format: `CORS_ORIGINS='["http://localhost:5173","https://asistcv-frontend.pages.dev"]'`.
+  Anything that is not a single string starting with `[` and ending with `]`
+  will fail validation and the backend will not boot.

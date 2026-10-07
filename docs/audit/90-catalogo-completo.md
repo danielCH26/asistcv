@@ -20,12 +20,12 @@
 | ID | Descripción | Ubicación | Sev. |
 |---|---|---|---|
 | A1 | Logout revoca el refresh token de **cualquier** usuario: el `UPDATE` filtra solo por `token_hash`, sin chequeo de ownership, así que cualquier principal con service key puede revocar la sesión de otro | `backend/app/api/v1/auth.py:321-344` | P0 |
-| A2 | `token_revocation` es tabla muerta: la blacklist de access tokens existe en el schema pero nunca se consulta al validar un token | `backend/app/models.py:238-252`; `backend/app/api/v1/auth.py:341-342` | P1 |
+| A2 | `token_revocation` es tabla muerta: la blacklist de access tokens existe en el schema pero nunca se consulta al validar un token | `backend/app/db/models.py:238-252`; `backend/app/api/v1/auth.py:341-342` | P1 |
 | A3 | `auth_login_attempts` no tiene índice sobre `(email, attempted_at)`, que es exactamente la clave del rate limit de login | `003:90-99` vs `backend/app/api/v1/auth.py:41-46` | P1 |
 | A4 | Rate limit de login indexa solo por email, sin dimensión de IP; además un login exitoso no limpia la ventana | `backend/app/api/v1/auth.py:36-54` | P1 |
 | A5 | Consent gate no compara `tos_version` contra `CURRENT_TOS_VERSION`; el endpoint de aceptación confía en el `body.tos_version` declarado por el cliente | `backend/app/services/consent_gate.py:50`; `backend/app/api/v1/recruiter_consent.py:20,69` | P1 |
 | A6 | Las rutas de candidates del recruiter no exigen `require_role("recruiter")` (a diferencia de las de consent) y `check_recruiter_consent` deja pasar a no-recruiters | `backend/app/main.py:204-208` vs `:197-201`; `backend/app/services/consent_gate.py:39-40` | P1 |
-| A7 | La tabla `profiles` **no** tiene RLS y los GET/PATCH de perfil no validan ownership del registro | `backend/app/models.py`; `backend/app/api/v1/profiles.py:165,175` | P0 |
+| A7 | La tabla `profiles` **no** tiene RLS y los GET/PATCH de perfil no validan ownership del registro | `backend/app/db/models.py`; `backend/app/api/v1/profiles.py:165,175` | P0 |
 | A8 | CORS con `allow_credentials=True` combinado con un `cors_origins` que `.env.example` sugiere configurar como `["*"]` → CORS abierto con credenciales | `backend/app/main.py:74-80`; `backend/.env.example:31-38` | P0 |
 | A8b | **La guía de troubleshooting de `DEPLOY.md` indica `CORS_ORIGINS` en formato CSV (comma-separated)**, pero `config.py` lo exige como **array JSON** y lo advierte explícitamente en el docstring del módulo. Seguir `DEPLOY.md:111-113` en producción rompe el parseo de CORS (el origen del frontend Cloudflare Pages no se aplica o el arranque falla). La guía correcta está en `backend/.env.example`. | `docs/DEPLOY.md:111-113` vs `backend/app/core/config.py:4-9,22-24`; `backend/.env.example` | P1 |
 | A9 | El rate limit del audit anónimo se indexa por `X-Forwarded-For`, header controlado por el cliente, y sin allowlist de proxies de confianza; si `ip is None` el límite no se aplica | `backend/app/api/v1/audit.py:50-55`; `backend/app/services/audit_rate_limit.py:57-59` | P1 |
@@ -44,11 +44,11 @@
 | A15 | El índice único parcial de adaptaciones deja filas atascadas en `pending` en repeticiones y concurrencia | `015:111-121`; `adaptation_runner.py:318` (detalle en F3) | P1 |
 | A16 | Cache de adaptaciones inválida: `cv_adaptations` no tiene `content_version` y la clave de cache hashea solo `jd_text[:500]`, así que dos JDs con prefijo compartido colisionan | `backend/app/services/adaptation_cache.py:4-16,51,64` | P1 |
 | A17 | `candidate_ranking` ignora su argumento `jd_text` y hace N+1 queries; el docstring promete un pre-filtro por embedding que no existe | `backend/app/services/candidate_ranking.py:60-117`; `backend/app/api/v1/recruiter_candidates.py:256` | P1 |
-| A18 | `profile.embedding` se calcula pero nunca se usa para ranking, y hay 4 índices vectoriales HNSW creados que **nunca se consultan** (no hay `<=>` ni `ORDER BY embedding` en ningún lado): la retrieval es numpy en proceso | `backend/app/models.py`; migraciones `002`/`004`; `backend/app/services/retrieval.py` | P1 |
+| A18 | `profile.embedding` se calcula pero nunca se usa para ranking, y hay 4 índices vectoriales HNSW creados que **nunca se consultan** (no hay `<=>` ni `ORDER BY embedding` en ningún lado): la retrieval es numpy en proceso | `backend/app/db/models.py`; migraciones `002`/`004`; `backend/app/services/retrieval.py` | P1 |
 | A19 | Groq duerme en el último retry antes de lanzar la excepción, y no reintenta 5xx; HuggingFace reintenta 4 veces con sleeps un mismatch de dimensión | `backend/app/services/groq_provider.py:291,300`; `backend/app/services/huggingface_provider.py:89-93,109` | P2 |
 | A20 | El SDK sync de Stripe se llama dentro de `async def`, bloqueando el event loop | `backend/app/services/stripe_client.py:26,87,106` | P1 |
 | A21 | El webhook de Stripe no es atómico entre 3 sesiones: un crash puede reproducir el side effect; además el prefijo `/api/v1` está hardcodeado sin relación con `API_PREFIX` | `backend/app/api/webhooks/stripe.py:45-86`; `backend/app/main.py:225` | P1 |
-| A22 | Datetimes naive/aware mezclados: defaults de modelo con `datetime.utcnow` vs escrituras de servicio con `datetime.now(UTC)` — ya requirió un parche defensivo | `backend/app/models.py` (múltiples); `backend/app/api/v1/audit.py:289,457` | P1 |
+| A22 | Datetimes naive/aware mezclados: defaults de modelo con `datetime.utcnow` vs escrituras de servicio con `datetime.now(UTC)` — ya requirió un parche defensivo | `backend/app/db/models.py` (múltiples); `backend/app/api/v1/audit.py:289,457` | P1 |
 | A23 | `NullPool` en todas partes: nuevo handshake TCP+TLS por request, sin pooling | `backend/app/db/session.py:55` | P2 |
 | A24 | `get_llm_provider` con `@lru_cache` lanza excepción por keys faltantes en el **primer uso**, produciendo 500 en request en lugar de fallar en el arranque | `backend/app/services/factory.py:14,34-43` | P2 |
 | A25 | Parseo de PDF y audit: los parámetros `session` / `pdf_bytes` de `run_audit` no se usan, y el docstring promete streaming de 64KB mientras el archivo entero se lee en memoria | `backend/app/services/audit_runner.py:46-51`; `backend/app/services/pdf_parser.py:3-5` | P2 |
@@ -121,14 +121,14 @@
 
 | ID | Descripción | Ubicación | Sev. |
 |---|---|---|---|
-| A60 | Tabla `TokenRevocation` definida y nunca consultada | `backend/app/models.py:238-252` | P2 |
-| A61 | Tabla `Payment` definida y nunca escrita | `backend/app/models.py` | P2 |
-| A62 | Servicio `cv_storage` presente pero solo con referencias comentadas | `backend/app/services/cv_storage.py` | P2 |
-| A63 | `init_db` / `close_db` definidos y nunca llamados; el bloque `init/close` del lifespan no ejecuta nada | `backend/app/main.py`; `backend/app/db/session.py` | P2 |
-| A64 | Helpers `consume_token`, `get_recruiter_consent` y `create_recruiter_consent` sin uso | `backend/app/services/consent_gate.py`; `backend/app/api/v1/recruiter_consent.py` | P3 |
-| A65 | Check `ROLE_IMMUTABLE` inalcanzable: el schema no tiene campo `role` | `backend/app/` (schemas) | P3 |
-| A66 | `stripe_client.create_customer` definido y nunca invocado | `backend/app/services/stripe_client.py` | P3 |
-| A67 | `Embedding.provider` con default sin uso | `backend/app/models.py` | P3 |
-| A68 | `pdf_parser.CHUNK_SIZE` y `validate_file_size` sin uso | `backend/app/services/pdf_parser.py` | P3 |
-| A69 | `_debug_safe_headers` definido y nunca invocado en el adapter MCP | `mcp-adapter/src/asistcv_mcp/http_client.py` | P3 |
-| A70 | Página de detalle `frontend/src/routes/history/[id]/+page.svelte` inalcanzable en la práctica (ver A38) | `frontend/src/routes/history/[id]/+page.svelte` | P3 |
+| A60 | Tabla `TokenRevocation` definida y nunca consultada — **PENDIENTE decisión de maintainer**: la tabla existe en migraciones (`003_users_and_refresh_tokens.py:80`, `011_rls_policies.py:29`, `013_tz_aware_timestamps.py:64`); eliminar el modelo requiere drop-migration | `backend/app/db/models.py:238-252` | P2 |
+| A61 | Tabla `Payment` definida y nunca escrita — **PENDIENTE decisión de maintainer**: la tabla existe en migraciones (`009_subscriptions_payments.py:53`, `011_rls_policies.py:63`, `013_tz_aware_timestamps.py:89`); sin imports vivos del modelo, pero dropear requiere decisión sobre datos históricos | `backend/app/db/models.py:611-630` | P2 |
+| A62 | ~~Servicio `cv_storage` presente pero solo con referencias comentadas~~ **RESUELTO 2026-10-07**: servicio, test huérfano (`test_cv_storage.py`, incluía el fallo pre-existente de Windows del hallazgo propio) y comentarios colgantes en `cvs.py` eliminados en `d2c05b6` | ~~`backend/app/services/cv_storage.py`~~ | P2 → cerrado |
+| A63 | ~~`init_db` / `close_db` definidos y nunca llamados~~ **RESUELTO 2026-10-07**: ambas funciones + import huérfano eliminados en `d2c05b6` | `backend/app/db/session.py` | P2 → cerrado |
+| A64 | ~~Helpers `consume_token`, `get_recruiter_consent` y `create_recruiter_consent` sin uso~~ **RESUELTO 2026-10-07**: `consume_token` ya había sido eliminado por el rework de consent (#77/#78); los otros dos eliminados en `d2c05b6`. El flujo vivo usa `check_recruiter_consent` y crea/updatea `RecruiterConsent` inline | `backend/app/services/consent_gate.py` | P3 → cerrado |
+| A65 | ~~Check `ROLE_IMMUTABLE` inalcanzable: el schema no tiene campo `role`~~ **RESUELTO 2026-10-07**: rama inalcanzable eliminada en `d2c05b6`. Nota: la ruta del catálogo era imprecisa — el check vivía en `backend/app/api/v1/users.py:76-80`, no en schemas | `backend/app/api/v1/users.py` | P3 → cerrado |
+| A66 | ~~`stripe_client.create_customer` definido y nunca invocado~~ **RESUELTO 2026-10-07**: método eliminado en `d2c05b6`; el checkout pasa `customer_email` directo | `backend/app/services/stripe_client.py` | P3 → cerrado |
+| A67 | `Embedding.provider` con default sin uso — **CATÁLOGO IMPRECISO**: el campo está vivo (escrito por `backend/app/llm/huggingface_provider.py:106` y pasado explícitamente en `match.py` + 6 tests); además vive en `backend/app/llm/schemas.py:92` (schema Pydantic), no en models.py. Nada que eliminar | `backend/app/llm/schemas.py:92` | P3 → inválido |
+| A68 | ~~`pdf_parser.CHUNK_SIZE` y `validate_file_size` sin uso~~ **RESUELTO 2026-10-07**: constantes + función + tests huérfanos eliminados en `d2c05b6`; también `MAX_FILE_SIZE` del módulo (único consumidor era la función muerta; el check vivo es el `MAX_FILE_SIZE` separado de `cvs.py`) | `backend/app/services/pdf_parser.py` | P3 → cerrado |
+| A69 | ~~`_debug_safe_headers` definido y nunca invocado en el adapter MCP~~ **RESUELTO 2026-10-07**: método eliminado en `d2c05b6` | `mcp-adapter/src/asistcv_mcp/http_client.py` | P3 → cerrado |
+| A70 | ~~Página de detalle `frontend/src/routes/history/[id]/+page.svelte` inalcanzable en la práctica (ver A38)~~ **OBSOLETO 2026-10-07**: el PR #86 (`409bf6d`) arregló la ruta — `+page.ts` ahora exporta `load` y la página funciona; ya no es dead code | `frontend/src/routes/history/[id]/+page.svelte` | P3 → obsoleto |

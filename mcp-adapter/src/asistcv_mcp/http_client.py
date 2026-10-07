@@ -170,13 +170,3 @@ class BackendClient:
             await self._client.aclose()
             self._client = None
             logger.debug("HTTP client closed")
-
-    def _debug_safe_headers(self) -> dict[str, str]:
-        """Devuelve los headers del cliente con valores sensibles redactados.
-
-        Útil para diagnóstico (debug); nunca se debe loggear
-        ``self._client.headers`` directamente porque contiene la API key.
-        """
-        if self._client is None:
-            return {}
-        return _sanitize_headers(self._client.headers)
