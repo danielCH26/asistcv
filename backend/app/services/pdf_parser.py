@@ -1,24 +1,17 @@
 """
 PDF parser service with pypdf and pdfminer.six fallback.
 
-Parses PDF files in streaming chunks (64KB) to avoid OOM.
-Hard cap at 10MB before processing.
+Extracts raw text, detects locale, and builds structured CV data.
+Size limits are enforced by the upload endpoint (see api/v1/cvs.py).
 """
 import io
 from dataclasses import dataclass
-from typing import BinaryIO
 
 from pypdf import PdfReader
 
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
-
-# Hard cap: 10MB
-MAX_FILE_SIZE = 10 * 1024 * 1024
-
-# Chunk size for streaming reads
-CHUNK_SIZE = 64 * 1024
 
 
 class PDFParseError(Exception):
@@ -39,27 +32,6 @@ class ParsedCV:
     raw_text: str
     structured: dict
     detected_locale: str
-
-
-def validate_file_size(file: BinaryIO) -> int:
-    """Validate file size is within limits.
-
-    Returns the file size in bytes.
-
-    Raises:
-        ValueError: If file exceeds MAX_FILE_SIZE
-    """
-    # Read file to check size
-    content = file.read()
-    file_size = len(content)
-
-    if file_size > MAX_FILE_SIZE:
-        raise ValueError(f"File too large: {file_size} bytes (max {MAX_FILE_SIZE})")
-
-    # Reset file pointer
-    file.seek(0)
-
-    return file_size
 
 
 def extract_text_with_pypdf(file_content: bytes) -> str | None:

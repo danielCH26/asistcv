@@ -4,7 +4,6 @@ Consent gate service for recruiter endpoints.
 This service provides the consent check dependency that enforces
 that recruiters have accepted the ToS before using roster endpoints.
 """
-from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -54,40 +53,6 @@ async def check_recruiter_consent(
         )
 
     return current_user
-
-
-async def get_recruiter_consent(
-    user_id: int,
-    db: AsyncSession,
-) -> RecruiterConsent | None:
-    """Get the consent record for a recruiter."""
-    result = await db.execute(
-        select(RecruiterConsent).where(
-            RecruiterConsent.user_id == user_id
-        )
-    )
-    return result.scalar_one_or_none()
-
-
-async def create_recruiter_consent(
-    user_id: int,
-    tos_version: str,
-    ip: str | None,
-    user_agent: str | None,
-    db: AsyncSession,
-) -> RecruiterConsent:
-    """Create a new consent record for a recruiter."""
-    consent = RecruiterConsent(
-        user_id=user_id,
-        accepted_at=datetime.now(UTC),
-        tos_version=tos_version,
-        ip=ip,
-        user_agent=user_agent,
-    )
-    db.add(consent)
-    await db.commit()
-    await db.refresh(consent)
-    return consent
 
 
 # Type alias for dependency injection

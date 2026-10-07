@@ -6,7 +6,6 @@ from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
-from sqlmodel import SQLModel
 
 from app.core.config import get_settings
 
@@ -87,19 +86,3 @@ async def get_session_context():
     factory = get_session_factory()
     async with factory() as session:
         yield session
-
-
-async def init_db():
-    """Initialize database tables (for development only)."""
-    engine = get_engine()
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
-
-
-async def close_db():
-    """Close database connections (for graceful shutdown)."""
-    global _engine, _session_factory
-    if _engine is not None:
-        await _engine.dispose()
-        _engine = None
-    _session_factory = None

@@ -20,21 +20,6 @@ def _get_stripe():
     return stripe
 
 
-async def create_customer(user_id: int, email: str, name: str | None = None) -> dict[str, Any]:
-    """Create a Stripe customer for a user."""
-    s = _get_stripe()
-    response = s.Customer.create(
-        email=email,
-        name=name or "",
-        metadata={"user_id": str(user_id)},
-    )
-    return {
-        "id": response.id,
-        "email": response.email,
-        "name": response.name,
-    }
-
-
 async def create_checkout_session(
     user_id: int,
     plan_id: str,
