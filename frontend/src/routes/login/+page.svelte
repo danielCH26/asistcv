@@ -83,14 +83,14 @@
 
 	.login h1 {
 		margin: 0;
-		font-size: 1.5rem;
+		font-size: var(--text-2xl);
 		color: var(--text-strong);
 	}
 
 	.login__notice {
-		padding: 0.75rem 1rem;
+		padding: var(--space-3) var(--space-4);
 		border: 1px solid var(--border);
-		border-radius: 8px;
+		border-radius: var(--radius-card);
 		background: var(--surface);
 		color: var(--text);
 		margin: 0;
@@ -112,9 +112,9 @@
 	}
 
 	.login__form input {
-		padding: var(--space-2) 0.75rem;
+		padding: var(--space-2) var(--space-3);
 		border: 1px solid var(--border);
-		border-radius: 6px;
+		border-radius: var(--radius-control);
 		background: var(--surface);
 		color: var(--text-strong);
 	}
@@ -126,9 +126,9 @@
 	}
 
 	button[type='submit'] {
-		padding: var(--space-3) 1rem;
+		padding: var(--space-3) var(--space-4);
 		border: none;
-		border-radius: 8px;
+		border-radius: var(--radius-card);
 		background: var(--accent);
 		color: var(--accent-contrast);
 		font-weight: 600;

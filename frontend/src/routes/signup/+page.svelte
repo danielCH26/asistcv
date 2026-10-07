@@ -146,14 +146,14 @@
 
 	.signup h1 {
 		margin: 0;
-		font-size: 1.5rem;
+		font-size: var(--text-2xl);
 		color: var(--text-strong);
 	}
 
 	.signup__banner {
-		padding: 0.75rem 1rem;
+		padding: var(--space-3) var(--space-4);
 		border: 1px solid var(--error);
-		border-radius: 8px;
+		border-radius: var(--radius-card);
 		background: var(--error-bg);
 		color: var(--error);
 		margin: 0;
@@ -176,17 +176,17 @@
 	.signup__form input[type='text'],
 	.signup__form input[type='email'],
 	.signup__form input[type='password'] {
-		padding: var(--space-2) 0.75rem;
+		padding: var(--space-2) var(--space-3);
 		border: 1px solid var(--border);
-		border-radius: 6px;
+		border-radius: var(--radius-control);
 		background: var(--surface);
 		color: var(--text-strong);
 	}
 
 	fieldset {
 		border: 1px solid var(--border);
-		border-radius: 8px;
-		padding: 0.75rem;
+		border-radius: var(--radius-card);
+		padding: var(--space-3);
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2);
@@ -201,23 +201,23 @@
 	.signup__role {
 		flex-direction: row !important;
 		align-items: center;
-		gap: 0.5rem !important;
+		gap: var(--space-2) !important;
 	}
 
 	.signup__consent {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2);
-		padding: 0.75rem;
+		padding: var(--space-3);
 		border: 1px solid var(--border);
-		border-radius: 8px;
+		border-radius: var(--radius-card);
 		background: var(--surface-alt, var(--surface));
 	}
 
 	.signup__consent label {
 		flex-direction: row;
 		align-items: flex-start;
-		gap: 0.5rem;
+		gap: var(--space-2);
 		font-size: var(--text-sm);
 	}
 
@@ -228,9 +228,9 @@
 	}
 
 	button[type='submit'] {
-		padding: var(--space-3) 1rem;
+		padding: var(--space-3) var(--space-4);
 		border: none;
-		border-radius: 8px;
+		border-radius: var(--radius-card);
 		background: var(--accent);
 		color: var(--accent-contrast);
 		font-weight: 600;
