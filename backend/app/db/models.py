@@ -698,9 +698,12 @@ class CVAdaptation(SQLModel, table=True):
     (cv-management spec R2) so deleting the source CV orphans the
     adaptation but preserves the audit trail.
 
-    PR1 fields are the minimal slice required by migration 015. PR2 adds
-    ``content_version`` snapshot, ``score_estimated``, ``retry_attempts``,
-    ``started_at``, ``failed_at`` and the ``jd_text`` retention field.
+    PR1 fields are the minimal slice required by migration 015. PR2
+    delivered the ``content_version`` snapshot (migration 022, issue
+    #81) and the ``jd_text`` retention field; ``score_estimated``,
+    ``retry_attempts``, ``started_at`` and ``failed_at`` are still
+    future work and must be added before they are referenced by any
+    code path that observes a row.
     """
 
     __tablename__ = "cv_adaptations"
@@ -743,6 +746,18 @@ class CVAdaptation(SQLModel, table=True):
             "Structured adapted CV output. Always present from row "
             "creation onward; populated by the runner when the job "
             "reaches status=completed."
+        ),
+    )
+    content_version: int = Field(
+        default=1,
+        sa_column=Column(Integer, nullable=False, server_default="1"),
+        description=(
+            "Snapshot of ``users_cvs.content_version`` at the moment the "
+            "row was written. The adaptation cache compares this snapshot "
+            "against the source CV's CURRENT value: mismatch is a miss "
+            "(the CV was edited), match is a hit (Slice A, design D2; "
+            "see migration 022). Default 1 keeps pre-existing rows "
+            "consistent with the seed value of ``users_cvs.content_version``."
         ),
     )
     status: str = Field(

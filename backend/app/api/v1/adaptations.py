@@ -293,10 +293,13 @@ async def create_adaptation(
 
     # Cache check (RLS-bound session; cv_adaptations + users_cvs
     # policies apply). Returns the most recent valid completed row.
+    # ``get_cached`` reads the snapshot stored on the cached row and
+    # compares it against the source CV's CURRENT ``content_version``
+    # (migration 022) -- an edit between write and read shows up as a
+    # snapshot/current mismatch and the runner rebuilds.
     cached = await get_cached(
         session=db,
         cv_id=payload.cv_id,
-        content_version=cv.content_version,
         jd_text_hash=jd_hash,
     )
     if cached is not None:
@@ -328,9 +331,34 @@ async def create_adaptation(
         owner_user_id=current_user.id,
         jd_text_hash=jd_hash,
         jd_text=payload.jd_text.encode("utf-8"),
+        # Snapshot the source CV's content_version onto the row so a
+        # later ``get_cached`` can detect an edit (migration 022; Slice A
+        # design D2). The ORM instance is already loaded by primary key
+        # inside this session, so ``cv.content_version`` is populated
+        # without an extra read. ``users_cvs.content_version`` is
+        # NOT NULL DEFAULT 1 in the schema, so ``None`` here would mean
+        # the row predates migration 014 or the read returned a stub --
+        # log and fall back to 1 rather than crash a paying request.
+        content_version=(
+            cv.content_version
+            if cv.content_version is not None
+            else 1
+        ),
         adapted_cv_json={},
         status="pending",
     )
+    if cv.content_version is None:
+        logger.warning(
+            "adaptation_content_version_defaulted",
+            owner_user_id=current_user.id,
+            cv_id=cv.id,
+            note=(
+                "cv.content_version was None at write time -- snapshotting "
+                "1 instead. users_cvs.content_version is NOT NULL DEFAULT 1, "
+                "so this should not happen in production; investigate if it "
+                "does."
+            ),
+        )
     db.add(row)
     try:
         await db.commit()

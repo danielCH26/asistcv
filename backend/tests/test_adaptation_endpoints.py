@@ -381,6 +381,191 @@ class TestCreateAdaptation:
         assert body["adapted_cv"]["full_name"] == "Owner"
 
 
+# === content_version snapshot (migration 022, issue #81) ===
+#
+# The endpoint must stamp the source CV's content_version onto the row
+# at write time so a later ``get_cached`` can detect an edit. These are
+# the integration tests that pin the snapshot at the HTTP boundary.
+
+
+class TestContentVersionSnapshot:
+    """POST /v1/adaptations stamps and re-reads ``content_version``."""
+
+    @pytest.mark.asyncio
+    async def test_adaptation_row_stamps_source_cv_content_version(
+        self, async_client, clean_db, monkeypatch
+    ) -> None:
+        """The row's ``content_version`` matches the CV's at write time.
+
+        Regression cover for migration 022 + issue #81: the snapshot
+        written at the endpoint must equal the CV's CURRENT
+        ``content_version``. A drift would make the cache look like it
+        served a stale row even when nothing changed -- and, worse,
+        would let an edit slip through silently because the snapshot
+        would still look "fresh".
+        """
+        # Make the runner write path a no-op so the post-success code
+        # does not try to use the LLM or increment usage counters.
+        async def _noop_increment(session, user_id, resource):  # noqa: ARG001
+            return None
+
+        monkeypatch.setattr(
+            "app.services.adaptation_runner.increment_usage", _noop_increment
+        )
+
+        user = await _create_user(clean_db)
+        await _create_subscription(clean_db, user.id, "job_seeker_monthly")
+        cv = await _create_cv(clean_db, user.id)
+        fake_runner = _FakeRunner()
+
+        async with (
+            _enable_adaptation_flag(),
+            _override_current_user(user),
+            _override_runner(fake_runner),
+        ):
+            response = await async_client.post(
+                "/v1/adaptations",
+                json={
+                    "cv_id": cv.id,
+                    "jd_text": "Looking for a Senior Backend Engineer with Python and AWS.",
+                },
+            )
+
+        assert response.status_code == 202, response.text
+        body = response.json()
+        assert isinstance(body["adaptation_id"], int)
+
+        # Read the row directly: the snapshot MUST equal the CV's
+        # content_version at the moment of the request.
+        async with clean_db.session_factory() as session:
+            await set_rls_user(session, user.id, "job_seeker")
+            row = await session.get(CVAdaptation, body["adaptation_id"])
+            assert row is not None
+            assert row.content_version == cv.content_version == 1, (
+                f"row.content_version={row.content_version!r} must equal "
+                f"cv.content_version={cv.content_version!r}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_edited_cv_does_not_serve_old_cached_one(
+        self, async_client, clean_db, monkeypatch
+    ) -> None:
+        """The exact production failure: edit the CV, re-POST the same JD.
+
+        Sequence:
+
+        1. POST the JD against the original CV -> 202, a fresh pending
+           row. The fake runner does not flip the row to ``completed``,
+           so the next request MISSES the cache and creates a new row.
+        2. PATCH the CV (bumps ``content_version``), then POST the same
+           JD again. A working cache would miss (correct); the buggy
+           cache used to return the pre-edit row.
+        """
+        # Make the increment path a no-op (matches the other tests).
+        async def _noop_increment(session, user_id, resource):  # noqa: ARG001
+            return None
+
+        monkeypatch.setattr(
+            "app.services.adaptation_runner.increment_usage", _noop_increment
+        )
+
+        user = await _create_user(clean_db)
+        await _create_subscription(clean_db, user.id, "job_seeker_monthly")
+        cv = await _create_cv(clean_db, user.id)
+        jd_text = "Looking for a Senior Backend Engineer with Python and AWS."
+        fake_runner = _FakeRunner()
+
+        # Step 1: POST the JD against the original CV.
+        async with (
+            _enable_adaptation_flag(),
+            _override_current_user(user),
+            _override_runner(fake_runner),
+        ):
+            first = await async_client.post(
+                "/v1/adaptations",
+                json={"cv_id": cv.id, "jd_text": jd_text},
+            )
+
+        assert first.status_code == 202, first.text
+        first_id = first.json()["adaptation_id"]
+
+        # The fake runner never promotes the row, so a second POST must
+        # MISS the cache (no completed row yet) and produce a NEW row.
+        # That is the precondition for the cache to be the only thing
+        # under test on the next step.
+        async with (
+            _enable_adaptation_flag(),
+            _override_current_user(user),
+            _override_runner(fake_runner),
+        ):
+            pre_warm = await async_client.post(
+                "/v1/adaptations",
+                json={"cv_id": cv.id, "jd_text": jd_text},
+            )
+        assert pre_warm.status_code == 202, pre_warm.text
+
+        # The first row is still pending (fake runner), so the cache
+        # will miss and a new pending row will be created. The two
+        # requests land on different rows: that is the only way the
+        # test can observe a snapshot-vs-current mismatch in the cache
+        # path. Flip the first row to ``completed`` so the cache is
+        # actually exercised.
+        async with clean_db.session_factory() as session:
+            await set_rls_user(session, user.id, "job_seeker")
+            first_row = await session.get(CVAdaptation, first_id)
+            assert first_row is not None
+            first_row.status = "completed"
+            first_row.adapted_cv_json = {
+                "full_name": "Owner",
+                "experience": [],
+                "skills": ["Python"],
+                "education": [],
+                "languages": ["English"],
+            }
+            first_row.completed_at = datetime.now(UTC)
+            first_row.content_version = cv.content_version  # =1, snapshot of original
+            await session.commit()
+
+        # Step 2: edit the CV (bump content_version), then POST the
+        # SAME jd. The cache must miss because the cached row's
+        # snapshot (1) != the CV's current value (2). A miss means a
+        # new row is created; the same-row response would be the
+        # regression that issue #81 documents.
+        async with clean_db.session_factory() as session:
+            current = await session.get(UserCV, cv.id)
+            assert current is not None
+            current.content_version = 2
+            await session.commit()
+
+        async with (
+            _enable_adaptation_flag(),
+            _override_current_user(user),
+            _override_runner(fake_runner),
+        ):
+            after_edit = await async_client.post(
+                "/v1/adaptations",
+                json={"cv_id": cv.id, "jd_text": jd_text},
+            )
+
+        assert after_edit.status_code == 202, after_edit.text
+        after_edit_id = after_edit.json()["adaptation_id"]
+        assert after_edit_id != first_id, (
+            "after editing the CV the endpoint returned the cached id, "
+            "which means the cache did not invalidate -- this is the "
+            "bug migration 022 + the snapshot check in get_cached fix"
+        )
+
+        # The new row's snapshot MUST equal the post-edit CV value (2).
+        async with clean_db.session_factory() as session:
+            await set_rls_user(session, user.id, "job_seeker")
+            new_row = await session.get(CVAdaptation, after_edit_id)
+            assert new_row is not None
+            assert new_row.content_version == 2, (
+                f"new row's content_version={new_row.content_version!r} must "
+                "equal the post-edit CV value 2"
+            )
+
+
 # === Concurrent POSTs for the same (cv, jd) ===
 
 

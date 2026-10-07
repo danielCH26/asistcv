@@ -762,7 +762,6 @@ class TestRepeatAdaptation:
                 await get_cached(
                     session,
                     cv_id=cv.id,
-                    content_version=cv.content_version,
                     jd_text_hash=stale.jd_text_hash,
                 )
                 is None

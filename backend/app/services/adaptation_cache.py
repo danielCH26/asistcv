@@ -3,17 +3,32 @@ Adaptation cache (Slice A, sprint-adapt-cv-outreach, PR2).
 
 Cache key
 ---------
-``(parent_cv_id, content_version, jd_text_hash)``
+``(parent_cv_id, content_version_snapshot, jd_text_hash)``
 
 - ``parent_cv_id``: id of the source CV in ``users_cvs``.
-- ``content_version``: monotonic counter on the source CV, bumped in
-  ``PATCH /v1/cvs/{id}``. We compare the cached row's snapshot
-  against the CV's *current* value (see ``get_cached``) so an edit
-  that bumps ``content_version`` invalidates the cache atomically.
+- ``content_version_snapshot``: the source CV's ``content_version`` AT
+  THE MOMENT the cached row was written (migration 022 stamps it onto
+  ``cv_adaptations.content_version``). On read we compare the row's
+  snapshot against the source CV's CURRENT ``content_version`` — equal
+  is a hit, different is a miss. The CV edit path (``PATCH /v1/cvs/{id}``)
+  bumps ``users_cvs.content_version`` (migration 014), so the snapshot
+  becomes stale on edit and the cache miss is automatic.
 - ``jd_text_hash``: ``sha256(jd_text[:500].encode()).hexdigest()``. Same
   first 500 chars of the JD = same hash. This is intentionally fuzzy on
   the tail because JDs often have boilerplate appended (company
   footers, EEO statements) that doesn't change the adaptation target.
+
+Why the snapshot, not the caller's value
+----------------------------------------
+The previous shape (``content_version: int`` passed in by the caller)
+read the source CV's ``content_version`` in the same request and
+passed it back in. The cache's "defensive" check then compared
+``cv_obj.content_version != content_version`` — a tautology (``x != x``).
+The caller did not know what value the source CV had been at when the
+row was originally written, and had no way to find out: that is
+precisely what the snapshot on the row records. Reading it is what
+makes the comparison meaningful: the row says "I was generated when
+the CV was at v=N"; the current CV says "I am at v=M"; mismatch → miss.
 
 TTL
 ---
@@ -68,28 +83,28 @@ def compute_jd_text_hash(jd_text: str) -> str:
 async def get_cached(
     session: AsyncSession,
     cv_id: int,
-    content_version: int,
     jd_text_hash: str,
 ) -> SQLModel | None:
-    """Look up a valid cached adaptation for the given triple key.
+    """Look up a valid cached adaptation for the given (cv, jd) key.
 
     A cached row is valid when ALL of the following hold:
     - ``parent_cv_id`` matches ``cv_id``
     - ``jd_text_hash`` matches the supplied hash
     - ``status`` is ``completed`` (we never serve pending/failed rows)
     - ``created_at`` is within ``CACHE_TTL`` (24 h)
-    - the parent CV's current ``users_cvs.content_version`` still
-      equals the supplied ``content_version`` — when the source CV was
-      edited between cache write and cache read, we miss on purpose so
-      the runner rebuilds against the new version.
+    - the row's stored snapshot of ``users_cvs.content_version``
+      (``cv_adaptations.content_version``) still equals the source CV's
+      current ``users_cvs.content_version``. When the source CV was
+      edited between cache write and cache read, ``PATCH /v1/cvs/{id}``
+      bumped ``users_cvs.content_version`` and the snapshot no longer
+      matches — we miss on purpose so the runner rebuilds against the
+      new CV.
 
     Args:
         session: Async DB session (RLS context must already be bound
             by the caller; ``cv_adaptations`` and ``users_cvs`` are both
             RLS-protected).
         cv_id: Source CV id (``parent_cv_id``).
-        content_version: Expected ``users_cvs.content_version`` of the
-            source CV at read time.
         jd_text_hash: Pre-computed hash of the JD head (see
             ``compute_jd_text_hash``).
 
@@ -120,17 +135,22 @@ async def get_cached(
     if row is None:
         return None
 
-    # Defensive content_version check: if the source CV's CURRENT
-    # version differs from what the caller supplied, the CV was edited
-    # since this cache row was written. Treat as a miss so the runner
-    # rebuilds against the new version.
+    # Snapshot-vs-current check (migration 022). The row's
+    # ``content_version`` is the source CV's value at write time;
+    # the source CV's CURRENT value is whatever ``users_cvs`` says now.
+    # When they differ, the CV was edited since the cache row was
+    # written — a miss, so the runner rebuilds against the new CV.
+    # The previous API let the caller pass the value back in, which
+    # was a tautology because the caller had read it from the same
+    # ``users_cvs`` row in the same request; the row is the only source
+    # of truth that survives across requests.
     cv_row = await session.execute(
         select(UserCV).where(UserCV.id == cv_id)
     )
     cv_obj = cv_row.scalar_one_or_none()
     if cv_obj is None:
         return None
-    if cv_obj.content_version != content_version:
+    if row.content_version != cv_obj.content_version:
         return None
 
     return row

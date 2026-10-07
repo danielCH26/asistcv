@@ -114,8 +114,14 @@ class TestGetCached:
         jd_hash: str,
         status: str = "completed",
         created_at: datetime | None = None,
+        content_version: int = 1,
     ) -> CVAdaptation:
-        """Helper to insert a CVAdaptation row directly."""
+        """Helper to insert a CVAdaptation row directly.
+
+        ``content_version`` is the snapshot of ``users_cvs.content_version``
+        stored on the row (migration 022). Defaults to 1 to mirror the
+        server-side default for legacy rows.
+        """
         async with clean_db.session_factory() as session:
             await set_rls_user(session, owner_user_id, "job_seeker")
             row = CVAdaptation(
@@ -129,6 +135,7 @@ class TestGetCached:
                     "education": [],
                     "languages": [],
                 },
+                content_version=content_version,
                 status=status,
             )
             if created_at is not None:
@@ -145,14 +152,14 @@ class TestGetCached:
         async with clean_db.session_factory() as session:
             await set_rls_user(session, owner.id, "job_seeker")
             hit = await get_cached(
-                session, cv_id=cv.id, content_version=1, jd_text_hash="x" * 64
+                session, cv_id=cv.id, jd_text_hash="x" * 64
             )
             assert hit is None
 
     async def test_returns_completed_row(
         self, clean_db, owner: User, cv: UserCV
     ) -> None:
-        """A completed row matching all 3 keys is returned."""
+        """A completed row matching the (cv, jd) key is returned."""
         jd_hash = "a" * 64
         await self._insert_adaptation(
             clean_db, cv_id=cv.id, owner_user_id=owner.id, jd_hash=jd_hash
@@ -161,7 +168,7 @@ class TestGetCached:
         async with clean_db.session_factory() as session:
             await set_rls_user(session, owner.id, "job_seeker")
             hit = await get_cached(
-                session, cv_id=cv.id, content_version=1, jd_text_hash=jd_hash
+                session, cv_id=cv.id, jd_text_hash=jd_hash
             )
             assert hit is not None
             assert isinstance(hit, CVAdaptation)
@@ -199,7 +206,7 @@ class TestGetCached:
         async with clean_db.session_factory() as session:
             await set_rls_user(session, owner.id, "job_seeker")
             hit = await get_cached(
-                session, cv_id=cv.id, content_version=1, jd_text_hash=jd_hash
+                session, cv_id=cv.id, jd_text_hash=jd_hash
             )
             assert hit is not None
             # Same key for both rows: the tie is broken by recency, which
@@ -224,7 +231,7 @@ class TestGetCached:
         async with clean_db.session_factory() as session:
             await set_rls_user(session, owner.id, "job_seeker")
             hit = await get_cached(
-                session, cv_id=cv.id, content_version=1, jd_text_hash=jd_hash
+                session, cv_id=cv.id, jd_text_hash=jd_hash
             )
             assert hit is None
 
@@ -244,51 +251,107 @@ class TestGetCached:
         async with clean_db.session_factory() as session:
             await set_rls_user(session, owner.id, "job_seeker")
             hit = await get_cached(
-                session, cv_id=cv.id, content_version=1, jd_text_hash=jd_hash
+                session, cv_id=cv.id, jd_text_hash=jd_hash
             )
             assert hit is None
 
-    async def test_different_content_version_invalidates_cache(
+    async def test_cache_hit_when_cv_unchanged_since_row_written(
         self, clean_db, owner: User, cv: UserCV
     ) -> None:
-        """Asking for a content_version that doesn't match → miss.
+        """Snapshot == CV's current content_version → hit.
 
-        Simulates: cache was written at content_version=1, then the CV
-        was edited (bumped to content_version=2), then the same request
-        comes in. The runner must miss and rebuild against v2.
+        Regression cover for the cache key that D2 promised and the
+        defensive check never delivered. A row written against
+        ``content_version=1`` while the CV was at 1 must hit when
+        re-requested against the unchanged CV.
+        """
+        jd_hash = "f" * 64
+        await self._insert_adaptation(
+            clean_db,
+            cv_id=cv.id,
+            owner_user_id=owner.id,
+            jd_hash=jd_hash,
+            content_version=1,  # snapshot at write time == CV at write time
+        )
+
+        async with clean_db.session_factory() as session:
+            await set_rls_user(session, owner.id, "job_seeker")
+            hit = await get_cached(session, cv_id=cv.id, jd_text_hash=jd_hash)
+
+        assert hit is not None
+        assert hit.jd_text_hash == jd_hash
+
+    async def test_cache_miss_when_cv_edited_after_write(
+        self, clean_db, owner: User, cv: UserCV
+    ) -> None:
+        """Snapshot != CV's current content_version → miss.
+
+        The CV is bumped by writing directly to ``users_cvs.content_version``
+        (mirroring what ``PATCH /v1/cvs/{id}`` does in production -- see
+        ``app/api/v1/cvs.py:263``). The cache must NOT return the pre-edit
+        row: a hit here would serve an adaptation generated against a CV
+        that no longer matches.
         """
         jd_hash = "e" * 64
         await self._insert_adaptation(
-            clean_db, cv_id=cv.id, owner_user_id=owner.id, jd_hash=jd_hash
+            clean_db,
+            cv_id=cv.id,
+            owner_user_id=owner.id,
+            jd_hash=jd_hash,
+            content_version=1,  # snapshot at write time
         )
+
+        # Edit the CV: bump content_version, the way PATCH does.
+        async with clean_db.session_factory() as session:
+            current = await session.get(UserCV, cv.id)
+            assert current is not None
+            current.content_version = 2
+            await session.commit()
 
         async with clean_db.session_factory() as session:
             await set_rls_user(session, owner.id, "job_seeker")
-            hit = await get_cached(
-                session,
-                cv_id=cv.id,
-                content_version=2,  # bumped since the row was written
-                jd_text_hash=jd_hash,
-            )
-            assert hit is None
+            hit = await get_cached(session, cv_id=cv.id, jd_text_hash=jd_hash)
 
-    async def test_matching_content_version_returns_row(
+        assert hit is None, (
+            "cache returned the pre-edit row after the CV's content_version "
+            "was bumped; this is the bug migration 022 + the snapshot "
+            "comparison in get_cached exist to prevent"
+        )
+
+    async def test_snapshot_is_what_was_current_at_write_time(
         self, clean_db, owner: User, cv: UserCV
     ) -> None:
-        """When caller passes the same version as the CV, hit succeeds."""
-        jd_hash = "f" * 64
+        """Read the cached row and assert ``content_version == cv.content_version`` at write time.
+
+        Pins the contract: the snapshot is the CV's current value at the
+        moment the row was written, NOT the value the caller happened to
+        pass (the old API let the caller lie -- that is exactly the bug).
+        """
+        jd_hash = "0" * 64
+        # CV starts at 1 (the fixture default). Snapshot at 1.
+        assert cv.content_version == 1
         await self._insert_adaptation(
-            clean_db, cv_id=cv.id, owner_user_id=owner.id, jd_hash=jd_hash
+            clean_db,
+            cv_id=cv.id,
+            owner_user_id=owner.id,
+            jd_hash=jd_hash,
+            content_version=cv.content_version,
         )
 
         async with clean_db.session_factory() as session:
             await set_rls_user(session, owner.id, "job_seeker")
-            hit = await get_cached(
-                session, cv_id=cv.id, content_version=cv.content_version,
-                jd_text_hash=jd_hash,
+            # Fresh read so the field is materialised through the same
+            # code path the cache check would use.
+            from sqlalchemy import select
+
+            result = await session.execute(
+                select(CVAdaptation).where(
+                    CVAdaptation.parent_cv_id == cv.id,
+                    CVAdaptation.jd_text_hash == jd_hash,
+                )
             )
-            assert hit is not None
-            assert hit.jd_text_hash == jd_hash
+            cached_row = result.scalar_one()
+            assert cached_row.content_version == cv.content_version == 1
 
     async def test_different_jd_hash_misses(
         self, clean_db, owner: User, cv: UserCV
@@ -306,7 +369,6 @@ class TestGetCached:
             hit = await get_cached(
                 session,
                 cv_id=cv.id,
-                content_version=1,
                 jd_text_hash="2" * 64,
             )
             assert hit is None
@@ -333,7 +395,7 @@ class TestGetCached:
         async with clean_db.session_factory() as session:
             await set_rls_user(session, owner.id, "job_seeker")
             hit = await get_cached(
-                session, cv_id=cv.id, content_version=1, jd_text_hash=jd_hash
+                session, cv_id=cv.id, jd_text_hash=jd_hash
             )
             # The owner can read their own row — that's the "happy" path
             # of the cache; the negative case (other user reading) is
