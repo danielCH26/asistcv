@@ -67,4 +67,19 @@ Therefore: **Tab 1 keeps `runMatch()` / `apiClient.match()` exactly as-is**, re-
 
 ### L3 — Evidence / commits (appended as work progresses)
 
-- TBD per task.
+**Infra fix (prerequisite, inside T1)** — vitest resolved the `svelte` root export to `src/runtime/ssr.js` under node's default export condition, whose `onMount` is a **silent no-op stub**. Consequence: NO component under test had ever run an onMount callback — with zero errors (proven with a minimal Probe component). `resolve.conditions: ['browser']` under `test:` is not a valid vitest-2 key and the sveltekit() plugin overrides vite-level resolve anyway; the durable fix is a **regex alias pinning `svelte` to `src/runtime/index.js`** (same precedence trick as the existing esm-env alias). This unblocks testing every auth-gated page (profile, billing, recruiter) that gates behind `requireSession()` in onMount.
+
+**T1 (S1,S2,S4 — tabs + match into tab 1) — DONE**
+- RED: 4 tab tests failed (no tablist). GREEN: `d233879`.
+- Tablist (`role=tab`/`aria-selected`, audit-page pattern) + panels; match flow re-wrapped in `JdForm` with new optional `headingKey`/`introKey` props (home byte-identical); i18n keys `profile.tabCvVsJd/tabCvOnly/cvOnlyHint/jdLabel/jdIntro` in es+en.
+- Test-side fixes during GREEN: JdForm textarea queries scoped to the active `tabpanel` (the adapt section has its own similar textarea); `createProfile` mock must resolve an id or `ensureProfile` throws before `match` is called; `MATCH_RESULT` typed as `MatchAnalysis`.
+- Verified: 82/82 tests, svelte-check 0 errors.
+
+**T2 (S3,S4,S5 — solo CV tab) — DONE**
+- RED: 3 solo tests failed. GREEN: `ff7b74d`.
+- PDF/text mode switch (`aria-pressed`), local file validation (10 MB), submit → `apiClient.auditAnonymous` **without `jd_text`** (cv_only), error mapping (PDF_NO_TEXT / RATE_LIMITED with retry minutes / CV_TOO_SHORT / …), result render with `problematicas` severity chips + `recomendaciones` + `fortalezas` + reasoning.
+- **Deviation from spec S3 (documented):** calls `apiClient.auditAnonymous` directly with LOCAL page state instead of `auditStore` — the funnel store persists result/token across pages; sharing it would bleed the profile solo result into `/audit`. Render semantics still mirror the funnel's cv_only branch.
+- Verified: 85/85 tests (11 files), svelte-check 0 errors, `npm run build` green.
+
+**T3 (S6 — final QA) — DONE (evidence above)**
+- vitest 11 files / 85 tests ✅ · svelte-check 0 errors (1 pre-existing warning) ✅ · build ✅ · `audit-page.test.ts` untouched and green ✅.
