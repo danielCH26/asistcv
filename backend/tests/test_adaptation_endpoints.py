@@ -222,7 +222,10 @@ class TestCreateAdaptation:
         async with _enable_adaptation_flag(), _override_current_user(user), _override_runner():
             response = await async_client.post(
                 "/v1/adaptations",
-                json={"cv_id": cv.id, "jd_text": "anything"},
+                json={
+                    "cv_id": cv.id,
+                    "jd_text": "Looking for a Senior Backend Engineer with Python and AWS.",
+                },
             )
 
         assert response.status_code == 402
@@ -255,7 +258,9 @@ class TestCreateAdaptation:
         async with _enable_adaptation_flag(), _override_current_user(user), _override_runner():
             response = await async_client.post(
                 "/v1/adaptations",
-                json={"jd_text": "something"},
+                json={
+                    "jd_text": "Looking for a Senior Backend Engineer with Python and AWS."
+                },
             )
         assert response.status_code == 422
 
@@ -274,6 +279,42 @@ class TestCreateAdaptation:
         assert response.status_code == 422
 
     @pytest.mark.asyncio
+    async def test_post_422_jd_text_below_minimum(
+        self, async_client, clean_db
+    ) -> None:
+        """1-49 character ``jd_text`` → 422 from pydantic, runner NOT called.
+
+        Catches the regression where ``min_length`` was loosened and short
+        JDs started costing slots on the paid LLM (#83). The runner is
+        injected so we can prove pydantic rejected the body BEFORE the
+        handler ran -- otherwise a 1-char JD would reach the runner, do
+        useless work, and still be charged as a successful slot on
+        completion (5 such requests exhaust a ``job_seeker_monthly`` quota).
+        """
+        user = await _create_user(clean_db)
+        await _create_subscription(clean_db, user.id, "job_seeker_monthly")
+        cv = await _create_cv(clean_db, user.id)
+        fake_runner = _FakeRunner()
+
+        async with (
+            _enable_adaptation_flag(),
+            _override_current_user(user),
+            _override_runner(fake_runner),
+        ):
+            response = await async_client.post(
+                "/v1/adaptations",
+                json={"cv_id": cv.id, "jd_text": "x" * 30},
+            )
+
+        assert response.status_code == 422, response.text
+        # The runner must not be called -- pydantic rejected before the
+        # handler ran, so no slot was charged.
+        assert fake_runner.calls == [], (
+            "runner must not be called when jd_text is below the minimum length; "
+            f"calls observed: {fake_runner.calls!r}"
+        )
+
+    @pytest.mark.asyncio
     async def test_post_404_no_cv_found(
         self, async_client, clean_db
     ) -> None:
@@ -284,7 +325,10 @@ class TestCreateAdaptation:
         async with _enable_adaptation_flag(), _override_current_user(user), _override_runner():
             response = await async_client.post(
                 "/v1/adaptations",
-                json={"cv_id": 999999, "jd_text": "anything"},
+                json={
+                    "cv_id": 999999,
+                    "jd_text": "Looking for a Senior Backend Engineer with Python and AWS.",
+                },
             )
         assert response.status_code == 404
         assert response.json()["detail"] == "NO_CV_FOUND"
@@ -362,7 +406,7 @@ class TestConcurrentDuplicatePost:
         user = await _create_user(clean_db)
         await _create_subscription(clean_db, user.id, "job_seeker_monthly")
         cv = await _create_cv(clean_db, user.id)
-        jd_text = "Senior Backend Engineer, Python and AWS."
+        jd_text = "Senior Backend Engineer with Python, AWS and PostgreSQL experience."
 
         inflight = CVAdaptation(
             parent_cv_id=cv.id,
@@ -422,7 +466,7 @@ class TestConcurrentDuplicatePost:
         cv = await _create_cv(clean_db, user.id)
         payload = {
             "cv_id": cv.id,
-            "jd_text": "Platform engineer with Kubernetes and Go.",
+            "jd_text": "Platform engineer with Kubernetes, Go and observability experience.",
         }
 
         fake_runner = _FakeRunner()

@@ -99,7 +99,13 @@ class AdaptationCreateRequest(BaseModel):
 
     cv_id: int = Field(..., description="Source CV id (must belong to the caller).")
     jd_text: str = Field(
-        ..., min_length=1, description="Free-text job description."
+        ...,
+        min_length=50,
+        description=(
+            "Free-text job description (>= 50 chars; anything shorter is rejected "
+            "by pydantic before the handler runs, so the runner and the paid LLM "
+            "are never charged -- see issue #83)."
+        ),
     )
 
 
