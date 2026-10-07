@@ -82,12 +82,13 @@
 	   restrained, and a 50-step scale invites drift. Every colour below is
 	   written exactly once; the legacy names further down are pure aliases.
 
-	   Every text-on-surface pair below was measured at >= 4.5:1 (light and
-	   dark) when this layer was written. There is no automated check for it
-	   yet, so re-measure after any edit that changes a colour value, a pair,
-	   or a mode. A previous revision of this comment cited a
-	   `contrast-audit.mjs` that was never committed; the script is still
-	   missing and the claim was doing more harm than the omission.
+   Every text-on-surface pair below is asserted >= 4.5:1 (light values) by
+   the automated check in `src/lib/tokens/contrast.test.ts`, which recomputes
+   WCAG 2.1 ratios from the hex values on every `vitest` run. Dark-scheme
+   ratios are documented in the comments of the dark block below. If you
+   change a colour value, a pair, or a mode, update
+   `src/lib/tokens/colors.ts` in the same commit — the parity test will
+   refuse the build otherwise — and confirm the contrast suite still passes.
 	   ========================================================================= */
 	/* canvas + surfaces */
 	--color-canvas: #f8fafc;
