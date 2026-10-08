@@ -67,6 +67,14 @@ class Settings(BaseSettings):
         default="BAAI/bge-m3", validation_alias="HF_EMBEDDING_MODEL"
     )
 
+    # Gemini embedding configuration
+    gemini_api_key: str | None = Field(
+        default=None, validation_alias="GEMINI_API_KEY"
+    )
+    gemini_embedding_model: str = Field(
+        default="gemini-embedding-001", validation_alias="GEMINI_EMBEDDING_MODEL"
+    )
+
     @property
     def resolved_embedding_model(self) -> str:
         """Model identifier the ACTIVE embedding provider produces.
@@ -75,11 +83,14 @@ class Settings(BaseSettings):
         against stored `embedding_model` markers: a mismatch or NULL vector
         triggers regeneration with the current provider. Keep in sync with
         the model each provider actually returns (mock.py hardcodes its
-        marker, huggingface_provider uses hf_embedding_model).
+        marker, huggingface_provider uses hf_embedding_model,
+        gemini_provider uses gemini_embedding_model).
         """
         provider = (self.embedding_provider or "local").lower()
         if provider == "huggingface":
             return self.hf_embedding_model
+        if provider == "gemini":
+            return self.gemini_embedding_model
         if provider == "mock":
             return "mock-embedding-v1"
         return self.embedding_model

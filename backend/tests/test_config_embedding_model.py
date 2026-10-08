@@ -18,6 +18,7 @@ def _settings(**overrides: str) -> Settings:
             "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
         ),
         hf_embedding_model=overrides.get("hf_embedding_model", "BAAI/bge-m3"),
+        gemini_embedding_model=overrides.get("gemini_embedding_model", "gemini-embedding-001"),
     )
 
 
@@ -45,3 +46,13 @@ def test_case_insensitive_provider_resolution():
         settings.resolved_embedding_model
         == "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     )
+
+
+def test_gemini_provider_resolves_gemini_model():
+    settings = _settings(embedding_provider="gemini")
+    assert settings.resolved_embedding_model == "gemini-embedding-001"
+
+
+def test_gemini_provider_resolves_custom_model():
+    settings = _settings(embedding_provider="gemini", gemini_embedding_model="custom-gemini-model")
+    assert settings.resolved_embedding_model == "custom-gemini-model"
