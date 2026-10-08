@@ -511,14 +511,16 @@ async def test_migration_002_downgrade_upgrade_reversible(setup_test_db):
     assert len(hnsw_indexes) == 4, f"4 HNSW indexes should exist after re-upgrade, got {hnsw_indexes}"
 
 
-@pytest.mark.asyncio
-async def test_migration_025_embedding_dim_384(setup_test_db):
-    """025 cambia embedding de vector(1024) a vector(384) en las 4 tablas.
+@pytest.mark.anyio
+async def test_migration_026_embedding_dim_768(setup_test_db):
+    """026 cambia embedding de vector(384) a vector(768) en las 4 tablas.
 
-    Verifica vía pg_type que la dimensión almacenada es 384.
+    El provider Gemini (gemini-embedding-001, outputDimensionality 768)
+    produce vectores de 768 dims (#101 pivote: la inferencia local no
+    sostenía los límites de la instancia free de Render).
     """
     engine = setup_test_db
-    expected_dim = 384
+    expected_dim = 768
     tables = ("profiles", "job_descriptions", "analyses", "users_cvs")
 
     async with engine.connect() as conn:
@@ -541,14 +543,9 @@ async def test_migration_025_embedding_dim_384(setup_test_db):
     for table in tables:
         type_str = found.get(table)
         assert type_str is not None, f"{table}.embedding should exist"
-        # pgvector almacena la dimensión en atttypmod: 'vector(384)' o 'vector' si -1
         if "(" in type_str:
             actual_dim = int(type_str.split("(")[1].split(")")[0])
         else:
-            # atttypmod=-1: pgvector no guardó la dimensión en pg_attribute.
-            # El test verifica que el tipo base sea 'vector'; la dimensión correcta
-            # la controla Vector(384) en models.py (que es lo que los tests de
-            # modelo de SQLModel verifican).
             assert type_str == "vector", (
                 f"{table}.embedding should be vector type, got {type_str}"
             )

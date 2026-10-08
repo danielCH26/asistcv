@@ -9,7 +9,6 @@ from app.llm.composite import CompositeProvider
 from app.llm.gemini_provider import GeminiEmbeddingProvider
 from app.llm.groq_provider import GroqProvider
 from app.llm.huggingface_provider import HuggingFaceProvider
-from app.llm.local_provider import LocalEmbeddingProvider
 from app.llm.mock import MockProvider
 
 
@@ -28,15 +27,10 @@ def _resolve_embedding_provider(settings: object) -> LLMProvider:
     """
     # Access through getattr so this module can be imported without
     # a full Settings instance (e.g. at type-check time).
-    ep: str = getattr(settings, "embedding_provider", "local")
+    ep: str = getattr(settings, "embedding_provider", "gemini")
     ep = ep.lower()
 
-    if ep == "local":
-        return LocalEmbeddingProvider(
-            embedding_model=getattr(settings, "embedding_model", None),
-            settings=settings,
-        )
-    elif ep == "huggingface":
+    if ep == "huggingface":
         api_key = getattr(settings, "huggingface_api_key", None)
         if not api_key:
             raise ValueError(
@@ -63,7 +57,7 @@ def _resolve_embedding_provider(settings: object) -> LLMProvider:
     else:
         raise ValueError(
             f"Unknown embedding provider: '{ep}'. "
-            f"Supported providers: 'local', 'huggingface', 'gemini', 'mock'. "
+            f"Supported providers: 'gemini', 'huggingface', 'mock'. "
             f"Set EMBEDDING_PROVIDER environment variable."
         )
 

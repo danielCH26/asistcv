@@ -180,29 +180,45 @@ class TestGroqProviderFactory:
 
             get_llm_provider.cache_clear()
 
-    def test_factory_requires_huggingface_api_key_for_groq(self):
+    def test_factory_requires_embedding_key_for_groq(self):
         """
-        groq composite works without HF key when embedding_provider=local (new default).
-        Raises ValueError only when embedding_provider=huggingface and key is missing.
+        groq composite resolves embeddings via embedding_provider: the default
+        (gemini) needs GEMINI_API_KEY, huggingface needs HUGGINGFACE_API_KEY.
         """
         from app.llm.factory import get_llm_provider
-        from app.llm.local_provider import LocalEmbeddingProvider
+        from app.llm.gemini_provider import GeminiEmbeddingProvider
 
-        # New default: embedding_provider=local → no HF key needed
+        # Default: embedding_provider=gemini → needs GEMINI_API_KEY
         with patch("app.llm.factory.get_settings") as mock_settings:
             mock_settings.return_value.llm_provider = "groq"
             mock_settings.return_value.groq_api_key = "groq_key"
             mock_settings.return_value.huggingface_api_key = None
-            mock_settings.return_value.embedding_provider = "local"
-            mock_settings.return_value.embedding_model = (
-                "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-            )
+            mock_settings.return_value.embedding_provider = "gemini"
+            mock_settings.return_value.gemini_api_key = "gemini_key"
+            mock_settings.return_value.gemini_embedding_model = "gemini-embedding-001"
 
             get_llm_provider.cache_clear()
 
             provider = get_llm_provider()
             assert hasattr(provider, "_embeddings")
-            assert isinstance(provider._embeddings, LocalEmbeddingProvider)
+            assert isinstance(provider._embeddings, GeminiEmbeddingProvider)
+
+            get_llm_provider.cache_clear()
+
+        # gemini embedding_provider with missing key raises
+        with patch("app.llm.factory.get_settings") as mock_settings:
+            mock_settings.return_value.llm_provider = "groq"
+            mock_settings.return_value.groq_api_key = "groq_key"
+            mock_settings.return_value.huggingface_api_key = None
+            mock_settings.return_value.embedding_provider = "gemini"
+            mock_settings.return_value.gemini_api_key = None
+
+            get_llm_provider.cache_clear()
+
+            with pytest.raises(ValueError) as exc_info:
+                get_llm_provider()
+
+            assert "GEMINI_API_KEY" in str(exc_info.value)
 
             get_llm_provider.cache_clear()
 

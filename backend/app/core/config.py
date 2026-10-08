@@ -49,14 +49,9 @@ class Settings(BaseSettings):
 
     # Embedding provider configuration (used by composite factory path)
     embedding_provider: str = Field(
-        default="local",
+        default="gemini",
         validation_alias="EMBEDDING_PROVIDER",
-        description="Embedding provider: local (fastembed), huggingface (Inference API), or mock",
-    )
-    embedding_model: str = Field(
-        default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
-        validation_alias="EMBEDDING_MODEL",
-        description="Model used for local fastembed embeddings (384 dims) or HF Inference API",
+        description="Embedding provider: gemini (AI Studio free tier), huggingface (Inference API), or mock",
     )
 
     # HuggingFace configuration
@@ -86,14 +81,14 @@ class Settings(BaseSettings):
         marker, huggingface_provider uses hf_embedding_model,
         gemini_provider uses gemini_embedding_model).
         """
-        provider = (self.embedding_provider or "local").lower()
+        provider = (self.embedding_provider or "gemini").lower()
         if provider == "huggingface":
             return self.hf_embedding_model
         if provider == "gemini":
             return self.gemini_embedding_model
         if provider == "mock":
             return "mock-embedding-v1"
-        return self.embedding_model
+        return self.gemini_embedding_model
 
     # Retrieval configuration (PR-C, issue #16)
     retrieval_size_threshold_chars: int = Field(
