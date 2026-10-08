@@ -67,6 +67,23 @@ class Settings(BaseSettings):
         default="BAAI/bge-m3", validation_alias="HF_EMBEDDING_MODEL"
     )
 
+    @property
+    def resolved_embedding_model(self) -> str:
+        """Model identifier the ACTIVE embedding provider produces.
+
+        On-demand re-embedding (match, retrieval cache keys) compares this
+        against stored `embedding_model` markers: a mismatch or NULL vector
+        triggers regeneration with the current provider. Keep in sync with
+        the model each provider actually returns (mock.py hardcodes its
+        marker, huggingface_provider uses hf_embedding_model).
+        """
+        provider = (self.embedding_provider or "local").lower()
+        if provider == "huggingface":
+            return self.hf_embedding_model
+        if provider == "mock":
+            return "mock-embedding-v1"
+        return self.embedding_model
+
     # Retrieval configuration (PR-C, issue #16)
     retrieval_size_threshold_chars: int = Field(
         default=3000, validation_alias="RETRIEVAL_SIZE_THRESHOLD_CHARS"

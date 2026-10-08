@@ -31,7 +31,9 @@ JD_TEXT = (
     "PostgreSQL y despliegues en AWS. Trabajo remoto, equipo pequeño."
 )
 
-EMBEDDING_MODEL = "BAAI/bge-m3"
+# Marker the active provider resolves to (EMBEDDING_PROVIDER default is
+# local) — match.py compares stored markers against it to skip re-embed.
+EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
 
 def _make_provider() -> MagicMock:
