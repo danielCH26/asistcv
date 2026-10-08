@@ -15,6 +15,7 @@
 		border: 1px solid var(--color-line);
 		border-radius: var(--radius-card-lg);
 		padding: var(--space-4) var(--space-5);
+		box-shadow: var(--clay-raised);
 	}
 
 	.reasoning__heading {

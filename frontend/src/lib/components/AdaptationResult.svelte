@@ -51,6 +51,7 @@
 		border: 1px solid var(--color-line);
 		border-radius: var(--radius-panel);
 		background: var(--color-surface);
+		box-shadow: var(--clay-raised);
 	}
 
 	.adaptation-result__header {
