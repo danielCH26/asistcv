@@ -140,7 +140,7 @@ async def match(
     # El embedding del JD histórico nunca se regenera (es snapshot del análisis).
     settings = get_settings()
     profile_reembedded = False
-    if profile.embedding is None or profile.embedding_model != settings.hf_embedding_model:
+    if profile.embedding is None or profile.embedding_model != settings.resolved_embedding_model:
         try:
             profile_payload = {
                 "id": profile.id,

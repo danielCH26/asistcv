@@ -14,7 +14,7 @@
 | Backend | FastAPI sobre Python 3.12 | Render Web Service |
 | Base de datos | Postgres + pgvector | Neon (serverless) |
 | LLM | Llama 3.3 70B Versatile | Groq |
-| Embeddings | BGE-M3 | HuggingFace Inference API |
+| Embeddings | paraphrase-multilingual-MiniLM-L12-v2 | Local (fastembed ONNX, sin red) |
 | Adapter MCP | Python con SDK `mcp` oficial | Local / ejecución por usuario |
 | CI/CD | GitHub Actions | Pipelines por push y por PR |
 | Secretos | GitHub Secrets + env vars en Render / Cloudflare dashboard | — |
@@ -97,19 +97,22 @@ El sistema se compone de un adapter MCP local que expone el producto como tools 
 
 ---
 
-### Embeddings — BGE-M3 vía HuggingFace Inference API
+### Embeddings — paraphrase-multilingual-MiniLM-L12-v2 local vía fastembed (ONNX)
 
-**Qué.** Modelo BGE-M3 (multilingüe, 1024 dimensiones) invocado vía la Inference API de HuggingFace por HTTP estándar (httpx).
+**Qué.** Inferencia de embeddings en el propio container del backend con [fastembed](https://github.com/qdrant/fastembed) (runtime ONNX): modelo `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (multilingüe, 384 dimensiones, ~220MB), sin llamadas de red al momento de embeddear. El modelo se bakéa en la imagen Docker en build time.
 
-**Por qué.** El usuario primario y muchos de los JDs que va a evaluar están en español, mientras que empresas destino publican en inglés. BGE-M3 es multilingüe fuerte y cubre ambos idiomas sin traducir pre-embarazadamente, lo que evita ruido semántico. La Inference API de HuggingFace ofrece free tier real sin tarjeta de crédito y se accede por HTTP estándar, sin SDK propietario. Las 1024 dimensiones son cómodas para pgvector sin penalizar demasiado storage ni búsqueda.
+**Por qué.** El usuario primario y muchos de los JDs que va a evaluar están en español, mientras que empresas destino publican en inglés. El modelo fue entrenado con datos paralelos de 50+ idiomas y alinea los dos idiomas en el mismo espacio vectorial (matching cross-lingual) sin traducir pre-embarazadamente. La Inference API de HuggingFace dejó de ser viable en 2026: el free tier ($0.10/mes en créditos) se agota y para seguir exige tarjeta de crédito, que el autor no tiene — y en producción el endpoint devolvía 401 (#101). La inferencia local elimina la clase entera de fallas de red/cuotas/auth del path crítico, mantiene $0 reales y suma privacidad: el CV no viaja a un tercero para vectorizarse. 384 dimensiones además reducen storage y costo de búsqueda en pgvector. La restricción dura es la RAM de Render free (512MB): este modelo ONNX es el más grande que entra junto con FastAPI; BGE-M3 (2.27GB) y e5-small (470MB) no caben.
+
+**Histórico.** Hasta octubre 2026 fue BGE-M3 (multilingüe, 1024 dimensiones) vía Inference API de HuggingFace por httpx. La migración a 384 dims se hizo en la migración Alembic `025`; los embeddings viejos se descartan y el match re-embeddea on-demand. `EMBEDDING_PROVIDER=huggingface` sigue disponible como fallback deprecated.
 
 **Alternativas consideradas.**
 
 - *text-multilingual-embedding-002 vía Vertex AI (stack anterior).* Se descarta porque Vertex AI requiere billing habilitado en GCP, lo que implica tarjeta de crédito.
-- *text-embedding-004 vía Vertex AI.* Más barato y de mayor benchmark en inglés puro. Se descarta porque el caso bilingüe ES / EN es central.
-- *Hospedar BGE-M3 propio en HuggingFace Spaces con GPU.* Sin costo de API, pero los Spaces con GPU tienen free tier limitado y algunos tiers piden tarjeta. Se descarta por simplicidad operativa.
+- *BGE-M3 local.* La mejor calidad multilingüe, pero 2.27GB: no entra en los 512MB de RAM de Render free.
+- *intfloat/multilingual-e5-small local.* Buena calidad cross-lingual, pero ~470MB fp32: marginal en 512MB junto con FastAPI.
+- *OpenAI / Cohere / Voyage APIs.* Calidad alta pero pago con tarjeta, contra la restricción free-tier del proyecto.
 
-**Costo.** $0 dentro del free tier de HuggingFace Inference API, sin tarjeta de crédito requerida.
+**Costo.** $0: ONNX runtime open source, modelo Apache-2.0, la CPU del container de Render ya paga el free tier.
 
 ---
 

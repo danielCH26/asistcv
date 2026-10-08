@@ -31,15 +31,17 @@ JD_TEXT = (
     "PostgreSQL y despliegues en AWS. Trabajo remoto, equipo pequeño."
 )
 
-EMBEDDING_MODEL = "BAAI/bge-m3"
+# Marker the active provider resolves to (EMBEDDING_PROVIDER default is
+# local) — match.py compares stored markers against it to skip re-embed.
+EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
 
 def _make_provider() -> MagicMock:
-    """Proveedor LLM mockeado: embeddings de 1024 + análisis válido."""
+    """Proveedor LLM mockeado: embeddings de 384 + análisis válido."""
     provider = MagicMock(name="LLMProviderMock")
     provider.generate_embedding = AsyncMock(
         return_value=Embedding(
-            vector=[0.1] * 1024,
+            vector=[0.1] * 384,
             model=EMBEDDING_MODEL,
             provider="huggingface",
         )
@@ -102,7 +104,7 @@ async def test_match_happy_path_persists_jd_and_analysis(
         assert len(jds) == 1, "el JD debe persistirse exactamente una vez"
         jd = jds[0]
         assert jd.raw_text == JD_TEXT
-        assert list(jd.embedding) == [0.1] * 1024
+        assert list(jd.embedding) == [0.1] * 384
         assert jd.embedding_model == EMBEDDING_MODEL
 
         assert len(analyses) == 1, "el análisis debe persistirse exactamente una vez"
@@ -117,7 +119,7 @@ async def test_match_happy_path_persists_jd_and_analysis(
         assert row.gaps == ["Kubernetes"]
         assert row.energy_level == "high"
         assert row.reasoning == "Buen match general entre el perfil y el JD."
-        assert list(row.embedding) == [0.1] * 1024
+        assert list(row.embedding) == [0.1] * 384
         assert row.embedding_model == EMBEDDING_MODEL
 
 
@@ -221,7 +223,7 @@ async def test_match_regenerates_missing_profile_embedding(
     async with clean_db.session_factory() as session:
         stored = await session.get(Profile, profile.id)
         assert stored.embedding is not None
-        assert len(list(stored.embedding)) == 1024
+        assert len(list(stored.embedding)) == 384
         assert stored.embedding_model == EMBEDDING_MODEL
 
 
@@ -230,7 +232,7 @@ async def test_match_skips_reembed_when_model_matches(
 ):
     """Perfil con embedding vigente → NO se re-embebe (solo se embebe el JD)."""
     profile = await create_profile(
-        name="Perfil Completo", embedding=[0.5] * 1024, embedding_model=EMBEDDING_MODEL
+        name="Perfil Completo", embedding=[0.5] * 384, embedding_model=EMBEDDING_MODEL
     )
     provider = _make_provider()
     monkeypatch.setattr(match_module, "get_llm_provider", lambda: provider)
@@ -244,7 +246,7 @@ async def test_match_skips_reembed_when_model_matches(
 
     async with clean_db.session_factory() as session:
         stored = await session.get(Profile, profile.id)
-        assert list(stored.embedding) == [0.5] * 1024, "el embedding no debe cambiar"
+        assert list(stored.embedding) == [0.5] * 384, "el embedding no debe cambiar"
         assert stored.embedding_model == EMBEDDING_MODEL
 
 
@@ -253,7 +255,7 @@ async def test_match_regenerates_when_embedding_model_differs(
 ):
     """Perfil con modelo de embedding viejo → regenera y persiste el nuevo."""
     profile = await create_profile(
-        name="Perfil Legacy", embedding=[0.3] * 1024, embedding_model="old-model-v1"
+        name="Perfil Legacy", embedding=[0.3] * 384, embedding_model="old-model-v1"
     )
     provider = _make_provider()
     monkeypatch.setattr(match_module, "get_llm_provider", lambda: provider)
@@ -268,7 +270,7 @@ async def test_match_regenerates_when_embedding_model_differs(
     async with clean_db.session_factory() as session:
         stored = await session.get(Profile, profile.id)
         assert stored.embedding_model == EMBEDDING_MODEL
-        assert list(stored.embedding) == [0.1] * 1024
+        assert list(stored.embedding) == [0.1] * 384
 
 
 async def test_match_profile_reembed_failure_continues(
@@ -279,7 +281,7 @@ async def test_match_profile_reembed_failure_continues(
     provider = _make_provider()
     provider.generate_embedding = AsyncMock(
         side_effect=[
-            Embedding(vector=[0.1] * 1024, model=EMBEDDING_MODEL, provider="huggingface"),
+            Embedding(vector=[0.1] * 384, model=EMBEDDING_MODEL, provider="huggingface"),
             RuntimeError("HF down al embeber el perfil"),
         ]
     )

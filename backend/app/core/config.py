@@ -47,6 +47,18 @@ class Settings(BaseSettings):
     groq_api_key: str | None = Field(default=None, validation_alias="GROQ_API_KEY")
     groq_model: str = Field(default="qwen/qwen3.8-27b", validation_alias="GROQ_MODEL")
 
+    # Embedding provider configuration (used by composite factory path)
+    embedding_provider: str = Field(
+        default="local",
+        validation_alias="EMBEDDING_PROVIDER",
+        description="Embedding provider: local (fastembed), huggingface (Inference API), or mock",
+    )
+    embedding_model: str = Field(
+        default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        validation_alias="EMBEDDING_MODEL",
+        description="Model used for local fastembed embeddings (384 dims) or HF Inference API",
+    )
+
     # HuggingFace configuration
     huggingface_api_key: str | None = Field(
         default=None, validation_alias="HUGGINGFACE_API_KEY"
@@ -54,6 +66,23 @@ class Settings(BaseSettings):
     hf_embedding_model: str = Field(
         default="BAAI/bge-m3", validation_alias="HF_EMBEDDING_MODEL"
     )
+
+    @property
+    def resolved_embedding_model(self) -> str:
+        """Model identifier the ACTIVE embedding provider produces.
+
+        On-demand re-embedding (match, retrieval cache keys) compares this
+        against stored `embedding_model` markers: a mismatch or NULL vector
+        triggers regeneration with the current provider. Keep in sync with
+        the model each provider actually returns (mock.py hardcodes its
+        marker, huggingface_provider uses hf_embedding_model).
+        """
+        provider = (self.embedding_provider or "local").lower()
+        if provider == "huggingface":
+            return self.hf_embedding_model
+        if provider == "mock":
+            return "mock-embedding-v1"
+        return self.embedding_model
 
     # Retrieval configuration (PR-C, issue #16)
     retrieval_size_threshold_chars: int = Field(

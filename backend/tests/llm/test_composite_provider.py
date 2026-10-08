@@ -117,6 +117,10 @@ class TestCompositeProviderFactory:
             mock_settings.return_value.groq_model = "llama-3.3-70b-versatile"
             mock_settings.return_value.huggingface_api_key = "hf_key"
             mock_settings.return_value.hf_embedding_model = "BAAI/bge-m3"
+            mock_settings.return_value.embedding_provider = "local"
+            mock_settings.return_value.embedding_model = (
+                "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+            )
 
             get_llm_provider.cache_clear()
 

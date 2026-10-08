@@ -36,7 +36,7 @@ async def _seed_analysis(
             raw_text=raw_text or RAW_TEXT,
             title=title,
             company=company,
-            embedding=[0.1] * 1024,
+            embedding=[0.1] * 384,
             embedding_model=EMBEDDING_MODEL,
         )
         session.add(jd)
@@ -51,7 +51,7 @@ async def _seed_analysis(
             gaps=["Docker"],
             energy_level="high",
             reasoning="Match sólido con el perfil solicitado.",
-            embedding=[0.1] * 1024,
+            embedding=[0.1] * 384,
             embedding_model=EMBEDDING_MODEL,
             created_at=created_at,
         )
