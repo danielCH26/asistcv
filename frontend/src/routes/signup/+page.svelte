@@ -147,15 +147,15 @@
 	.signup h1 {
 		margin: 0;
 		font-size: var(--text-2xl);
-		color: var(--text-strong);
+		color: var(--color-ink-strong);
 	}
 
 	.signup__banner {
 		padding: var(--space-3) var(--space-4);
-		border: 1px solid var(--error);
+		border: 1px solid var(--color-error);
 		border-radius: var(--radius-card);
-		background: var(--error-bg);
-		color: var(--error);
+		background: var(--color-error-bg);
+		color: var(--color-error);
 		margin: 0;
 	}
 
@@ -170,21 +170,30 @@
 		flex-direction: column;
 		gap: var(--space-1);
 		font-size: var(--text-sm);
-		color: var(--text);
+		color: var(--color-ink);
 	}
 
 	.signup__form input[type='text'],
 	.signup__form input[type='email'],
 	.signup__form input[type='password'] {
 		padding: var(--space-2) var(--space-3);
-		border: 1px solid var(--border);
+		border: 1px solid var(--color-line);
 		border-radius: var(--radius-control);
-		background: var(--surface);
-		color: var(--text-strong);
+		background: var(--clay-fill);
+		color: var(--color-ink-strong);
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.signup__form input[type='text']:focus-visible,
+	.signup__form input[type='email']:focus-visible,
+	.signup__form input[type='password']:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
 	}
 
 	fieldset {
-		border: 1px solid var(--border);
+		border: 1px solid var(--color-line);
 		border-radius: var(--radius-card);
 		padding: var(--space-3);
 		display: flex;
@@ -194,7 +203,7 @@
 
 	legend {
 		font-size: var(--text-sm);
-		color: var(--text-muted);
+		color: var(--color-ink-muted);
 		padding: 0 var(--space-1);
 	}
 
@@ -209,9 +218,9 @@
 		flex-direction: column;
 		gap: var(--space-2);
 		padding: var(--space-3);
-		border: 1px solid var(--border);
+		border: 1px solid var(--color-line);
 		border-radius: var(--radius-card);
-		background: var(--surface-alt, var(--surface));
+		background: var(--color-surface-alt, var(--color-surface));
 	}
 
 	.signup__consent label {
@@ -231,10 +240,21 @@
 		padding: var(--space-3) var(--space-4);
 		border: none;
 		border-radius: var(--radius-card);
-		background: var(--accent);
-		color: var(--accent-contrast);
+		background: var(--color-action);
+		color: var(--color-on-action);
 		font-weight: 600;
 		cursor: pointer;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	button[type='submit']:hover:not(:disabled) {
+		box-shadow: var(--clay-lifted);
+	}
+
+	button[type='submit']:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
 	}
 
 	button[type='submit']:disabled {
@@ -245,6 +265,6 @@
 	.signup__login {
 		margin: 0;
 		font-size: var(--text-sm);
-		color: var(--text-muted);
+		color: var(--color-ink-muted);
 	}
 </style>

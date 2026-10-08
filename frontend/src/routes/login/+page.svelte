@@ -84,15 +84,15 @@
 	.login h1 {
 		margin: 0;
 		font-size: var(--text-2xl);
-		color: var(--text-strong);
+		color: var(--color-ink-strong);
 	}
 
 	.login__notice {
 		padding: var(--space-3) var(--space-4);
-		border: 1px solid var(--border);
+		border: 1px solid var(--color-line);
 		border-radius: var(--radius-card);
-		background: var(--surface);
-		color: var(--text);
+		background: var(--color-surface);
+		color: var(--color-ink);
 		margin: 0;
 		font-size: var(--text-sm);
 	}
@@ -108,15 +108,22 @@
 		flex-direction: column;
 		gap: var(--space-1);
 		font-size: var(--text-sm);
-		color: var(--text);
+		color: var(--color-ink);
 	}
 
 	.login__form input {
 		padding: var(--space-2) var(--space-3);
-		border: 1px solid var(--border);
+		border: 1px solid var(--color-line);
 		border-radius: var(--radius-control);
-		background: var(--surface);
-		color: var(--text-strong);
+		background: var(--clay-fill);
+		color: var(--color-ink-strong);
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.login__form input:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
 	}
 
 	.login__error {
@@ -129,10 +136,21 @@
 		padding: var(--space-3) var(--space-4);
 		border: none;
 		border-radius: var(--radius-card);
-		background: var(--accent);
-		color: var(--accent-contrast);
+		background: var(--color-action);
+		color: var(--color-on-action);
 		font-weight: 600;
 		cursor: pointer;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	button[type='submit']:hover:not(:disabled) {
+		box-shadow: var(--clay-lifted);
+	}
+
+	button[type='submit']:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
 	}
 
 	button[type='submit']:disabled {
@@ -143,6 +161,6 @@
 	.login__signup {
 		margin: 0;
 		font-size: var(--text-sm);
-		color: var(--text-muted);
+		color: var(--color-ink-muted);
 	}
 </style>
