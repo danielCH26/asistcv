@@ -406,6 +406,110 @@ async def test_service_principal_can_still_read_profiles(
 
 
 # ---------------------------------------------------------------------------
+# Issue #87 — service-principal reads must be auditable (S2 + S3)
+# ---------------------------------------------------------------------------
+
+
+async def test_service_principal_read_emits_audit_log(
+    async_client, clean_db, override_get_session, protected_mode, world, monkeypatch
+):
+    """Every API-key read of a profile emits a structured log line.
+
+    The shared ``BACKEND_API_KEY`` is root of read over any profile (incl.
+    salary range inside ``preferences``). Closing the leak is a bigger
+    change; the minimum honest improvement is making every such read
+    auditable. This test pins that contract.
+    """
+    from app.api.v1 import profiles as profiles_module
+
+    captured: list[tuple[str, dict]] = []
+    # structlog's ``info`` is bound by configure_logging; we patch the
+    # module-level logger so the helper can swap in a recorder without
+    # touching global log config.
+    original_info = profiles_module.logger.info
+
+    def recorder(event: str, **kwargs: object) -> None:
+        captured.append((event, kwargs))
+
+    monkeypatch.setattr(profiles_module.logger, "info", recorder)
+
+    response = await async_client.get(
+        f"/v1/profiles/{world['profile_b'].id}",
+        headers={"Authorization": f"Bearer {API_KEY}"},
+    )
+    assert response.status_code == 200
+    # Restore so the rest of the suite doesn't see a broken logger.
+    monkeypatch.setattr(profiles_module.logger, "info", original_info)
+
+    events = [c for c in captured if c[0] == "service_principal_profile_read"]
+    assert events, f"Expected one service_principal_profile_read event, got: {captured}"
+    event_name, payload = events[-1]
+    assert payload["profile_id"] == world["profile_b"].id
+    assert payload["auth_method"] == "api_key"
+
+
+async def test_user_a_read_does_not_emit_service_audit_log(
+    async_client, clean_db, override_get_session, protected_mode, world, monkeypatch
+):
+    """Real-JWT users reading their own profile must NOT emit the service log.
+
+    The audit log is for the bypass path only. Normal user reads stay
+    quiet (the standard access log is enough).
+    """
+    from app.api.v1 import profiles as profiles_module
+
+    captured: list[str] = []
+    original_info = profiles_module.logger.info
+
+    def recorder(event: str, **kwargs: object) -> None:
+        captured.append(event)
+
+    monkeypatch.setattr(profiles_module.logger, "info", recorder)
+
+    a = world["user_a"]
+    response = await async_client.get(
+        f"/v1/profiles/{world['profile_a'].id}",
+        headers=_jwt_header(a),
+    )
+    assert response.status_code == 200
+    monkeypatch.setattr(profiles_module.logger, "info", original_info)
+
+    assert "service_principal_profile_read" not in captured
+
+
+async def test_open_mode_service_principal_read_emits_log_with_auth_method_open(
+    async_client, clean_db, override_get_session, open_mode, world, monkeypatch
+):
+    """In open mode (no BACKEND_API_KEY) the service user is auto-fabricated
+    and the ownership filter is inerte. The audit log must still fire — and
+    carry ``auth_method=open`` so it is distinguishable from a real
+    API-key call. This is the dev-mode trace the issue (#87) called out.
+    """
+    from app.api.v1 import profiles as profiles_module
+
+    captured: list[tuple[str, dict]] = []
+    original_info = profiles_module.logger.info
+
+    def recorder(event: str, **kwargs: object) -> None:
+        captured.append((event, kwargs))
+
+    monkeypatch.setattr(profiles_module.logger, "info", recorder)
+
+    # No auth header at all — open mode fabricates the service user.
+    response = await async_client.get(
+        f"/v1/profiles/{world['profile_b'].id}"
+    )
+    assert response.status_code == 200
+    monkeypatch.setattr(profiles_module.logger, "info", original_info)
+
+    events = [c for c in captured if c[0] == "service_principal_profile_read"]
+    assert events, f"Expected one service_principal_profile_read event, got: {captured}"
+    event_name, payload = events[-1]
+    assert payload["auth_method"] == "open"
+    assert payload["profile_id"] == world["profile_b"].id
+
+
+# ---------------------------------------------------------------------------
 # Controls: the owner keeps full access
 # ---------------------------------------------------------------------------
 

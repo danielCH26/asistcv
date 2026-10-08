@@ -112,7 +112,8 @@ async def _get_profile_or_404(
 
     El filtro de ownership va ACÁ y no en RLS porque `profiles` no tiene
     policies (migración 011 no la cubrió). Para el principal de servicio
-    (id 0) el filtro se omite: ver la nota de ownership en el módulo.
+    (id 0) el filtro se omite: ver la nota de ownership en el módulo y el
+    contrato completo en ``docs/security/service-principal.md`` (issue #87).
     """
     query = select(Profile).where(Profile.id == profile_id)
     if user.id != 0:
@@ -124,6 +125,19 @@ async def _get_profile_or_404(
         raise HTTPException(
             status_code=404,
             detail=f"Profile with id {profile_id} not found",
+        )
+    # Issue #87: the service principal (id 0) bypasses the ownership filter
+    # (justified for the MCP adapter; see docs/security/service-principal.md).
+    # Every such read is auditable — we don't gate access, we make it visible.
+    # In open mode the service user is auto-fabricated and ``user.auth_method``
+    # is "open" (no ``BACKEND_API_KEY`` configured); in protected mode it is
+    # "api_key" (the shared key). The log makes the two distinguishable
+    # downstream without changing the read surface.
+    if user.id == 0:
+        logger.info(
+            "service_principal_profile_read",
+            profile_id=profile.id,
+            auth_method=user.auth_method,
         )
     return profile
 

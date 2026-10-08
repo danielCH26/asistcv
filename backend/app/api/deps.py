@@ -49,7 +49,7 @@ class CurrentUser:
     id: int
     name: str
     role: str
-    auth_method: str  # "jwt" or "api_key"
+    auth_method: str  # "jwt" | "api_key" | "open" (auto-fabricated in open mode)
 
 
 def _extract_bearer(header_value: str | None) -> str | None:
@@ -186,13 +186,16 @@ async def optional_auth(
     - Valid JWT or API key → returns user
     - No credentials or invalid credentials → raises 401
     """
-    # In open mode, skip auth entirely - return service user
+    # In open mode, skip auth entirely - return service user.
+    # ``auth_method="open"`` (not "api_key") so the audit log in
+    # ``_get_profile_or_404`` can distinguish a real API-key read from an
+    # inerte auto-fabrication when ``BACKEND_API_KEY`` is unset. See #87.
     if not is_auth_required():
         return CurrentUser(
             id=0,
             name="service",
             role="service",
-            auth_method="api_key"
+            auth_method="open",
         )
 
     # In protected mode, require valid credentials
