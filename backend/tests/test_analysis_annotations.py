@@ -31,9 +31,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-from pydantic import ValidationError
-
 from app.db.models import Analysis
 
 
