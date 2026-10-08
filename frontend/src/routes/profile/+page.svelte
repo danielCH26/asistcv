@@ -892,7 +892,7 @@
 	}
 
 	.profile__solo-submit:hover:not(:disabled) {
-		filter: brightness(1.05);
+		background: var(--color-accent-hover);
 		box-shadow: var(--clay-lifted);
 	}
 
@@ -1058,7 +1058,7 @@
 	}
 
 	.profile__match button[type='button']:hover:not(:disabled) {
-		filter: brightness(1.05);
+		background: var(--color-accent-hover);
 		box-shadow: var(--clay-lifted);
 	}
 
@@ -1130,7 +1130,7 @@
 	}
 
 	.profile__adapt-cta:hover:not(:disabled) {
-		filter: brightness(1.05);
+		background: var(--color-accent-hover);
 		box-shadow: var(--clay-lifted);
 	}
 

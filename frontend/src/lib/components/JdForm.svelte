@@ -144,7 +144,7 @@
 	}
 
 	.jd-form__submit:hover:not(:disabled) {
-		filter: brightness(1.05);
+		background: var(--color-accent-hover);
 		box-shadow: var(--clay-lifted);
 	}
 

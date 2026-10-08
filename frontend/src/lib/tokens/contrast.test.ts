@@ -134,6 +134,10 @@ const TEXT_PAIRS: ReadonlyArray<readonly [string, string]> = [
 	['--color-on-warning', '--color-warning'],
 	['--color-on-danger', '--color-danger'],
 	['--color-on-info', '--color-info'],
+	// accent hover/pressed steps with the white label (issue #57 T2):
+	// both hold AAA (~7.9:1 and ~10:1) — pins them against lightening.
+	['--color-on-action', '--color-accent-hover'],
+	['--color-on-action', '--color-accent-pressed'],
 	// score inks as LABEL text on surfaces (EnergyBadge, StrengthsGapsList)
 	['--score-low-ink', '--color-surface'],
 	['--score-mid-ink', '--color-surface'],

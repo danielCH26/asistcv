@@ -40,6 +40,44 @@ The **expanded** palette: `--color-bg-elevated`, `--color-bg-sunken`, `--color-f
 
 ---
 
+## T2 PASS — semantic roles + hover tokens (design decisions received)
+
+### T2-S1 — Design decisions (maintainer, 2026-10-08)
+
+> *"Me gusta la paleta de colores que definiste, para el resto tomá las decisiones según convengan mejor visualmente y en la calidad del proyecto."*
+
+1. **Acento**: se conserva `#0369a1` (la paleta actual gusta). No hay re-acento.
+2. **Error/warning**: universales loud (actuales `#b91c1c`/`#92400e`) — pasan AA holgado; suavizar arriesga el umbral.
+3. **AAA**: body text ya lo pasa y está pineado ≥7:1; nuevos roles, AAA donde salga natural.
+
+### T2-S2 — Nuevos tokens (solo valor genuinamente nuevo)
+
+Los demás roles del issue YA existen en nuestro vocabulario canónico (documentado en `docs/palette.md`, sin alias-soup — precedente #54):
+
+| Rol del issue | Token nuestro | Nota |
+|---|---|---|
+| bg / bg-elevated / bg-sunken | canvas / surface / surface-alt | existen |
+| fg / fg-muted / fg-subtle | ink / ink-muted / **line-strong (dual-use documentado 4.55/4.76)** | subtle cubierto por line-strong |
+| accent | action | existe |
+| **accent-hover** | **NUEVO: `#075985`** (light) / `#7dd3fc` (dark) | blanco encima ~7.9:1 AAA (light); label oscuro ≥13:1 (dark) |
+| **accent-pressed** | **NUEVO: `#0c4a6e`** (light) / `#0ea5e9` (dark) | blanco ~10:1 (light); label oscuro ~6:1 (dark) |
+| success/warning/danger/info | existen (loud universales, decisión 2) | existen |
+| border / border-strong | line / line-strong | existen |
+
+### T2-S3 — Wiring en componentes (criterio: ≥5)
+
+Swap `filter: brightness(1.05)` → `background: var(--color-accent-hover)` en los hovers de action buttons (8 sitios en 5 archivos: JdForm, audit, profile ×3, recruiter ×3). En dark, el token apunta a la variante clara — el label oscuro `--color-on-action` mantiene contraste sin cambios.
+
+### T2-S4 — docs/palette.md
+
+Tabla visual del rol → token → hex → ratio medido, incluyendo el mapping de nombres del issue → vocabulario canónico (bg→canvas, fg-subtle→line-strong, accent→action, etc.).
+
+### T2-S5 — axe-core: decisión documentada
+
+El criterio *"test automatizado en CI falla si una combinación nueva no cumple"* ya lo satisface `contrast.test.ts` a nivel token (falla si un par no cumple). Un scan axe-core a nivel DOM requiere Playwright browsers en CI (infra pesada) y su regla de contraste es redundante con el test de tokens para combinaciones declaradas. Queda como mejora futura opcional, documentada aquí — no bloquea el cierre de #57.
+
+---
+
 ## Log
 
 ### L1 — User's verbatim request (2026-10-07)
@@ -83,6 +121,15 @@ I will hold the T2 follow-up until you answer. The T1 work above is mechanical a
 - **Dos iteraciones de diseño del test** (fallas mías, no de tokens): (1) puse `on-X` sobre `X-muted` → 1.0-1.15:1 (contrato incorrecto: el muted lleva texto regular, no blanco); (2) puse mismo-token-same-token → 1:1. Corregidos con el contrato documentado en el header del test.
 - Verificado: 52/52 tokens suite · 110/110 suite completa · svelte-check 0 errores.
 
-**T2 (S2 — axe-core en CI) — PENDIENTE** (siguiente paso, mismo branch o follow-up)
+**T2 PASS (S2 wiring + S3 paleta expandida + decisiones recibidas) — DONE**
 
-**T3 (S3 — paleta expandida) — BLOQUEADO en decisión de diseño** (L3: acento, familia error/warning, alcance AAA)
+Decisiones del maintainer (L3 resuelta): acento SE QUEDA `#0369a1` (gusta la paleta actual); error/warning universales loud; AAA donde salga natural.
+
+- Tokens nuevos (solo valor genuino — el resto de roles del issue se cubre con el vocabulario canónico, mapeado en `docs/palette.md`): `--color-accent-hover` (#075985 light / #7dd3fc dark) + `--color-accent-pressed` (#0c4a6e light / #0ea5e9 dark), ambos bloques de app.css con racional de contraste + colors.ts (paridad byte-a-byte).
+- Tests: +2 pares (`on-action` sobre hover ~7.9:1 AAA, sobre pressed ~10:1 AAA) → **54 aserciones** en contrast.test.ts.
+- Wiring (S2 wiring — criterio ≥5 componentes): 8 hovers `filter: brightness(1.05)` → `background: var(--color-accent-hover)` en 5 archivos (JdForm, audit, profile ×3, recruiter ×3). Dark label `--color-on-action` mantiene contraste sin cambios (hover aclara, label oscuro: ~13:1).
+- `docs/palette.md`: mapping rol→token→hex→ratio del issue → vocabulario canónico, contrato de uso (5 reglas), dark theme, decisión axe-core.
+- axe-core (S2 original): decisión documentada en T2-S5 — el test de tokens ya satisface el criterio de CI; scan DOM requiere Playwright en CI, queda como mejora futura.
+- Verificado: **112/112** suite completa · svelte-check 0 errores · build ✅.
+
+**Criterios de aceptación de #57**: roles definidos ✅ · usados en ≥5 componentes ✅ · todos los pares AA validados ✅ · test CI que falla si un par nuevo no cumple ✅ · documentación visual ✅ (`docs/palette.md`).

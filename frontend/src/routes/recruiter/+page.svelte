@@ -363,7 +363,7 @@
 	}
 
 	.recruiter__consent-form button:hover:not(:disabled) {
-		filter: brightness(1.05);
+		background: var(--color-accent-hover);
 		box-shadow: var(--clay-lifted);
 	}
 
@@ -428,7 +428,7 @@
 	}
 
 	.recruiter__jd-actions button:hover:not(:disabled) {
-		filter: brightness(1.05);
+		background: var(--color-accent-hover);
 		box-shadow: var(--clay-lifted);
 	}
 
@@ -574,7 +574,7 @@
 	}
 
 	.recruiter__add button[type='submit']:hover:not(:disabled) {
-		filter: brightness(1.05);
+		background: var(--color-accent-hover);
 		box-shadow: var(--clay-lifted);
 	}
 
