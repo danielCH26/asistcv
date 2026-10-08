@@ -38,7 +38,7 @@ export const floating = {
 } as const;
 
 export const focusRing = {
-	'--clay-focus-ring': '0 0 0 3px rgba(3, 105, 161, 0.45)',
+	'--clay-focus-ring': '0 0 0 3px rgba(15, 118, 110, 0.45)',
 } as const;
 
 /** Flat registry: every clay token name -> its `app.css :root` value. */
