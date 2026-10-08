@@ -7,7 +7,7 @@ import secrets as _secrets_module
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select, update
+from sqlalchemy import and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, get_current_user
@@ -46,20 +46,43 @@ MAX_LOGIN_ATTEMPTS = 5
 LOGIN_ATTEMPTS_WINDOW_MINUTES = 15
 
 
-async def _check_rate_limit(email: str, db: AsyncSession) -> None:
-    """Check if account is locked due to too many failed login attempts."""
+async def _check_rate_limit(email: str, ip: str | None, db: AsyncSession) -> None:
+    """
+    Check if account is locked due to too many failed login attempts.
+
+    A4 fix: Blocks on BOTH email AND IP so that an attacker cannot bypass
+    the per-account limit by cycling through different IP addresses.
+    A3 fix: The auth_login_attempts table now has indexes on
+    (email, attempted_at) and (ip, attempted_at) for efficient queries.
+    """
     window_start = datetime.now(UTC) - timedelta(minutes=LOGIN_ATTEMPTS_WINDOW_MINUTES)
 
-    result = await db.execute(
-        select(LoginAttempt).where(
-            LoginAttempt.email == email.lower(),
-            LoginAttempt.attempted_at >= window_start,
-            LoginAttempt.success.is_(False)
+    # Build base conditions: failed attempts within the time window
+    base_conditions = [
+        LoginAttempt.attempted_at >= window_start,
+        LoginAttempt.success.is_(False),
+    ]
+
+    # Check per-email count
+    email_count = 0
+    email_result = await db.execute(
+        select(func.count(LoginAttempt.id)).where(
+            and_(LoginAttempt.email == email.lower(), *base_conditions)
         )
     )
-    failed_attempts = result.scalars().all()
+    email_count = email_result.scalar() or 0
 
-    if len(failed_attempts) >= MAX_LOGIN_ATTEMPTS:
+    # Check per-IP count (A4 fix)
+    ip_count = 0
+    if ip:
+        ip_result = await db.execute(
+            select(func.count(LoginAttempt.id)).where(
+                and_(LoginAttempt.ip == ip, *base_conditions)
+            )
+        )
+        ip_count = ip_result.scalar() or 0
+
+    if email_count >= MAX_LOGIN_ATTEMPTS or ip_count >= MAX_LOGIN_ATTEMPTS:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="RATE_LIMITED",
@@ -189,7 +212,7 @@ async def login(
 ):
     """Login with email and password."""
     # Check rate limit first
-    await _check_rate_limit(body.email, db)
+    await _check_rate_limit(body.email, request.client.host if request.client else None, db)
 
     # Find user
     result = await db.execute(

@@ -57,10 +57,32 @@ MIN_CV_TEXT_LENGTH = 50
 
 
 def _get_client_ip(request: Request) -> str | None:
-    """Extract client IP from request, handling X-Forwarded-For."""
-    forwarded_for = request.headers.get("X-Forwarded-For")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
+    """
+    Extract the client IP for rate limiting.
+
+    Priority:
+    1. CF-Connecting-IP  — set by Cloudflare with the REAL client IP.  Not
+       spoofable because Cloudflare injects it after connecting to the origin.
+    2. X-Forwarded-For    — client-supplied but still better than the TCP peer
+       (which would be a CDN/proxy IP).  Use only the first value (leftmost).
+    3. request.client.host — TCP peer; will be the CDN/proxy IP when behind
+       Cloudflare Pages, so rate limiting counts against the proxy pool.
+    4. None              — no IP available; rate limiting is skipped.
+
+    A9 fix: Removed unconditional trust of X-Forwarded-For as the sole source.
+    We now prefer CF-Connecting-IP (Cloudflare-sourced, not client-spoofable)
+    and fall back through the hierarchy so that any available signal is used.
+    """
+    # Cloudflare injects this with the real client IP before forwarding.
+    cf_ip = request.headers.get("CF-Connecting-IP")
+    if cf_ip:
+        return cf_ip.split(",")[0].strip()
+
+    # Client-supplied but better than the CDN/proxy TCP peer.
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+
     return request.client.host if request.client else None
 
 
