@@ -14,7 +14,7 @@
 | Backend | FastAPI sobre Python 3.12 | Render Web Service |
 | Base de datos | Postgres + pgvector | Neon (serverless) |
 | LLM | Llama 3.3 70B Versatile | Groq |
-| Embeddings | paraphrase-multilingual-MiniLM-L12-v2 | Local (fastembed ONNX, sin red) |
+| Embeddings | gemini-embedding-001 | Gemini API (Google AI Studio, free sin tarjeta) |
 | Adapter MCP | Python con SDK `mcp` oficial | Local / ejecución por usuario |
 | CI/CD | GitHub Actions | Pipelines por push y por PR |
 | Secretos | GitHub Secrets + env vars en Render / Cloudflare dashboard | — |
@@ -97,22 +97,23 @@ El sistema se compone de un adapter MCP local que expone el producto como tools 
 
 ---
 
-### Embeddings — paraphrase-multilingual-MiniLM-L12-v2 local vía fastembed (ONNX)
+### Embeddings — gemini-embedding-001 vía Gemini API (Google AI Studio)
 
-**Qué.** Inferencia de embeddings en el propio container del backend con [fastembed](https://github.com/qdrant/fastembed) (runtime ONNX): modelo `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (multilingüe, 384 dimensiones, ~220MB), sin llamadas de red al momento de embeddear. El modelo se bakéa en la imagen Docker en build time.
+**Qué.** Modelo `gemini-embedding-001` (multilingüe top-tier, 100+ idiomas) invocado por REST (`embedContent` con `x-goog-api-key`) con `taskType SEMANTIC_SIMILARITY` — el producto es similarity scoring entre CV y JD, y ambos lados embeben con el mismo task type — y `outputDimensionality 768` para pgvector.
 
-**Por qué.** El usuario primario y muchos de los JDs que va a evaluar están en español, mientras que empresas destino publican en inglés. El modelo fue entrenado con datos paralelos de 50+ idiomas y alinea los dos idiomas en el mismo espacio vectorial (matching cross-lingual) sin traducir pre-embarazadamente. La Inference API de HuggingFace dejó de ser viable en 2026: el free tier ($0.10/mes en créditos) se agota y para seguir exige tarjeta de crédito, que el autor no tiene — y en producción el endpoint devolvía 401 (#101). La inferencia local elimina la clase entera de fallas de red/cuotas/auth del path crítico, mantiene $0 reales y suma privacidad: el CV no viaja a un tercero para vectorizarse. 384 dimensiones además reducen storage y costo de búsqueda en pgvector. La restricción dura es la RAM de Render free (512MB): este modelo ONNX es el más grande que entra junto con FastAPI; BGE-M3 (2.27GB) y e5-small (470MB) no caben.
+**Por qué.** El usuario primario y muchos de los JDs que va a evaluar están en español, mientras que empresas destino publican en inglés. gemini-embedding-001 lidera los benchmarks multilingües (MTEB) y alinea los dos idiomas en el mismo espacio vectorial (matching cross-lingual) sin traducir pre-embarazadamente. La Gemini API (Google AI Studio) ofrece free tier real **sin tarjeta de crédito** — la restricción dura del proyecto — con límites de rate holgados para early adopters.
 
-**Histórico.** Hasta octubre 2026 fue BGE-M3 (multilingüe, 1024 dimensiones) vía Inference API de HuggingFace por httpx. La migración a 384 dims se hizo en la migración Alembic `025`; los embeddings viejos se descartan y el match re-embeddea on-demand. `EMBEDDING_PROVIDER=huggingface` sigue disponible como fallback deprecated.
+**Histórico (dos pivotes en #101).** Originalmente BGE-M3 (1024 dims) vía HuggingFace Inference API: en 2026 el free tier de HF ($0.10/mes en créditos) se agota y exige tarjeta para continuar, y en producción el endpoint devolvía 401. Primer pivote: inferencia local con fastembed/ONNX (paraphrase-multilingual-MiniLM-L12-v2, 384 dims) — pero la instancia free de Render (512MB RAM / 0.1 CPU) no sostuvo la inferencia: el container se mató a mitad del request ("se superaron los límites de la instancia"). Segundo pivote (actual): Gemini API — el container vuelve a ser liviano (sin inferencia local en prod) y el free tier no requiere tarjeta. Las migraciones Alembic `025` (→384) y `026` (→768) documentan las transiciones de dimensión; los embeddings viejos se descartan y el match re-embeddea on-demand (`EMBEDDING_PROVIDER` cambia el modelo sin tocar código vía `Settings.resolved_embedding_model`).
 
 **Alternativas consideradas.**
 
 - *text-multilingual-embedding-002 vía Vertex AI (stack anterior).* Se descarta porque Vertex AI requiere billing habilitado en GCP, lo que implica tarjeta de crédito.
 - *BGE-M3 local.* La mejor calidad multilingüe, pero 2.27GB: no entra en los 512MB de RAM de Render free.
-- *intfloat/multilingual-e5-small local.* Buena calidad cross-lingual, pero ~470MB fp32: marginal en 512MB junto con FastAPI.
+- *paraphrase-multilingual-MiniLM-L12-v2 local (fastembed ONNX).* Free y sin tarjeta, pero la instancia free de Render no sostiene la inferencia (RAM/CPU límites superados, confirmado en producción).
+- *HuggingFace Inference API / PRO.* Requiere tarjeta de crédito desde 2026; el free tier de $0.10/mes se agota con un solo uso intensivo.
 - *OpenAI / Cohere / Voyage APIs.* Calidad alta pero pago con tarjeta, contra la restricción free-tier del proyecto.
 
-**Costo.** $0: ONNX runtime open source, modelo Apache-2.0, la CPU del container de Render ya paga el free tier.
+**Costo.** $0 dentro del free tier de la Gemini API (AI Studio), sin tarjeta de crédito requerida.
 
 ---
 

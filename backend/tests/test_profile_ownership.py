@@ -50,7 +50,7 @@ def _make_provider() -> MagicMock:
     provider = MagicMock(name="LLMProviderMock")
     provider.generate_embedding = AsyncMock(
         return_value=Embedding(
-            vector=[0.1] * 384,
+            vector=[0.1] * 768,
             model=EMBEDDING_MODEL,
             provider="huggingface",
         )

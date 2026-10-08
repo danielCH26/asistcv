@@ -42,8 +42,8 @@ JD_TEXT = (
 )
 EMBEDDING_MODEL = "BAAI/bge-m3"
 # Dimensión del modelo local (migration 025, issue #101):
-# paraphrase-multilingual-MiniLM-L12-v2 produce vectores de 384 dims.
-EMBEDDING_DIM = 384
+# paraphrase-multilingual-MiniLM-L12-v2 produce vectores de 768 dims (gemini-embedding-001).
+EMBEDDING_DIM = 768
 
 
 # ---------------------------------------------------------------------------
