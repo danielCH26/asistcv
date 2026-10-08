@@ -66,4 +66,13 @@ Además: `"profiles"` se agrega a `_PROTECTED_TABLES` (test no-GUC).
 
 ### L3 — Evidence / commits (appended as work progresses)
 
-- TBD per task.
+**T1 (S1, S4 — migración + tests RLS) — DONE**
+- RED: 4 tests fallaron contra el estado sin RLS (leak cross-user SELECT, INSERT/UPDATE sin bloqueo, no-GUC sin deny).
+- GREEN: `023_enable_rls_profiles` (ENABLE+FORCE + service_all + owner CRUD — patrón exacto de 011, reutiliza `app_current_user_id()`). Downgrade limpio.
+- Aprendizaje del test: cross-user UPDATE bajo RLS **no lanza** — afecta 0 filas (stealth semantics de Postgres); la aserción correcta es rowcount==0 + read-back vía servicio. El test positive-control existente no lee cross-conexión porque `conn_as` hace rollback al salir.
+- 24/24 en test_rls.py.
+
+**T2 (S2, S3 — seed + comentarios) — DONE**
+- `seed.py` bindea `set_rls_service` (sin GUC, FORCE RLS denegaría el insert; mismo patrón que internal/adaptations).
+- Comentarios stale actualizados: match.py (RLS ahora protege; app filter = defense-in-depth), profiles.py docstring (doble capa), `docs/security/service-principal.md` (item RLS marcado DONE).
+- QA: **160/160** (rls + ownership + persistence + analyses + recruiter + security + adaptation + billing + migrations) · ruff ✅ · mypy ✅.
