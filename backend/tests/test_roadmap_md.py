@@ -51,7 +51,12 @@ def _actual_backend_routes() -> set[str]:
 
 
 def _actual_mcp_tools() -> set[str]:
-    """Read mcp-adapter/src and extract registered tool names."""
+    """Read mcp-adapter/src and extract registered tool names.
+
+    Two declaration styles coexist historically:
+    - mcp 1.x low-level: ``Tool(name="...", ...)`` dicts
+    - mcp 2.x MCPServer: ``@mcp.tool()`` decorating an ``async def name(...)``
+    """
     tools: set[str] = set()
     if not MCP_ADAPTER_SRC.is_dir():
         return tools
@@ -59,14 +64,8 @@ def _actual_mcp_tools() -> set[str]:
         text = py.read_text(encoding="utf-8", errors="ignore")
         for m in re.finditer(r'name\s*=\s*["\']([a-z_][a-z0-9_]*)["\']', text):
             tools.add(m.group(1))
-        # Also catch `@server.list_tools()` registrations and tool decorators.
-        for m in re.finditer(
-            r"@server\.\w+\(\s*[\"']?([a-z_][a-z0-9_]*)[\"']?\s*\)", text,
-        ):
-            tools.add(m.group(1))
-        for m in re.finditer(
-            r"@mcp\.\w+\(\s*[\"']?([a-z_][a-z0-9_]*)[\"']?\s*\)", text,
-        ):
+        # mcp 2.x: the tool name is the decorated function's name.
+        for m in re.finditer(r"@mcp\.tool\(\)\s*(?:async\s+)?def\s+([a-z_][a-z0-9_]*)", text):
             tools.add(m.group(1))
     return tools
 

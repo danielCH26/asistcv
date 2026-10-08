@@ -1,102 +1,91 @@
-"""Servidor MCP para AsistCV."""
+"""Servidor MCP para AsistCV (MCPServer del SDK mcp 2.x).
+
+El SDK mcp 2.2.0 eliminó la API de decoradores del ``Server`` low-level
+(el atributo ``list_tools`` ya no existe y los ``type: ignore`` lo ocultaban:
+el adapter no podía construirse con el lock actual). La API high-level
+bendecida en 2.x es ``MCPServer`` (el renombre de FastMCP), que registra
+tools desde funciones tipadas y acepta ``instructions`` en el constructor —
+que usamos para el grounding de fecha del issue #59.
+"""
+
+from datetime import UTC, datetime
 
 import structlog
-from mcp.server import Server
-from mcp.types import TextContent, Tool
+from mcp.server import MCPServer
+from pydantic import Field
 
 from . import tools
 from .http_client import BackendClient
+from .search_client import TavilyClient
+from .ttl_cache import TTLCache
 
 logger = structlog.get_logger(__name__)
 
+# Cache en proceso compartido por todas las llamadas a web_search (issue #59):
+# clave exacta de query, TTL 1h, tope de entradas en ttl_cache.TTLCache.
+_WEB_SEARCH_CACHE = TTLCache(ttl_seconds=3600.0, max_entries=128)
 
-def create_server(client: BackendClient) -> Server:
+
+def create_server(
+    client: BackendClient,
+    search_client: TavilyClient | None = None,
+) -> MCPServer:
     """Crea el servidor MCP con las tools registradas.
 
     Args:
         client: Cliente HTTP hacia el backend.
+        search_client: Cliente del proveedor de búsqueda web. Si es None se
+            crea uno nuevo (lee TAVILY_API_KEY del entorno al primer uso).
 
     Returns:
-        Instancia del servidor MCP.
+        Instancia de MCPServer lista para correr sobre stdio.
     """
-    server = Server("asistcv-mcp")
+    search = search_client if search_client is not None else TavilyClient()
+    today = datetime.now(UTC).date().isoformat()
 
-    @server.list_tools()  # type: ignore[attr-defined,untyped-decorator]
-    async def list_tools() -> list[Tool]:
-        """Lista todas las tools disponibles."""
-        return [
-            Tool(
-                name="ping",
-                description="Health check del adapter. Devuelve 'pong' si todo funciona.",
-                input_schema={"type": "object", "properties": {}},
-            ),
-            Tool(
-                name="evaluate_match",
-                description=(
-                    "Evalúa el match entre una descripción de puesto (JD) y el perfil del usuario. "
-                    "Devuelve score, strengths, gaps, energy_level y reasoning."
-                ),
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "jd_text": {
-                            "type": "string",
-                            "description": "Texto completo de la descripción del puesto",
-                            "minLength": 50,
-                        },
-                        "profile_id": {
-                            "type": "integer",
-                            "description": "ID del perfil a usar",
-                            "default": 1,
-                        },
-                    },
-                    "required": ["jd_text"],
-                },
-            ),
-            Tool(
-                name="get_health",
-                description="Llama al endpoint /health del backend y devuelve el status.",
-                input_schema={"type": "object", "properties": {}},
-            ),
-        ]
+    mcp = MCPServer(
+        name="asistcv-mcp",
+        instructions=(
+            "Adapter MCP de AsistCV. "
+            f"Fecha de hoy: {today}. "
+            "Usá web_search cuando la consulta dependa de información que "
+            "pudo cambiar después de tu fecha de corte de conocimiento."
+        ),
+    )
 
-    @server.call_tool()  # type: ignore[attr-defined,untyped-decorator]
-    async def call_tool(name: str, arguments: dict[str, object] | None) -> list[TextContent]:
-        """Ejecuta una tool por nombre.
+    @mcp.tool()
+    async def ping() -> str:
+        """Health check del adapter. Devuelve 'pong' si todo funciona."""
+        return await tools.ping()
 
-        Args:
-            name: Nombre de la tool a ejecutar.
-            arguments: Argumentos para la tool.
+    @mcp.tool()
+    async def get_health() -> str:
+        """Llama al endpoint /health del backend y devuelve el status."""
+        return await tools.get_health(client)
 
-        Returns:
-            Lista de resultados en formato TextContent.
+    @mcp.tool()
+    async def evaluate_match(jd_text: str, profile_id: int = 1) -> str:
+        """Evalúa el match entre una descripción de puesto (JD) y el perfil del usuario.
+
+        Devuelve score, strengths, gaps, energy_level y reasoning.
         """
-        logger.debug("Tool called", name=name, arguments=arguments)
+        return await tools.evaluate_match(client, jd_text=jd_text, profile_id=profile_id)
 
-        try:
-            if name == "ping":
-                result = await tools.ping()
-                return [TextContent(type="text", text=result)]
+    @mcp.tool()
+    async def web_search(
+        query: str = Field(description="Consulta de búsqueda (ej: 'python frameworks 2026')"),
+        max_results: int = Field(default=5, ge=1, le=10),
+    ) -> str:
+        """Busca en la web información actual (fechas, versiones, novedades).
 
-            elif name == "get_health":
-                result = await tools.get_health(client)
-                return [TextContent(type="text", text=result)]
+        Compensa el corte de conocimiento del modelo. Devuelve resultados con
+        título, snippet, link, score y fecha de publicación (puede ser nula).
+        """
+        return await tools.web_search(
+            search,
+            query=query,
+            max_results=max_results,
+            cache=_WEB_SEARCH_CACHE,
+        )
 
-            elif name == "evaluate_match":
-                jd_text = str(arguments.get("jd_text", "")) if arguments else ""
-                profile_id_arg = arguments.get("profile_id", 1) if arguments else 1
-                profile_id = int(profile_id_arg) if profile_id_arg else 1  # type: ignore[call-overload]
-                result = await tools.evaluate_match(client, jd_text=jd_text, profile_id=profile_id)
-                return [TextContent(type="text", text=result)]
-
-            else:
-                raise ValueError(f"Unknown tool: {name}")
-
-        except ValueError as e:
-            logger.error("Validation error in tool", name=name, error=str(e))
-            raise
-        except Exception as e:
-            logger.error("Error executing tool", name=name, error=str(e))
-            raise
-
-    return server
+    return mcp
