@@ -127,10 +127,10 @@ class Analysis(SQLModel, table=True):
     score: int | None = Field(
         default=None, ge=0, le=100, description="Match score 0-100"
     )
-    strengths: dict | None = Field(
+    strengths: list[str] | None = Field(
         default=None, sa_column=Column(JSON), description="Identified strengths"
     )
-    gaps: dict | None = Field(
+    gaps: list[str] | None = Field(
         default=None, sa_column=Column(JSON), description="Identified gaps"
     )
     energy_level: str | None = Field(
