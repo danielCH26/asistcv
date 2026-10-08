@@ -258,14 +258,14 @@ async def retrieve_profile_context(
         return ProfileContext(mode="complete", text=full_context, chunks_used=None)
 
     # Retrieval path.
-    cache_key = _cache_key(profile, settings.hf_embedding_model)
+    cache_key = _cache_key(profile, settings.resolved_embedding_model)
     cached = _cache.get(cache_key)
 
     if regenerate_profile_embedding:
         logger.warning(
             "profile_embedding_stale_for_retrieval",
             profile_id=profile.id,
-            embedding_model=settings.hf_embedding_model,
+            embedding_model=settings.resolved_embedding_model,
         )
 
     if cached is None:

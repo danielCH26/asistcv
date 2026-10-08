@@ -23,6 +23,16 @@ COPY alembic ./alembic
 COPY alembic.ini ./
 RUN uv sync --frozen --no-dev
 
+# Bake the local embedding model into the image (issue #101):
+# downloading at build time keeps cold starts off the HF Hub. The default
+# model is paraphrase-multilingual-MiniLM-L12-v2 (384-dim, ~220MB ONNX).
+# Override with --build-arg EMBEDDING_MODEL=<name> if EMBEDDING_MODEL changes;
+# keep it in sync with the runtime EMBEDDING_MODEL env.
+ARG EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+ENV EMBEDDING_MODEL=${EMBEDDING_MODEL} \
+    HF_HOME=/hf-cache
+RUN uv run python -c "from fastembed import TextEmbedding; TextEmbedding(model_name='${EMBEDDING_MODEL}')"
+
 ############################
 # Stage 2: runtime
 ############################
@@ -41,9 +51,13 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 COPY --from=builder --chown=user:user /app/.venv ./.venv
+COPY --from=builder --chown=user:user /hf-cache /hf-cache
 COPY --chown=user:user pyproject.toml uv.lock alembic.ini ./
 COPY --chown=user:user app ./app
 COPY --chown=user:user alembic ./alembic
+
+# Model cache baked in the builder stage; the app user only needs read.
+ENV HF_HOME=/hf-cache
 
 ENV PATH="/app/.venv/bin:$PATH"
 
