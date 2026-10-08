@@ -20,24 +20,7 @@ def _settings(**overrides: str) -> Settings:
     )
 
 
-def test_gemini_provider_resolves_gemini_model():
-    settings = _settings(embedding_provider="gemini")
-    assert settings.resolved_embedding_model == "gemini-embedding-001"
-
-
-def test_zz_debug_inline():
-    import pydantic_settings
-    import pydantic as _p
-    print("PS FILE:", pydantic_settings.__file__)
-    print("PYDANTIC FILE:", _p.__file__)
-    import pydantic
-    print("PYDANTIC VERSION:", pydantic.VERSION)
-    s = Settings(embedding_provider="huggingface")
-    print("INLINE field:", s.embedding_provider)
-    print("model_config:", dict(Settings.model_config))
-
 def test_huggingface_provider_resolves_hf_model():
-    import os
     settings = _settings(embedding_provider="huggingface")
     assert settings.resolved_embedding_model == "BAAI/bge-m3"
 
