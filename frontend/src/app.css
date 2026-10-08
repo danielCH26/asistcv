@@ -109,14 +109,14 @@
 	--color-ink-muted: #475569;
 
 	/* action / primary */
-	--color-action: #0369a1;
+	--color-action: #0f766e;
 	--color-on-action: #ffffff;
-	--color-action-muted: #e0f2fe;
-	/* Hover/pressed steps of the action colour (issue #57). Both hold a
-	   white label well above AA: #075985 measures ~7.9:1 (AAA), #0c4a6e
-	   ~10:1. Dark-theme counterparts live in the dark block below. */
-	--color-accent-hover: #075985;
-	--color-accent-pressed: #0c4a6e;
+	--color-action-muted: #ccfbf1;
+	/* Hover/pressed steps of the action colour (issue #57). White label:
+	   #115e59 measures 5.47:1 (AA), #134e4a 7.58:1 (AAA). Dark-theme
+	   counterparts live in the dark block below. */
+	--color-accent-hover: #115e59;
+	--color-accent-pressed: #134e4a;
 
 	/* success */
 	--color-success: #047857;
@@ -135,9 +135,9 @@
 	--color-danger-muted: #fef2f2;
 
 	/* info */
-	--color-info: #0369a1;
+	--color-info: #0f766e;
 	--color-on-info: #ffffff;
-	--color-info-muted: #e0f2fe;
+	--color-info-muted: #ccfbf1;
 
 	/* -------------------------------------------------------------------------
 	   SCORE INKS — the text half of the score pair.
@@ -204,7 +204,7 @@
 	--clay-floating-rim: inset 2px 2px 3px rgba(255, 255, 255, 0.85);
 	--clay-floating: var(--clay-floating-shadow-dark) var(--clay-floating-shadow-light) var(--clay-floating-rim);
 
-	--clay-focus-ring: 0 0 0 3px rgba(3, 105, 161, 0.45);
+	--clay-focus-ring: 0 0 0 3px rgba(15, 118, 110, 0.45);
 
 	/* =========================================================================
 	   LAYER 2 — SWISS STRUCTURE
@@ -364,18 +364,19 @@
 		--color-ink-strong: #f8fafc;
 		--color-ink-muted: #cbd5e1; /* #94a3b8 was 4.04:1 on --surface-alt */
 
-		/* The action colour is LIGHT here, so its label must be DARK.
-		   --color-on-action flips with it: a white label on this blue measured
-		   2.14:1. Paired the other way round the same pair measures 8.33:1. */
-		--color-action: #38bdf8;
+		/* The action colour is teal here, so its label must be DARK.
+		   --color-on-action flips with it: a white label on this teal measured
+		   2.14:1. Paired the other way round (#0f172a on #5eead4) measures
+		   12.07:1. */
+		--color-action: #5eead4;
 		--color-on-action: #0f172a;
-		--color-action-muted: #0c4a6e;
+		--color-action-muted: #134e4a;
 		/* Dark-theme hover/pressed: the accent LIGHTENS on hover (inverse of
 		   light theme) because contrast on dark comes from luminance above
-		   the surface. The dark label --color-on-action (#0f172a) holds
-		   >=13:1 on hover and ~6:1 on pressed. */
-		--color-accent-hover: #7dd3fc;
-		--color-accent-pressed: #0ea5e9;
+		   the surface. The dark label (#0f172a) holds 14.16:1 on hover,
+		   9.59:1 on pressed. */
+		--color-accent-hover: #99f6e4;
+		--color-accent-pressed: #2dd4bf;
 
 		--color-success: #6ee7b7;
 		--color-on-success: #042f2e;
@@ -394,9 +395,9 @@
 		--color-on-danger: #450a0a;
 		--color-danger-muted: #7f1d1d;
 
-		--color-info: #38bdf8;
-		--color-on-info: #0c4a6e;
-		--color-info-muted: #0c4a6e;
+		--color-info: #5eead4;
+		--color-on-info: #134e4a;
+		--color-info-muted: #134e4a;
 
 		/* Score INKS flip to the light end. The FILLS in Layer 0 are
 		   intentionally absent from this block — see the note there. */
@@ -458,7 +459,7 @@
 		--clay-floating-rim: inset 1.5px 1.5px 2.5px rgba(255, 255, 255, 0.08);
 		--clay-floating: var(--clay-floating-shadow-dark) var(--clay-floating-shadow-light) var(--clay-floating-rim);
 
-		--clay-focus-ring: 0 0 0 3px rgba(56, 189, 248, 0.5);
+		--clay-focus-ring: 0 0 0 3px rgba(94, 234, 212, 0.5);
 	}
 }
 

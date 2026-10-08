@@ -38,6 +38,7 @@
 		border: 1px solid var(--color-line);
 		border-radius: var(--radius-panel);
 		padding: var(--space-5);
+		box-shadow: var(--clay-raised);
 	}
 
 	.match-result__header {

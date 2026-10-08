@@ -64,14 +64,14 @@ export const palette = {
 	'--color-ink-muted': '#475569',
 
 	// action / primary
-	'--color-action': '#0369a1',
+	'--color-action': '#0f766e',
 	'--color-on-action': '#ffffff',
-	'--color-action-muted': '#e0f2fe',
+	'--color-action-muted': '#ccfbf1',
 	// Hover/pressed steps (issue #57). White label on either holds >= AA
-	// (~7.9:1 hover, ~10:1 pressed — both AAA). Dark-theme counterparts
-	// live in app.css dark block (#7dd3fc / #0ea5e9 with a dark label).
-	'--color-accent-hover': '#075985',
-	'--color-accent-pressed': '#0c4a6e',
+	// (5.47:1 hover — AA, 7.58:1 pressed — AAA). Dark-theme counterparts
+	// live in app.css dark block (#99f6e4 / #2dd4bf with a dark label).
+	'--color-accent-hover': '#115e59',
+	'--color-accent-pressed': '#134e4a',
 
 	// success
 	'--color-success': '#047857',
@@ -89,9 +89,9 @@ export const palette = {
 	'--color-danger-muted': '#fef2f2',
 
 	// info
-	'--color-info': '#0369a1',
+	'--color-info': '#0f766e',
 	'--color-on-info': '#ffffff',
-	'--color-info-muted': '#e0f2fe',
+	'--color-info-muted': '#ccfbf1',
 } as const;
 
 /** Flat registry: every color token name -> its `app.css :root` value. */
