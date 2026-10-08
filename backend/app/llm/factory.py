@@ -6,9 +6,9 @@ from functools import lru_cache
 from app.core.config import get_settings
 from app.llm.base import LLMProvider
 from app.llm.composite import CompositeProvider
+from app.llm.gemini_provider import GeminiEmbeddingProvider
 from app.llm.groq_provider import GroqProvider
 from app.llm.huggingface_provider import HuggingFaceProvider
-from app.llm.local_provider import LocalEmbeddingProvider
 from app.llm.mock import MockProvider
 
 
@@ -27,15 +27,10 @@ def _resolve_embedding_provider(settings: object) -> LLMProvider:
     """
     # Access through getattr so this module can be imported without
     # a full Settings instance (e.g. at type-check time).
-    ep: str = getattr(settings, "embedding_provider", "local")
+    ep: str = getattr(settings, "embedding_provider", "gemini")
     ep = ep.lower()
 
-    if ep == "local":
-        return LocalEmbeddingProvider(
-            embedding_model=getattr(settings, "embedding_model", None),
-            settings=settings,
-        )
-    elif ep == "huggingface":
+    if ep == "huggingface":
         api_key = getattr(settings, "huggingface_api_key", None)
         if not api_key:
             raise ValueError(
@@ -46,12 +41,23 @@ def _resolve_embedding_provider(settings: object) -> LLMProvider:
             api_key=api_key,
             embedding_model=getattr(settings, "hf_embedding_model", "BAAI/bge-m3"),
         )
+    elif ep == "gemini":
+        api_key = getattr(settings, "gemini_api_key", None)
+        if not api_key:
+            raise ValueError(
+                "GEMINI_API_KEY is required when EMBEDDING_PROVIDER=gemini. "
+                "Set the GEMINI_API_KEY environment variable for embeddings."
+            )
+        return GeminiEmbeddingProvider(
+            api_key=api_key,
+            model=getattr(settings, "gemini_embedding_model", "gemini-embedding-001"),
+        )
     elif ep == "mock":
         return MockProvider()
     else:
         raise ValueError(
             f"Unknown embedding provider: '{ep}'. "
-            f"Supported providers: 'local', 'huggingface', 'mock'. "
+            f"Supported providers: 'gemini', 'huggingface', 'mock'. "
             f"Set EMBEDDING_PROVIDER environment variable."
         )
 

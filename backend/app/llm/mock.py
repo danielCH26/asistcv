@@ -212,24 +212,24 @@ class MockProvider:
         Generate a deterministic embedding using SHA256 hash.
 
         The embedding is deterministic: same input always produces same output.
-        Uses SHA256 to generate 32 bytes, then expands to 384 floats.
+        Uses SHA256 to generate 32 bytes, then expands to 768 floats.
         Result is L2-normalized to have norm ≈ 1.0.
 
         Args:
             text: Input text to embed
 
         Returns:
-            Embedding with 384-dimensional normalized vector
+            Embedding with 768-dimensional normalized vector
         """
         # Generate SHA256 hash of the text
         hash_bytes = hashlib.sha256(text.encode("utf-8")).digest()
 
-        # Expand 32 bytes to 384 floats using a deterministic pattern
-        # Each byte contributes to 12 float values (384 / 32 = 12)
+        # Expand 32 bytes to 768 floats using a deterministic pattern
+        # Each byte contributes to 24 float values (768 / 32 = 24)
         vector = []
         for byte_idx in range(32):
             byte_val = hash_bytes[byte_idx]
-            for sub_idx in range(12):
+            for sub_idx in range(24):
                 # Create deterministic float from byte
                 base = (byte_val * 256 + sub_idx) / 65536.0
                 vector.append(base)

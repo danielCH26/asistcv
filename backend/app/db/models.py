@@ -1,11 +1,13 @@
 """
 SQLModel database models for AsistCV.
 
-Embedding columns (vector(384) + embedding_model) were added in
+Embedding columns (vector(768) + embedding_model) were added in
 migration 002 (Sprint 1, issue #14) as vector(1024); migration 025
-(Sprint 3, issue #101) changed the dimension to 384 to match the
-local provider (paraphrase-multilingual-MiniLM-L12-v2). NULLable so
-legacy rows remain valid until on-demand re-embedding fills them.
+(issue #101) moved to 384 for the local fastembed provider, and
+migration 026 (issue #101 pivot) moved to 768 for gemini-embedding-001
+(outputDimensionality 768) after Render free could not sustain local
+inference. NULLable so legacy rows remain valid until on-demand
+re-embedding fills them.
 
 User accounts and auth tables added in migration 003 (Sprint 2, PR1):
 - User, RefreshToken, TokenRevocation, LoginAttempt, SecurityEvent
@@ -48,8 +50,8 @@ class Profile(SQLModel, table=True):
     )
     embedding: list[float] | None = Field(
         default=None,
-        sa_column=Column(Vector(1024), nullable=True),
-        description="Profile embedding vector (384 dims, paraphrase-multilingual-MiniLM-L12-v2)",
+        sa_column=Column(Vector(768), nullable=True),
+        description="Profile embedding vector (768 dims, gemini-embedding-001)",
     )
     embedding_model: str | None = Field(
         default=None,
@@ -92,8 +94,8 @@ class JobDescription(SQLModel, table=True):
     )
     embedding: list[float] | None = Field(
         default=None,
-        sa_column=Column(Vector(384), nullable=True),
-        description="JD embedding snapshot at analysis time (384 dims, never re-generated)",
+        sa_column=Column(Vector(768), nullable=True),
+        description="JD embedding snapshot at analysis time (768 dims, never re-generated)",
     )
     embedding_model: str | None = Field(
         default=None,
@@ -145,8 +147,8 @@ class Analysis(SQLModel, table=True):
     )
     embedding: list[float] | None = Field(
         default=None,
-        sa_column=Column(Vector(384), nullable=True),
-        description="JD embedding snapshot that produced the score (384 dims, reproducibility)",
+        sa_column=Column(Vector(768), nullable=True),
+        description="JD embedding snapshot that produced the score (768 dims, reproducibility)",
     )
     embedding_model: str | None = Field(
         default=None,
@@ -318,8 +320,8 @@ class UserCV(SQLModel, table=True):
     )
     embedding: list[float] | None = Field(
         default=None,
-        sa_column=Column(Vector(384), nullable=True),
-        description="Embedding vector (384 dims, paraphrase-multilingual-MiniLM-L12-v2)",
+        sa_column=Column(Vector(768), nullable=True),
+        description="Embedding vector (768 dims, gemini-embedding-001)",
     )
     embedding_model: str | None = Field(
         default=None, max_length=100,
