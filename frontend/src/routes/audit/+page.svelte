@@ -433,7 +433,7 @@
 
 	.audit__form button:hover:not(:disabled),
 	.audit__capture-form button:hover:not(:disabled) {
-		filter: brightness(1.05);
+		background: var(--color-accent-hover);
 		box-shadow: var(--clay-lifted);
 	}
 

@@ -67,6 +67,11 @@ export const palette = {
 	'--color-action': '#0369a1',
 	'--color-on-action': '#ffffff',
 	'--color-action-muted': '#e0f2fe',
+	// Hover/pressed steps (issue #57). White label on either holds >= AA
+	// (~7.9:1 hover, ~10:1 pressed — both AAA). Dark-theme counterparts
+	// live in app.css dark block (#7dd3fc / #0ea5e9 with a dark label).
+	'--color-accent-hover': '#075985',
+	'--color-accent-pressed': '#0c4a6e',
 
 	// success
 	'--color-success': '#047857',

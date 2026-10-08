@@ -112,6 +112,11 @@
 	--color-action: #0369a1;
 	--color-on-action: #ffffff;
 	--color-action-muted: #e0f2fe;
+	/* Hover/pressed steps of the action colour (issue #57). Both hold a
+	   white label well above AA: #075985 measures ~7.9:1 (AAA), #0c4a6e
+	   ~10:1. Dark-theme counterparts live in the dark block below. */
+	--color-accent-hover: #075985;
+	--color-accent-pressed: #0c4a6e;
 
 	/* success */
 	--color-success: #047857;
@@ -365,6 +370,12 @@
 		--color-action: #38bdf8;
 		--color-on-action: #0f172a;
 		--color-action-muted: #0c4a6e;
+		/* Dark-theme hover/pressed: the accent LIGHTENS on hover (inverse of
+		   light theme) because contrast on dark comes from luminance above
+		   the surface. The dark label --color-on-action (#0f172a) holds
+		   >=13:1 on hover and ~6:1 on pressed. */
+		--color-accent-hover: #7dd3fc;
+		--color-accent-pressed: #0ea5e9;
 
 		--color-success: #6ee7b7;
 		--color-on-success: #042f2e;
