@@ -109,11 +109,12 @@
 		justify-content: center;
 		width: var(--space-6);
 		height: var(--space-6);
-		background: var(--color-ink-strong);
-		color: var(--color-surface);
+		background: var(--color-action);
+		color: var(--color-on-action);
 		border-radius: var(--radius-control);
 		font-weight: 700;
 		font-size: var(--text-sm);
+		box-shadow: var(--clay-raised);
 	}
 
 	.app-shell__title {
@@ -148,7 +149,10 @@
 	}
 
 	/* A nav link is a destination, not a control the person operates, so it
-	   stays flat. The accent fill on .is-active is the state, not the material. */
+	   stays flat. The accent fill on .is-active is the state, not the material.
+	   The active pill also carries subtle clay elevation as the active-state
+	   marker, but keeps no hover-lift because a link is a destination, not a
+	   control — it is only ever "arrived at," never pressed. */
 	.app-shell__link {
 		padding: var(--space-2) var(--space-3);
 		border-radius: var(--radius-control);
@@ -164,6 +168,8 @@
 	.app-shell__link.is-active {
 		background: var(--color-action);
 		color: var(--color-on-action);
+		font-weight: 600;
+		box-shadow: var(--clay-raised);
 	}
 
 	.app-shell__actions {
@@ -173,9 +179,24 @@
 	}
 
 	.app-shell__signup {
+		padding: var(--space-2) var(--space-3);
+		border: var(--border-width) solid transparent;
+		border-radius: var(--radius-control);
 		background: var(--color-action);
 		color: var(--color-on-action);
 		font-weight: 600;
+		font-size: var(--text-sm);
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.app-shell__signup:hover {
+		box-shadow: var(--clay-lifted);
+	}
+
+	.app-shell__signup:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
 	}
 
 	/* A real <button>: control, so clay. */
