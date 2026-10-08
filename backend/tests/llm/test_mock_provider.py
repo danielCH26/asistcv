@@ -86,10 +86,10 @@ class TestMockProvider:
 
     @pytest.mark.asyncio
     async def test_generate_embedding_correct_dimension(self, provider: MockProvider):
-        """Embedding vector should have exactly 1024 dimensions."""
+        """Embedding vector should have exactly 384 dimensions."""
         embedding = await provider.generate_embedding("Test text")
 
-        assert len(embedding.vector) == 1024
+        assert len(embedding.vector) == 384
 
     @pytest.mark.asyncio
     async def test_generate_embedding_normalized(self, provider: MockProvider):

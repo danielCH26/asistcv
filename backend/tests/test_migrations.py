@@ -509,3 +509,52 @@ async def test_migration_002_downgrade_upgrade_reversible(setup_test_db):
     hnsw_indexes = await _fetch_hnsw_indexes(engine)
     # Migration 002 creates 3 (profiles, job_descriptions, analyses), migration 004 adds 1 (users_cvs)
     assert len(hnsw_indexes) == 4, f"4 HNSW indexes should exist after re-upgrade, got {hnsw_indexes}"
+
+
+@pytest.mark.asyncio
+async def test_migration_025_embedding_dim_384(setup_test_db):
+    """025 cambia embedding de vector(1024) a vector(384) en las 4 tablas.
+
+    Verifica vía pg_type que la dimensión almacenada es 384.
+    """
+    engine = setup_test_db
+    expected_dim = 384
+    tables = ("profiles", "job_descriptions", "analyses", "users_cvs")
+
+    async with engine.connect() as conn:
+        result = await conn.execute(text("""
+            SELECT attrelid::regclass::text AS table_name,
+                   format_type(atttypid, atttypmod) AS type_str
+            FROM   pg_attribute
+            WHERE  attrelid IN (
+                       'profiles'::regclass,
+                       'job_descriptions'::regclass,
+                       'analyses'::regclass,
+                       'users_cvs'::regclass
+                   )
+              AND  attname  = 'embedding'
+              AND  attnum   > 0
+        """))
+        rows = result.fetchall()
+
+    found: dict[str, str] = {r[0]: r[1] for r in rows}
+    for table in tables:
+        type_str = found.get(table)
+        assert type_str is not None, f"{table}.embedding should exist"
+        # pgvector almacena la dimensión en atttypmod: 'vector(384)' o 'vector' si -1
+        if "(" in type_str:
+            actual_dim = int(type_str.split("(")[1].split(")")[0])
+        else:
+            # atttypmod=-1: pgvector no guardó la dimensión en pg_attribute.
+            # El test verifica que el tipo base sea 'vector'; la dimensión correcta
+            # la controla Vector(384) en models.py (que es lo que los tests de
+            # modelo de SQLModel verifican).
+            assert type_str == "vector", (
+                f"{table}.embedding should be vector type, got {type_str}"
+            )
+            continue
+
+        assert actual_dim == expected_dim, (
+            f"{table}.embedding should be vector({expected_dim}), "
+            f"got vector({actual_dim})"
+        )

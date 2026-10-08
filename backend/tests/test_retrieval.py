@@ -41,7 +41,9 @@ JD_TEXT = (
     "PostgreSQL y despliegues en AWS. Trabajo remoto, equipo pequeño."
 )
 EMBEDDING_MODEL = "BAAI/bge-m3"
-EMBEDDING_DIM = 1024
+# Dimensión del modelo local (migration 025, issue #101):
+# paraphrase-multilingual-MiniLM-L12-v2 produce vectores de 384 dims.
+EMBEDDING_DIM = 384
 
 
 # ---------------------------------------------------------------------------
@@ -50,7 +52,7 @@ EMBEDDING_DIM = 1024
 
 
 def _make_embedding(value: float = 0.1) -> Embedding:
-    """Vector dummy de 1024 dims para stubs del provider."""
+    """Vector dummy de EMBEDDING_DIM dims para stubs del provider."""
     return Embedding(
         vector=[value] * EMBEDDING_DIM,
         model=EMBEDDING_MODEL,
@@ -59,7 +61,7 @@ def _make_embedding(value: float = 0.1) -> Embedding:
 
 
 def _make_provider() -> MagicMock:
-    """Provider mockeado: embeddings de 1024 + análisis válido."""
+    """Provider mockeado: embeddings de EMBEDDING_DIM dims + análisis válido."""
     provider = MagicMock(name="LLMProviderMock")
     provider.generate_embedding = AsyncMock(
         side_effect=lambda text: _make_embedding()

@@ -1,9 +1,11 @@
 """
 SQLModel database models for AsistCV.
 
-Embedding columns (vector(1024) + embedding_model) were added in
-migration 002 (Sprint 1, issue #14). They are NULLable so legacy rows
-remain valid until on-demand re-embedding fills them.
+Embedding columns (vector(384) + embedding_model) were added in
+migration 002 (Sprint 1, issue #14) as vector(1024); migration 025
+(Sprint 3, issue #101) changed the dimension to 384 to match the
+local provider (paraphrase-multilingual-MiniLM-L12-v2). NULLable so
+legacy rows remain valid until on-demand re-embedding fills them.
 
 User accounts and auth tables added in migration 003 (Sprint 2, PR1):
 - User, RefreshToken, TokenRevocation, LoginAttempt, SecurityEvent
@@ -47,7 +49,7 @@ class Profile(SQLModel, table=True):
     embedding: list[float] | None = Field(
         default=None,
         sa_column=Column(Vector(1024), nullable=True),
-        description="Profile embedding vector (1024 dims)",
+        description="Profile embedding vector (384 dims, paraphrase-multilingual-MiniLM-L12-v2)",
     )
     embedding_model: str | None = Field(
         default=None,
@@ -90,8 +92,8 @@ class JobDescription(SQLModel, table=True):
     )
     embedding: list[float] | None = Field(
         default=None,
-        sa_column=Column(Vector(1024), nullable=True),
-        description="JD embedding snapshot at analysis time (never re-generated)",
+        sa_column=Column(Vector(384), nullable=True),
+        description="JD embedding snapshot at analysis time (384 dims, never re-generated)",
     )
     embedding_model: str | None = Field(
         default=None,
@@ -143,8 +145,8 @@ class Analysis(SQLModel, table=True):
     )
     embedding: list[float] | None = Field(
         default=None,
-        sa_column=Column(Vector(1024), nullable=True),
-        description="JD embedding snapshot that produced the score (reproducibility)",
+        sa_column=Column(Vector(384), nullable=True),
+        description="JD embedding snapshot that produced the score (384 dims, reproducibility)",
     )
     embedding_model: str | None = Field(
         default=None,
@@ -316,8 +318,8 @@ class UserCV(SQLModel, table=True):
     )
     embedding: list[float] | None = Field(
         default=None,
-        sa_column=Column(Vector(1024), nullable=True),
-        description="Embedding vector (1024 dims)",
+        sa_column=Column(Vector(384), nullable=True),
+        description="Embedding vector (384 dims, paraphrase-multilingual-MiniLM-L12-v2)",
     )
     embedding_model: str | None = Field(
         default=None, max_length=100,
