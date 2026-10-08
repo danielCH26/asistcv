@@ -68,10 +68,10 @@ itself is not gated.
 Closing the service-principal bypass requires one of:
 
 - **Per-client service principal** (replaces the global `BACKEND_API_KEY`).
-- **Row-level security on `profiles`** with a `service_principal` policy (moves the exception from app code into the DB).
+- ~~**Row-level security on `profiles`**~~ **DONE** (migration `023_enable_rls_profiles`, issue #95): FORCE RLS + `profiles_service_all` (GUC '0') + owner CRUD policies. The exception now lives in the database; the app-level filter remains as defense in depth.
 - **Secret rotation** moved out of plain-text env into a managed secret store.
 
-None of these is in v1.0 scope. They are tracked as a follow-up. This
+The first and third items remain open. This
 document exists so that, when those changes happen, the existing
 behaviour is described here as the reference point.
 

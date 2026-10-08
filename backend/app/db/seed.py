@@ -37,6 +37,14 @@ async def seed_initial_data():
     }
 
     async with get_session_context() as session:
+        # El seed corre FUERA de cualquier request: sin GUC, FORCE RLS
+        # (migración 023) denegaría el SELECT/INSERT sobre profiles.
+        # Fijamos contexto de servicio — mismo patrón que los sweepers
+        # internos (issue #95).
+        from app.services.rls_context import set_rls_service
+
+        await set_rls_service(session)
+
         # Check if profile already exists
         from sqlalchemy import select
         from sqlmodel import col
