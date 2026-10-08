@@ -181,13 +181,38 @@ class TestGroqProviderFactory:
             get_llm_provider.cache_clear()
 
     def test_factory_requires_huggingface_api_key_for_groq(self):
-        """Should raise error if HUGGINGFACE_API_KEY is missing for groq mode."""
+        """
+        groq composite works without HF key when embedding_provider=local (new default).
+        Raises ValueError only when embedding_provider=huggingface and key is missing.
+        """
         from app.llm.factory import get_llm_provider
+        from app.llm.local_provider import LocalEmbeddingProvider
 
+        # New default: embedding_provider=local → no HF key needed
         with patch("app.llm.factory.get_settings") as mock_settings:
             mock_settings.return_value.llm_provider = "groq"
             mock_settings.return_value.groq_api_key = "groq_key"
             mock_settings.return_value.huggingface_api_key = None
+            mock_settings.return_value.embedding_provider = "local"
+            mock_settings.return_value.embedding_model = (
+                "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+            )
+
+            get_llm_provider.cache_clear()
+
+            provider = get_llm_provider()
+            assert hasattr(provider, "_embeddings")
+            assert isinstance(provider._embeddings, LocalEmbeddingProvider)
+
+            get_llm_provider.cache_clear()
+
+        # Explicit huggingface embedding_provider still requires the key
+        with patch("app.llm.factory.get_settings") as mock_settings:
+            mock_settings.return_value.llm_provider = "groq"
+            mock_settings.return_value.groq_api_key = "groq_key"
+            mock_settings.return_value.huggingface_api_key = None
+            mock_settings.return_value.embedding_provider = "huggingface"
+            mock_settings.return_value.hf_embedding_model = "BAAI/bge-m3"
 
             get_llm_provider.cache_clear()
 

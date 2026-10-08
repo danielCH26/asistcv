@@ -47,6 +47,18 @@ class Settings(BaseSettings):
     groq_api_key: str | None = Field(default=None, validation_alias="GROQ_API_KEY")
     groq_model: str = Field(default="qwen/qwen3.8-27b", validation_alias="GROQ_MODEL")
 
+    # Embedding provider configuration (used by composite factory path)
+    embedding_provider: str = Field(
+        default="local",
+        validation_alias="EMBEDDING_PROVIDER",
+        description="Embedding provider: local (fastembed), huggingface (Inference API), or mock",
+    )
+    embedding_model: str = Field(
+        default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        validation_alias="EMBEDDING_MODEL",
+        description="Model used for local fastembed embeddings (384 dims) or HF Inference API",
+    )
+
     # HuggingFace configuration
     huggingface_api_key: str | None = Field(
         default=None, validation_alias="HUGGINGFACE_API_KEY"
