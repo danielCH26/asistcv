@@ -27,6 +27,7 @@ from app.db.models import (
     Analysis,
     AuditUpload,
     JobDescription,
+    Profile,
     RecruiterCandidate,
     RecruiterCandidateCV,
     RecruiterConsent,
@@ -37,7 +38,8 @@ from app.db.models import (
 from app.main import app
 from tests.conftest import RLS_TEST_ROLE
 
-# Tables protected by migration 011 (used by the no-GUC default-deny test)
+# Tables protected by migration 011 (used by the no-GUC default-deny test),
+# plus profiles (migration 023 — issue #95).
 _PROTECTED_TABLES = (
     "users_cvs",
     "analyses",
@@ -49,6 +51,7 @@ _PROTECTED_TABLES = (
     "payments",
     "usage_counters",
     "audit_uploads",
+    "profiles",
 )
 
 
@@ -148,6 +151,17 @@ async def world(clean_db):
             job_description_id=jd.id, owner_user_id=user_b.id, score=70
         ))
 
+        session.add(Profile(
+            owner_user_id=user_a.id,
+            name="A",
+            preferences={"salary_expectations": "80M COP"},
+        ))
+        session.add(Profile(
+            owner_user_id=user_b.id,
+            name="B",
+            preferences={"salary_expectations": "90M COP"},
+        ))
+
         for user, filename in ((rec1, "r1.pdf"), (rec2, "r2.pdf")):
             cv = RecruiterCandidateCV(original_filename=filename)
             session.add(cv)
@@ -192,6 +206,12 @@ async def world(clean_db):
         filename_to_id = {filename: cv_id for filename, cv_id in cvs}
         ids["cv_a"] = filename_to_id["a.pdf"]
         ids["cv_b"] = filename_to_id["b.pdf"]
+
+        profiles = (await session.execute(
+            select(Profile.name, Profile.id)
+        )).all()
+        ids["profile_a"] = next(i for n, i in profiles if n == "A")
+        ids["profile_b"] = next(i for n, i in profiles if n == "B")
 
         analyses = (await session.execute(
             select(Analysis.id, Analysis.score)
@@ -242,6 +262,63 @@ class TestDatabaseLevelIsolation:
                 conn, f"SELECT id FROM analyses WHERE id = {world['analysis_a']}"
             )
         assert leak == set()
+
+    # ------------------------------------------------------------------
+    # Issue #95 / #87: RLS on `profiles` (migration 023). Mirrors the
+    # analyses assertions above; the salary range lives in
+    # `Profile.preferences`, so this is the table the audit flagged.
+    # ------------------------------------------------------------------
+
+    async def test_user_cannot_select_other_users_profile(self, clean_db, world):
+        async with conn_as(clean_db.engine, str(world["user_a"])) as conn:
+            seen = await _fetch_ids(conn, "SELECT id FROM profiles")
+        assert seen == {world["profile_a"]}
+
+        async with conn_as(clean_db.engine, str(world["user_b"])) as conn:
+            leak = await _fetch_ids(
+                conn, f"SELECT id FROM profiles WHERE id = {world['profile_a']}"
+            )
+        assert leak == set()
+
+    async def test_profile_cross_user_insert_is_blocked(self, clean_db, world):
+        async with conn_as(clean_db.engine, str(world["user_a"])) as conn:
+            with pytest.raises(DBAPIError):
+                await conn.execute(text(
+                    f"INSERT INTO profiles (owner_user_id, name) "
+                    f"VALUES ({world['user_b']}, 'evil')"
+                ))
+
+    async def test_profile_owner_can_update_own_row(self, clean_db, world):
+        # Owner: actualiza su fila (rowcount 1).
+        async with conn_as(clean_db.engine, str(world["user_a"])) as conn:
+            result = await conn.execute(text(
+                f"UPDATE profiles SET name = 'A2' "
+                f"WHERE id = {world['profile_a']}"
+            ))
+            assert result.rowcount == 1
+
+        # Cross-user: RLS filtra la fila (USING), el UPDATE afecta 0 filas
+        # SIN error — la semántica de stealth de Postgres. La fila queda
+        # intacta (verificado por el owner debajo).
+        async with conn_as(clean_db.engine, str(world["user_b"])) as conn:
+            result = await conn.execute(text(
+                f"UPDATE profiles SET name = 'hacked' "
+                f"WHERE id = {world['profile_a']}"
+            ))
+            assert result.rowcount == 0
+
+        # Read-back as service: 'hacked' nunca aterrizó (rowcount 0) y el
+        # update del owner se descartó con la transacción de su conexión.
+        async with conn_as(clean_db.engine, "0") as conn:
+            names = await conn.execute(text(
+                f"SELECT name FROM profiles WHERE id = {world['profile_a']}"
+            ))
+            assert names.scalar_one() == "A"
+
+    async def test_profile_service_user_reads_across_users(self, clean_db, world):
+        async with conn_as(clean_db.engine, "0") as conn:
+            seen = await _fetch_ids(conn, "SELECT id FROM profiles")
+        assert seen == {world["profile_a"], world["profile_b"]}
 
     async def test_cross_user_insert_is_blocked(self, clean_db, world):
         # WITH CHECK rejects inserting a row owned by someone else. Each

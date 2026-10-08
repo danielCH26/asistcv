@@ -116,13 +116,11 @@ async def match(
     # las llamadas lentas al LLM).
     #
     # Ownership (issue #85): el filtro por owner es explícito y OBLIGATORIO
-    # acá. `bind_rls_context` no protege esta lectura: `profiles` no tiene
-    # policies de RLS (la migración 011 no la cubrió, `relrowsecurity =
-    # false`), así que el GUC no cambia ni una fila de este SELECT. Sin el
-    # WHERE, `profile_id` sería un IDOR que además manda el nombre, headline,
-    # experiencia, skills y preferencias de otro usuario al prompt del LLM.
-    # Para el principal de servicio (id 0) el filtro se omite, por paridad
-    # con `profiles.py` y con el modo single-user del MCP adapter.
+    # acá como defense-in-depth. `bind_rls_context` SÍ protege esta lectura
+    # a nivel DB desde la migración 023 (RLS sobre `profiles`, issue #95):
+    # el GUC del principal acota las filas y el WHERE mantiene la intención
+    # legible. Para el principal de servicio (id 0) el filtro se omite, por
+    # paridad con `profiles.py` y con el modo single-user del MCP adapter.
     async with get_session_context() as session:
         if current_user is not None:
             await bind_rls_context(session, current_user.id, current_user.role)

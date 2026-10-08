@@ -110,8 +110,10 @@ async def _get_profile_or_404(
 ) -> Profile:
     """Lookup helper acotado al owner: 404 si no existe o no es del caller.
 
-    El filtro de ownership va ACÁ y no en RLS porque `profiles` no tiene
-    policies (migración 011 no la cubrió). Para el principal de servicio
+    Doble capa (issue #95): RLS sobre `profiles` (migración 023 — service
+    carve-out + owner policies) es la primera capa; el filtro
+    ``owner_user_id == user.id`` de acá queda como defense-in-depth y como
+    declaración explícita de intención. Para el principal de servicio
     (id 0) el filtro se omite: ver la nota de ownership en el módulo y el
     contrato completo en ``docs/security/service-principal.md`` (issue #87).
     """
