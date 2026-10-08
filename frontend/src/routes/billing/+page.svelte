@@ -172,13 +172,13 @@
 	.billing h1 {
 		margin: 0;
 		font-size: var(--text-2xl);
-		color: var(--text-strong);
+		color: var(--color-ink-strong);
 	}
 
 	.billing h2 {
 		margin: 0 0 var(--space-2);
 		font-size: var(--text-lg);
-		color: var(--text-strong);
+		color: var(--color-ink-strong);
 	}
 
 	.billing__current,
@@ -193,19 +193,30 @@
 	}
 
 	.billing__usage {
-		color: var(--text-muted);
+		color: var(--color-ink-muted);
 		font-size: var(--text-sm);
 	}
 
 	.billing__current button {
 		align-self: flex-start;
 		padding: var(--space-2) var(--space-4);
-		border: 1px solid var(--border);
+		border: none;
 		border-radius: var(--radius-card);
-		background: transparent;
-		color: var(--text);
+		background: var(--clay-fill);
+		color: var(--color-ink);
 		cursor: pointer;
 		font-weight: 600;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.billing__current button:hover {
+		box-shadow: var(--clay-lifted);
+	}
+
+	.billing__current button:focus-visible {
+		outline: none;
+		box-shadow: var(--clay-raised), var(--clay-focus-ring);
 	}
 
 	.billing__current button:disabled {
@@ -216,7 +227,7 @@
 	.billing__no-portal {
 		margin: 0;
 		font-size: var(--text-sm);
-		color: var(--text-muted);
+		color: var(--color-ink-muted);
 	}
 
 	.billing__choose-cta {
@@ -224,10 +235,21 @@
 		padding: var(--space-2) var(--space-4);
 		border: none;
 		border-radius: var(--radius-card);
-		background: var(--accent);
-		color: var(--accent-contrast);
+		background: var(--clay-fill);
+		color: var(--color-ink);
 		font-weight: 600;
 		cursor: pointer;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.billing__choose-cta:hover {
+		box-shadow: var(--clay-lifted);
+	}
+
+	.billing__choose-cta:focus-visible {
+		outline: none;
+		box-shadow: var(--clay-raised), var(--clay-focus-ring);
 	}
 
 	.billing__error {
@@ -241,7 +263,7 @@
 		align-items: center;
 		gap: var(--space-3);
 		font-size: var(--text-sm);
-		color: var(--text);
+		color: var(--color-ink);
 	}
 
 	.billing__method label {
@@ -262,27 +284,28 @@
 		flex-direction: column;
 		gap: var(--space-2);
 		padding: var(--space-4);
-		border: 1px solid var(--border);
+		border: 1px solid var(--color-line);
 		border-radius: var(--radius-panel);
-		background: var(--surface);
+		background: var(--color-surface);
+		box-shadow: var(--clay-raised);
 	}
 
 	.plan-card h3 {
 		margin: 0;
 		font-size: var(--text-md);
-		color: var(--text-strong);
+		color: var(--color-ink-strong);
 	}
 
 	.plan-card__price {
 		margin: 0;
 		font-weight: 700;
-		color: var(--accent);
+		color: var(--color-action);
 	}
 
 	.plan-card ul {
 		margin: 0;
 		padding-left: var(--space-4);
-		color: var(--text-muted);
+		color: var(--color-ink-muted);
 		font-size: var(--text-sm);
 		display: flex;
 		flex-direction: column;
@@ -294,14 +317,26 @@
 		padding: var(--space-2) var(--space-4);
 		border: none;
 		border-radius: var(--radius-card);
-		background: var(--accent);
-		color: var(--accent-contrast);
+		background: var(--color-action);
+		color: var(--color-on-action);
 		font-weight: 600;
 		cursor: pointer;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.plan-card button:hover {
+		box-shadow: var(--clay-lifted);
+	}
+
+	.plan-card button:focus-visible {
+		outline: none;
+		box-shadow: var(--clay-raised), var(--clay-focus-ring);
 	}
 
 	.plan-card button:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
+		box-shadow: none;
 	}
 </style>
