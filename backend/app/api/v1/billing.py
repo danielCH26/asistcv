@@ -221,8 +221,10 @@ async def create_checkout(
             idempotency_key=idempotency_key,
         )
         return CheckoutResponse(checkout_url=result["checkout_url"])
-    except ValueError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+    except ValueError:
+        # str(e) from Stripe can expose internal details (API key, network, config).
+        # Sanitize so only a code reaches the client.
+        raise HTTPException(status_code=503, detail="BILLING_ERROR")
 
 
 @router.post("/portal", response_model=PortalResponse)
@@ -260,8 +262,9 @@ async def create_portal(current_user: CurrentUser = Depends(get_current_user)):
             return_url=return_url,
         )
         return PortalResponse(portal_url=result["portal_url"])
-    except ValueError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+    except ValueError:
+        # Sanitize: portal errors may expose internal Stripe messages.
+        raise HTTPException(status_code=503, detail="BILLING_ERROR")
 
 
 @router.get("/subscription", response_model=SubscriptionResponse)
