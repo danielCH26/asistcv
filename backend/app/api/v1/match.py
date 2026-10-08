@@ -105,12 +105,11 @@ async def match(
     try:
         jd_embedding = await provider.generate_embedding(request.jd_text)
     except NotImplementedError as exc:
-        raise HTTPException(status_code=501, detail=str(exc)) from exc
+        # Sanitize: NotImplementedError messages expose internal provider names/config.
+        raise HTTPException(status_code=501, detail="EMBEDDING_ERROR") from exc
     except Exception as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Embedding provider failed: {exc}",
-        ) from exc
+        # Sanitize: raw exception messages can expose internal paths, hostnames, API keys.
+        raise HTTPException(status_code=502, detail="EMBEDDING_ERROR") from exc
 
     # Paso 4: lookup del perfil en sesión corta (libera la conexión durante
     # las llamadas lentas al LLM).
@@ -221,12 +220,11 @@ async def match(
             detail="LLM rate limit exceeded after retries",
         ) from exc
     except NotImplementedError as exc:
-        raise HTTPException(status_code=501, detail=str(exc)) from exc
+        # Sanitize: exposes internal provider config.
+        raise HTTPException(status_code=501, detail="LLM_ERROR") from exc
     except Exception as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Error generating match analysis: {exc}",
-        ) from exc
+        # Sanitize: raw exception messages can expose internal paths, hostnames, API keys.
+        raise HTTPException(status_code=502, detail="LLM_ERROR") from exc
 
     # Paso 8: transacción única. Si el LLM falló, nunca se llega acá.
     try:

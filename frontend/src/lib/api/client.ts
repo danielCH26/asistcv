@@ -54,11 +54,14 @@ interface RequestOptions {
 async function toApiError(response: Response): Promise<ApiError> {
 	const text = await response.text().catch(() => '');
 	let code = '';
+	let detailMessage: string | undefined;
 	try {
 		const parsed = JSON.parse(text) as { detail?: unknown };
 		if (typeof parsed.detail === 'string') code = parsed.detail;
 		else if (parsed.detail && typeof parsed.detail === 'object') {
-			code = ((parsed.detail as { code?: string }).code) ?? '';
+			const detailObj = parsed.detail as { code?: string; message?: string };
+			code = detailObj.code ?? '';
+			detailMessage = detailObj.message;
 		}
 	} catch {
 		// Body no JSON.
@@ -66,7 +69,7 @@ async function toApiError(response: Response): Promise<ApiError> {
 	const retryAfterHeader = response.headers.get('Retry-After');
 	const retryAfter = retryAfterHeader ? Number.parseInt(retryAfterHeader, 10) : undefined;
 	return new ApiError(
-		humanizeStatus(response.status, code, text),
+		humanizeStatus(response.status, code, text, detailMessage),
 		response.status,
 		text || response.statusText,
 		code || undefined,
@@ -74,28 +77,62 @@ async function toApiError(response: Response): Promise<ApiError> {
 	);
 }
 
-function humanizeStatus(status: number, code: string, body: string): string {
+function humanizeStatus(
+	status: number,
+	code: string,
+	_body: string,
+	detailMessage?: string
+): string {
+	// If the backend sent a structured {code, message} detail, prefer the message.
+	if (detailMessage) return detailMessage;
+
+	// Structured code mapping — these are safe to surface as human messages.
+	const CODE_MESSAGES: Record<string, string> = {
+		// Auth
+		TOKEN_REUSED: 'Tu sesión fue invalidada por seguridad. Iniciá sesión nuevamente.',
+		TOKEN_INVALID: 'Tu sesión expiró. Iniciá sesión nuevamente.',
+		TOKEN_EXPIRED: 'Tu sesión expiró. Iniciá sesión nuevamente.',
+		INVALID_CREDENTIALS: 'Email o contraseña incorrectos.',
+		RATE_LIMITED: 'Demasiados intentos. Esperá unos minutos y reintentá.',
+		// Billing
+		BILLING_ERROR: 'No se pudo procesar el pago. Reintentá.',
+		EMAIL_REQUIRED: 'Verificá tu email antes de comprar un plan.',
+		// LLM / embedding
+		LLM_ERROR: 'El servicio de análisis tuvo un error. Reintentá.',
+		EMBEDDING_ERROR: 'No se pudo procesar la descripción del puesto. Reintentá.',
+		// Audit
+		AUDIT_NOT_FOUND: 'Auditoría no encontrada.',
+		AUDIT_EXPIRED: 'Esta auditoría ya expiró. Podés hacer una nueva.',
+		PDF_NO_TEXT: 'El PDF no contiene texto extraíble.',
+		FILE_TOO_LARGE: 'El archivo es demasiado grande.',
+		UNSUPPORTED_MEDIA_TYPE: 'Solo se aceptan archivos PDF.',
+		CV_REQUIRED: 'Adjuntá tu CV para continuar.',
+		CV_TOO_SHORT: 'El CV debe tener al menos 50 caracteres.',
+		JD_TOO_SHORT: 'La descripción del puesto debe tener al menos 50 caracteres.',
+	};
+
 	if (status === 401) {
-		return code === 'TOKEN_REUSED'
-			? 'Tu sesión fue invalidada por seguridad. Iniciá sesión nuevamente.'
-			: 'Tu sesión expiró. Iniciá sesión nuevamente.';
+		return CODE_MESSAGES[code] ?? 'Tu sesión expiró. Iniciá sesión nuevamente.';
 	}
 	if (status === 402) {
 		return 'Alcanzaste el límite de tu plan. Actualizá para continuar.';
 	}
 	if (status === 404) {
-		return 'Recurso no encontrado.';
+		return CODE_MESSAGES[code] ?? 'Recurso no encontrado.';
 	}
 	if (status === 422) {
-		return body || 'Datos inválidos.';
+		// 422 from the backend is usually a validation error — surface the code.
+		return CODE_MESSAGES[code] ?? 'Datos inválidos.';
 	}
 	if (status === 429) {
-		return 'Rate limit alcanzado. Esperá unos segundos y reintentá.';
+		return CODE_MESSAGES[code] ?? 'Rate limit alcanzado. Esperá unos segundos y reintentá.';
 	}
 	if (status >= 500) {
 		return 'Error del servidor. Reintentá en unos minutos.';
 	}
-	return body || `Error HTTP ${status}`;
+	// Fallback: show the code if we have one, otherwise generic.
+	if (code) return CODE_MESSAGES[code] ?? `Error: ${code}`;
+	return `Error HTTP ${status}`;
 }
 
 async function request<T>(path: string, init: RequestInit = {}, options: RequestOptions = {}, isRetry = false): Promise<T> {
