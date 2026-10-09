@@ -32,33 +32,27 @@ El producto está en producción con stack 100% free tier (sin tarjeta de crédi
 - Node.js 20+ con npm
 - Docker y Docker Compose (para la DB local con pgvector)
 
-### Backend
+### Setup rápido (todo de una)
 
 ```bash
-cd backend
-cp .env.example .env        # editá los valores que necesites
-uv sync --extra dev         # IMPORTANTE: sin --extra dev perdés pytest/ruff/mypy
-docker compose up -d        # DB local con pgvector
-uv run alembic upgrade head
-uv run uvicorn app.main:app --reload
+make setup     # instala backend + frontend + MCP adapter y arranca la DB local
+make migrate   # migraciones + seed
 ```
 
-En dev el default es `LLM_PROVIDER=mock` + `EMBEDDING_PROVIDER=mock` (vectores deterministas, sin API keys). Para LLM real: `LLM_PROVIDER=groq` + `GROQ_API_KEY` + `EMBEDDING_PROVIDER=gemini` + `GEMINI_API_KEY` (gratis, sin tarjeta).
+Después copiá los `.env.example` (`infra/`, `backend/`, `frontend/`) a sus `.env` con los valores que necesites. En dev el default es `LLM_PROVIDER=mock` + `EMBEDDING_PROVIDER=mock` (vectores deterministas, sin API keys). Para LLM real: `LLM_PROVIDER=groq` + `GROQ_API_KEY` + `EMBEDDING_PROVIDER=gemini` + `GEMINI_API_KEY` (gratis, sin tarjeta).
 
-### Frontend
+### Correr por partes
 
 ```bash
-cd frontend
-npm install
-npm run dev
+make backend-run       # backend dev server (uvicorn --reload)
+make frontend-run      # frontend dev server (vite)
+make db-up             # DB local con pgvector (docker compose)
+
+make test              # toda la suite: backend (~590) + frontend (~112) + MCP
+make lint              # ruff + mypy + svelte-check
 ```
 
-### Tests
-
-```bash
-cd backend && uv run pytest -q          # ~590 tests
-cd frontend && npm run test             # ~112 tests
-```
+Los tests corren en CI y bloquean el merge. Nota: si sincronizás el venv a mano, `uv sync --extra dev` — un `uv sync` plano borra pytest/ruff/mypy.
 
 ## Stack
 
@@ -94,3 +88,7 @@ Issues y PRs bienvenidos. Para cambios de código:
 3. El validador anti-alucinación (`adaptation_validator.py`) es la salvaguarda del producto: sus tests bloquean cualquier cambio que permita inventar skills
 
 Los docs del repo (ROADMAP, STACK, métricas) están en español; el código, los commits y los tests en inglés.
+
+## Licencia
+
+Apache 2.0 — ver [LICENSE](LICENSE).
