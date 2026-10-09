@@ -13,9 +13,9 @@ comparison pipeline.
 """
 from __future__ import annotations
 
-import pytest
-
 from decimal import Decimal
+
+import pytest
 
 from app.services.adaptation_validator import (
     ValidationResult,
