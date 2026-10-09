@@ -22,7 +22,9 @@ import {
 	type SubscriptionInfo,
 	type AdaptationDetail,
 	type AdaptationRequest,
-	type AdaptationSummary
+	type AdaptationSummary,
+	type JobOffer,
+	type OfferPreferences
 } from './types';
 import {
 	refreshIfNeeded,
@@ -430,5 +432,24 @@ export const apiClient = {
 	},
 
 	/** Borra el audit token pendiente tras un claim exitoso. */
-	clearAuditToken: clearPendingAuditToken
+	clearAuditToken: clearPendingAuditToken,
+
+	// === Job Offers ===
+
+	getJobOffers(params: { status?: string; limit?: number; offset?: number } = {}): Promise<JobOffer[]> {
+		return request<JobOffer[]>(
+			`/v1/job-offers${buildQuery({ status: params.status, limit: params.limit, offset: params.offset })}`
+		);
+	},
+
+	archiveJobOffer(id: number): Promise<void> {
+		return request<void>(`/v1/job-offers/${id}/archive`, { method: 'POST' });
+	},
+
+	updateOfferPreferences(prefs: OfferPreferences): Promise<void> {
+		return request<void>('/v1/me/offer-preferences', {
+			method: 'PUT',
+			body: JSON.stringify(prefs)
+		});
+	}
 };
