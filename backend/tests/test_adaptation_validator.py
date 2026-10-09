@@ -15,9 +15,15 @@ from __future__ import annotations
 
 import pytest
 
+from decimal import Decimal
+
 from app.services.adaptation_validator import (
     ValidationResult,
+    _classify_word,
     _extract_numeric_claims,
+    _is_numeric_domain,
+    _is_substring_of,
+    _parse_digit_run,
     normalize,
     validate_adaptation,
 )
@@ -918,3 +924,143 @@ class TestPromptInjectionNeutralized:
         joined = " ".join(result.violations)
         for fabricated in ("Kyd", "Drool-PLYOWD", "CISO"):
             assert fabricated in joined, result.violations
+
+
+# === Validation-path branch coverage (issue #26: 100% del path) ===
+#
+# The adversarial cases above cover behavior; these pin the remaining
+# validation-path branches so a regression cannot hide in an untested
+# line.
+
+
+class TestSubstringEdges:
+    def test_empty_needle_never_matches(self) -> None:
+        """An empty needle matches nothing (the L168 guard)."""
+        assert _is_substring_of("", {"python"}) is False
+
+
+class TestParseDigitRunEdges:
+    def test_separator_only_runs_return_none(self) -> None:
+        """``..`` and ``.,.`` carry no digits: None, never a crash."""
+        assert _parse_digit_run("..") is None
+        assert _parse_digit_run(".,.") is None
+
+
+class TestClassifyWordBranches:
+    def test_standalone_suffix_is_magnitude_with_value(self) -> None:
+        """A bare "k"/"m"/"b" word is a magnitude carrying its scale."""
+        tag, value = _classify_word("k")
+        assert tag == "magnitude"
+        assert value == Decimal(1000)
+
+    def test_bare_x_is_multiplier(self) -> None:
+        """A bare "x" classifies as a multiplier with no value of its own."""
+        tag, value = _classify_word("x")
+        assert tag == "multiplier"
+        assert value == Decimal(0)
+
+
+class TestNumericDomainEdges:
+    def test_empty_token_is_not_numeric_domain(self) -> None:
+        """An empty token is not a numeric domain token."""
+        assert _is_numeric_domain("") is False
+
+
+class TestNormalizeDiacriticDecomposition:
+    def test_n_tilde_folds_via_nfkd_decomposition(self) -> None:
+        """ñ is not in _SYMBOL_FOLD: NFKD decomposes it to "n" plus a
+        combining tilde, which the combining-skip branch drops (L385).
+        Both sides of a comparison normalize the same way, so "año"
+        still matches "año"."""
+        assert normalize("ñ") == "n"
+        assert normalize("Año") == normalize("año")
+        # The numeric-claims cleaner shares the fold-but-decompose rule:
+        # "año" keeps its letters and the combining tilde is dropped.
+        claims = _extract_numeric_claims("año 2020 gestion 5")
+        assert {int(c.value) for c in claims} == {2020, 5}
+
+
+class TestNumericClaimsEdges:
+    def test_separator_only_run_is_skipped(self) -> None:
+        """A separator-only run ("..") parses to None and is skipped —
+        no claim, no crash (the L491 continue)."""
+        claims = _extract_numeric_claims("revenue ..% this year")
+        assert claims == []
+
+    def test_leading_magnitude_opens_group(self) -> None:
+        """A magnitude word with no preceding number opens its own group
+        and still yields a claim (the L637-638 state transition)."""
+        claims = _extract_numeric_claims("millones de usuarios felices")
+        assert claims  # a claim exists — the magnitude was not dropped
+
+
+class TestValidatorEmptyFieldEdges:
+    def test_adapted_empty_description_skips_numeric_check(self) -> None:
+        """An adapted experience with an empty description contributes no
+        numeric violations (the L774 continue)."""
+        source = {
+            "full_name": "Jane Doe",
+            "experience": [
+                {
+                    "title": "Engineer",
+                    "company": "Acme",
+                    "dates": "2020-2024",
+                    "description": "Built Python services on AWS.",
+                }
+            ],
+            "skills": ["Python", "AWS"],
+            "education": [],
+            "languages": [],
+        }
+        adapted = {
+            "full_name": "Jane Doe",
+            "experience": [
+                {
+                    "title": "Engineer",
+                    "company": "Acme",
+                    "dates": "2020-2024",
+                    "description": "",
+                }
+            ],
+            "skills": ["Python", "AWS"],
+            "education": [],
+            "languages": [],
+        }
+        result = validate_adaptation(source, adapted)
+        assert result.ok is True
+        assert result.violations == []
+
+    def test_adapted_empty_company_skips_company_check(self) -> None:
+        """An adapted experience with an empty company contributes no
+        company violations (the L859 continue)."""
+        source = {
+            "full_name": "Jane Doe",
+            "experience": [
+                {
+                    "title": "Engineer",
+                    "company": "Acme",
+                    "dates": "2020-2024",
+                    "description": "Built things.",
+                }
+            ],
+            "skills": ["Python"],
+            "education": [],
+            "languages": [],
+        }
+        adapted = {
+            "full_name": "Jane Doe",
+            "experience": [
+                {
+                    "title": "Engineer",
+                    "company": "",
+                    "dates": "2020-2024",
+                    "description": "Built things.",
+                }
+            ],
+            "skills": ["Python"],
+            "education": [],
+            "languages": [],
+        }
+        result = validate_adaptation(source, adapted)
+        assert result.ok is True
+        assert result.violations == []
