@@ -32,12 +32,12 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import numpy as np
-from sqlalchemy import select, text
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlmodel import select
 
 from app.core.config import Settings
 from app.core.logging import get_logger
@@ -46,7 +46,6 @@ from app.llm.base import LLMProvider
 from app.services.offer_prefs import OfferPrefs, get_offer_prefs, is_stale
 from app.services.offer_search_client import (
     OfferSearchResult,
-    OfferSearchTimeoutError,
 )
 from app.services.rls_context import set_rls_user
 
@@ -113,10 +112,10 @@ async def run_offer_search(
         ``OfferSearchTimeoutError`` and subclasses: Tavily errors propagate.
         ``SQLAlchemyError``: DB errors propagate.
     """
-    from datetime import datetime as _dt, timezone as _tz
+    from datetime import datetime as _dt
 
     if now is None:
-        now = _dt.now(_tz.utc)
+        now = _dt.now(UTC)
 
     t0 = time.monotonic()
 

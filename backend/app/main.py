@@ -26,6 +26,7 @@ from app.api.v1 import (
     auth,
     cvs,
     health,
+    job_offers,
     match,
     ping,
     profiles,
@@ -157,6 +158,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         match.router,
         prefix=settings.api_prefix,
         dependencies=[Depends(optional_auth)],
+    )
+    app.include_router(
+        job_offers.router,
+        prefix=settings.api_prefix,
     )
     app.include_router(
         analyses.router,

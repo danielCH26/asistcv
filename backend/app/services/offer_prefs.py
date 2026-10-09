@@ -6,11 +6,10 @@ every caller avoids repeating them. All functions are tolerant of
 malformed input: they fall back to defaults rather than raising.
 """
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from app.db.models import User
-
 
 # ---------------------------------------------------------------------------
 # Public types
@@ -119,7 +118,7 @@ def is_stale(user: User, prefs: OfferPrefs, now: datetime) -> bool:
 
     # Normalise to UTC-aware for comparison.
     if last_run.tzinfo is None:
-        last_run = last_run.replace(tzinfo=timezone.utc)
+        last_run = last_run.replace(tzinfo=UTC)
 
     threshold = last_run + timedelta(hours=prefs.frequency_hours)
     return now > threshold

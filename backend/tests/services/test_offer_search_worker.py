@@ -2,7 +2,7 @@
 Tests for offer_search_worker — search → rank → persist pipeline.
 """
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -10,22 +10,18 @@ import pytest
 
 from app.db.models import Profile, User
 from app.llm.schemas import Embedding
-from app.services.offer_prefs import OfferPrefs
 from app.services.offer_search_client import OfferSearchResult
-
 
 # ---------------------------------------------------------------------------
 # Target
 # ---------------------------------------------------------------------------
-
 from app.services.offer_search_worker import OfferRunResult, run_offer_search
-
 
 # ---------------------------------------------------------------------------
 # Fixed reference time for deterministic staleness logic
 # ---------------------------------------------------------------------------
 
-NOW = datetime(2025, 1, 10, 12, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2025, 1, 10, 12, 0, 0, tzinfo=UTC)
 
 
 # ---------------------------------------------------------------------------
@@ -215,7 +211,7 @@ class TestStalenessShortCircuit:
         user = _make_user(
             offer_preferences={
                 "frequency_hours": 24,
-                "last_offer_run_at": datetime(2025, 1, 9, 0, 0, 0, tzinfo=timezone.utc).isoformat(),
+                "last_offer_run_at": datetime(2025, 1, 9, 0, 0, 0, tzinfo=UTC).isoformat(),
             }
         )
         profile = _make_profile()
@@ -244,7 +240,7 @@ class TestStalenessShortCircuit:
         user = _make_user(
             offer_preferences={
                 "frequency_hours": 24,
-                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=timezone.utc).isoformat(),
+                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=UTC).isoformat(),
             }
         )
         profile = _make_profile()
@@ -315,7 +311,7 @@ class TestSearchQueryTemplate:
         user = _make_user(
             offer_preferences={
                 "frequency_hours": 24,
-                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=timezone.utc).isoformat(),
+                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=UTC).isoformat(),
             }
         )
 
@@ -360,7 +356,7 @@ class TestRanking:
             offer_preferences={
                 "frequency_hours": 24,
                 # 12h ago → NOT stale → pipeline continues
-                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=timezone.utc).isoformat(),
+                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=UTC).isoformat(),
             }
         )
 
@@ -402,7 +398,7 @@ class TestRanking:
             offer_preferences={
                 "frequency_hours": 24,
                 # 12h ago → NOT stale → pipeline continues
-                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=timezone.utc).isoformat(),
+                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=UTC).isoformat(),
             }
         )
 
@@ -424,7 +420,9 @@ class TestRanking:
 
         assert result.found == 3
         assert result.new_offers == 0
-        # _persist_offers is always called (even with empty list) — confirmed via result.new_offers=0
+        # _persist_offers is always called (even with an empty list) — the
+        # alias exists to pin that call.
+        mock_persist.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
@@ -446,7 +444,7 @@ class TestDeduplication:
             offer_preferences={
                 "frequency_hours": 24,
                 # 12h ago → NOT stale → pipeline continues
-                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=timezone.utc).isoformat(),
+                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=UTC).isoformat(),
             }
         )
 
@@ -487,7 +485,7 @@ class TestOnDemandReEmbedding:
             offer_preferences={
                 "frequency_hours": 24,
                 # 12h ago → NOT stale → pipeline continues
-                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=timezone.utc).isoformat(),
+                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=UTC).isoformat(),
             }
         )
 
@@ -523,7 +521,7 @@ class TestOnDemandReEmbedding:
             offer_preferences={
                 "frequency_hours": 24,
                 # 12h ago → NOT stale → pipeline continues
-                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=timezone.utc).isoformat(),
+                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=UTC).isoformat(),
             }
         )
 
@@ -565,7 +563,7 @@ class TestLastRunUpdate:
             offer_preferences={
                 "frequency_hours": 24,
                 # 12h ago → NOT stale → pipeline continues
-                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=timezone.utc).isoformat(),
+                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=UTC).isoformat(),
             }
         )
 
@@ -607,7 +605,7 @@ class TestStructuredLogging:
             offer_preferences={
                 "frequency_hours": 24,
                 # 12h ago → NOT stale → pipeline continues
-                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=timezone.utc).isoformat(),
+                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=UTC).isoformat(),
             }
         )
 
@@ -658,7 +656,7 @@ class TestErrorPropagation:
             offer_preferences={
                 "frequency_hours": 24,
                 # 12h ago → NOT stale → pipeline reaches search_client.search
-                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=timezone.utc).isoformat(),
+                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=UTC).isoformat(),
             }
         )
 

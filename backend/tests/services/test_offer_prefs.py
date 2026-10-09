@@ -2,9 +2,7 @@
 Tests for offer_prefs — helpers over User.offer_preferences JSONB.
 """
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-
-import pytest
+from datetime import UTC, datetime
 
 from app.services.offer_prefs import OfferPrefs, get_offer_prefs, is_stale
 
@@ -87,7 +85,7 @@ class TestIsStale:
         """last_offer_run_at absent → stale."""
         prefs = OfferPrefs(frequency_hours=24)
         user = _make_user(offer_preferences={"frequency_hours": 24})  # no last_offer_run_at
-        now = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
         assert is_stale(user, prefs, now) is True
 
     def test_null_last_run_is_stale(self):
@@ -96,59 +94,59 @@ class TestIsStale:
         user = _make_user(
             offer_preferences={"frequency_hours": 24, "last_offer_run_at": None}
         )
-        now = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
         assert is_stale(user, prefs, now) is True
 
     def test_within_frequency_not_stale(self):
         """Last run was 1 hour ago, frequency is 24h → not stale."""
         prefs = OfferPrefs(frequency_hours=24)
-        last_run = datetime(2025, 1, 1, 11, 0, 0, tzinfo=timezone.utc)
+        last_run = datetime(2025, 1, 1, 11, 0, 0, tzinfo=UTC)
         user = _make_user(
             offer_preferences={
                 "frequency_hours": 24,
                 "last_offer_run_at": last_run.isoformat(),
             }
         )
-        now = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
         assert is_stale(user, prefs, now) is False
 
     def test_past_frequency_is_stale(self):
         """Last run was 25 hours ago, frequency is 24h → stale."""
         prefs = OfferPrefs(frequency_hours=24)
-        last_run = datetime(2025, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        last_run = datetime(2025, 1, 1, 0, 0, 0, tzinfo=UTC)
         user = _make_user(
             offer_preferences={
                 "frequency_hours": 24,
                 "last_offer_run_at": last_run.isoformat(),
             }
         )
-        now = datetime(2025, 1, 2, 1, 0, 0, tzinfo=timezone.utc)  # 25h later
+        now = datetime(2025, 1, 2, 1, 0, 0, tzinfo=UTC)  # 25h later
         assert is_stale(user, prefs, now) is True
 
     def test_exactly_at_boundary_not_stale(self):
         """Last run exactly 24h ago → not stale."""
         prefs = OfferPrefs(frequency_hours=24)
-        last_run = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        last_run = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
         user = _make_user(
             offer_preferences={
                 "frequency_hours": 24,
                 "last_offer_run_at": last_run.isoformat(),
             }
         )
-        now = datetime(2025, 1, 2, 12, 0, 0, tzinfo=timezone.utc)  # exactly 24h later
+        now = datetime(2025, 1, 2, 12, 0, 0, tzinfo=UTC)  # exactly 24h later
         assert is_stale(user, prefs, now) is False
 
     def test_custom_frequency_hours_respected(self):
         """frequency=48h with 47h elapsed → not stale."""
         prefs = OfferPrefs(frequency_hours=48)
-        last_run = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        last_run = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
         user = _make_user(
             offer_preferences={
                 "frequency_hours": 48,
                 "last_offer_run_at": last_run.isoformat(),
             }
         )
-        now = datetime(2025, 1, 3, 11, 0, 0, tzinfo=timezone.utc)  # 47h later
+        now = datetime(2025, 1, 3, 11, 0, 0, tzinfo=UTC)  # 47h later
         assert is_stale(user, prefs, now) is False
 
     def test_invalid_timestamp_not_stale(self):
@@ -160,7 +158,7 @@ class TestIsStale:
                 "last_offer_run_at": "not-a-timestamp",
             }
         )
-        now = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
         assert is_stale(user, prefs, now) is True
 
 
