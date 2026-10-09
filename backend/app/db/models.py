@@ -196,6 +196,15 @@ class User(SQLModel, table=True):
         sa_column=Column(DateTime(timezone=True), nullable=True),
         description="Last successful login timestamp",
     )
+    offer_preferences: dict | None = Field(
+        default=None,
+        sa_column=Column(JSON),
+        description=(
+            "Job-offer notification preferences. "
+            "Contains: frequency_hours (int, default 24), top_n (int, default 5), "
+            "filters (object), email_frequency (string). Defaults handled by the app."
+        ),
+    )
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
         sa_column=Column(DateTime(timezone=True), server_default="NOW()"),
@@ -837,4 +846,72 @@ class EmailVerificationToken(SQLModel, table=True):
         default=None,
         sa_column=Column(DateTime(timezone=True), nullable=True),
         description="Set when the confirm endpoint validates it.",
+    )
+
+
+# === Migration 027: Job Offers ===
+
+
+class JobOffer(SQLModel, table=True):
+    """Job offer discovered by Tavily search pipeline.
+
+    Each row is scoped to a single owner (``owner_user_id``). The ``url``
+    column is the dedupe key: the same external URL should not be inserted
+    twice for the same user. RLS (migration 027) enforces this ownership
+    at the database level.
+
+    ``status`` values (``new``, ``archived``) and ``score`` are populated
+    by the pipeline; ``search_query`` is stored for auditability.
+    """
+
+    __tablename__ = "job_offers"
+
+    id: int | None = Field(default=None, primary_key=True)
+    owner_user_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        description="User who owns this job offer",
+    )
+    title: str = Field(
+        max_length=500,
+        description="Job title",
+    )
+    company: str | None = Field(
+        default=None,
+        max_length=255,
+        description="Company name",
+    )
+    url: str = Field(
+        max_length=2048,
+        description="URL to the original posting (dedupe key)",
+    )
+    snippet: str | None = Field(
+        default=None,
+        sa_column=Column(Text),
+        description="Short excerpt from the job listing (Tavily snippet)",
+    )
+    published_date: str | None = Field(
+        default=None,
+        max_length=100,
+        description=(
+            "Published date string from Tavily. "
+            "Tavily returns this field frequently as NULL."
+        ),
+    )
+    score: int | None = Field(
+        default=None,
+        description="Match score assigned by the pipeline (0-100)",
+    )
+    status: str = Field(
+        default="new",
+        max_length=20,
+        description="Offer lifecycle: new | archived",
+    )
+    search_query: str | None = Field(
+        default=None,
+        sa_column=Column(Text),
+        description="Audit trail: search query that discovered this offer",
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column=Column(DateTime(timezone=True), server_default="NOW()"),
     )
