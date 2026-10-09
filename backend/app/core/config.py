@@ -148,6 +148,10 @@ class Settings(BaseSettings):
     offer_search_provider: str = Field(default="tavily", validation_alias="OFFER_SEARCH_PROVIDER")
     tavily_api_key: str | None = Field(default=None, validation_alias="TAVILY_API_KEY")
     offer_search_max_results: int = Field(default=10, validation_alias="OFFER_SEARCH_MAX_RESULTS")
+    offer_search_min_score: int = Field(
+        default=40, validation_alias="OFFER_SEARCH_MIN_SCORE",
+        description="Minimum cosine-similarity score (0-100) for a found offer to persist",
+    )
 
     # Email delivery (verify-email flow, C3 / issue #46).
     # ``resend`` is the only provider that actually sends today; ``sendgrid``
