@@ -3,90 +3,92 @@
 [![CI](https://github.com/danielCH26/asistcv/actions/workflows/ci.yml/badge.svg)](https://github.com/danielCH26/asistcv/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-Asistente agéntico de búsqueda de empleo. Hoy entrega **Match JD ↔ perfil** y **Adaptación de CV** (reorganiza bullets del CV del usuario contra una JD, sin inventar experiencia). Outreach y Tracking Pipeline están diferidos a v2.0. Diseñado para ayudar a aplicar mejor a los 5–10 puestos que valen la pena, no a auto-aplicar a 100.
+> **Aplicá mejor, no más.** AsistCV analiza honestamente qué tan bien encaja tu CV con una búsqueda de empleo, te dice qué te falta y cuánta energía vale la pena invertir — antes de que gastes una hora reescribiendo tu CV para un puesto que no era.
 
-## Capacidades actuales
+![Match funcionando en producción](docs/images/qa-match-prod.png)
 
-- **Match JD ↔ perfil** — análisis semántico del puesto contra el perfil del usuario. Devuelve score honesto, razones, skills faltantes y energía recomendada para invertir.
-- **Adaptación de CV** — reescribe los bullets del CV para los puestos que pasaron el filtro anterior. El usuario revisa y aprueba antes de cualquier envío; el LLM no inventa experiencia.
-- **Adapter MCP** — Claude Desktop o Cursor pueden llamar `evaluate_match` contra el backend.
+## Qué hace
 
-Fuera de alcance por ahora: outreach (mensaje de primer contacto), tracking pipeline (kanban de aplicaciones), landing pública. Ver [ROADMAP.md](ROADMAP.md) para el plan v2.0.
+Pegás la descripción de un puesto, elegís tu CV, y el sistema devuelve un **score honesto de match** con razones, skills faltantes y la energía recomendada. Para los puestos que pasan el filtro, **reescribe los bullets de tu CV** contra esa descripción — sin inventar experiencia: un validador anti-alucinación rechaza cualquier skill o logro que no esté en tu CV original, y vos aprobás antes de enviar.
 
-## Stack
+Diseñado para ayudar a aplicar mejor a los **5–10 puestos que valen la pena**, no a auto-aplicar a 100. El anti-patrón explícito del producto: no auto-applier, no inventa experiencia, no chatbot mágico.
 
-- **Backend**: FastAPI (Python 3.12, uv)
-- **Frontend**: SvelteKit (TypeScript, npm)
-- **MCP Adapter**: Python con SDK `mcp` oficial
-- **Base de datos**: PostgreSQL con pgvector (Neon en prod, docker-compose en local)
-- **Cloud**: backend auto-deployado en **Render**, frontend auto-deployado en **Cloudflare Pages**
-- **LLM**: Groq (Llama 3.x) en prod, mock determinista en dev
-- **Embeddings**: HuggingFace Inference API (BGE-M3) en prod, mock en dev
+## Por qué importa
 
-## Prerequisitos
+El documento fundacional ([`job-search-assistant.md`](job-search-assistant.md)) resume el problema: postularse a un puesto a mano toma ~15 minutos entre leer la búsqueda y ajustar el CV; la mayoría de esas aplicaciones van a puestos donde el candidato no encaja. AsistCV reduce la evaluación a **segundos** con un score honesto y concentra el esfuerzo humano donde hay señal. Las métricas reales del proyecto están en [`docs/metrics.md`](docs/metrics.md).
+
+## Verlo correr
+
+El producto está en producción con stack 100% free tier (sin tarjeta de crédito):
+
+- **Frontend**: https://asistcv-frontend.pages.dev
+- **Backend**: https://asistcv-backend.onrender.com (`/health` responde `{"status":"ok"}`)
+
+## Correrlo localmente
+
+### Prerequisitos
 
 - Python 3.12+ con [uv](https://docs.astral.sh/uv/)
 - Node.js 20+ con npm
 - Docker y Docker Compose (para la DB local con pgvector)
 
-## Quick start
+### Setup rápido (todo de una)
 
 ```bash
-# Instalar todas las dependencias (backend + frontend + MCP + DB local)
-make setup
-
-# Copiá los archivos de env de ejemplo y completá los valores
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
-cp infra/.env.example infra/.env
-
-# Aplicar migraciones
-make migrate
-
-# Correr servidores de desarrollo
-make backend-run   # API en http://localhost:8000
-make frontend-run  # UI en http://localhost:5173
-
-# Correr los tests (backend + frontend + MCP)
-make test
+make setup     # instala backend + frontend + MCP adapter y arranca la DB local
+make migrate   # migraciones + seed
 ```
 
-`make help` lista todos los comandos. Para deploy a staging o producción, ver [docs/DEPLOY.md](docs/DEPLOY.md) — el deploy es automático desde `main` (Render + Cloudflare Pages lo gestionan).
+Después copiá los `.env.example` (`infra/`, `backend/`, `frontend/`) a sus `.env` con los valores que necesites. En dev el default es `LLM_PROVIDER=mock` + `EMBEDDING_PROVIDER=mock` (vectores deterministas, sin API keys). Para LLM real: `LLM_PROVIDER=groq` + `GROQ_API_KEY` + `EMBEDDING_PROVIDER=gemini` + `GEMINI_API_KEY` (gratis, sin tarjeta).
 
-## Estructura del proyecto
+### Correr por partes
 
+```bash
+make backend-run       # backend dev server (uvicorn --reload)
+make frontend-run      # frontend dev server (vite)
+make db-up             # DB local con pgvector (docker compose)
+
+make test              # toda la suite: backend (~590) + frontend (~112) + MCP
+make lint              # ruff + mypy + svelte-check
 ```
-asistcv/
-├── backend/      # API REST con FastAPI
-├── frontend/     # Web app con SvelteKit
-├── mcp-adapter/  # Integración con Claude Desktop / Cursor vía MCP
-├── infra/        # docker-compose.yml + .env.example para DB local
-└── docs/         # Documentación técnica (DEPLOY, CI_SETUP, audit)
-```
 
-## Documentación
+Los tests corren en CI y bloquean el merge. Nota: si sincronizás el venv a mano, `uv sync --extra dev` — un `uv sync` plano borra pytest/ruff/mypy.
 
-Para documentación detallada del proyecto:
+## Stack
 
-- [PROJECT.md](PROJECT.md) — documento integrador (qué es, estado actual, links)
-- [STACK.md](STACK.md) — decisiones arquitectónicas y tradeoffs del stack
-- [ROADMAP.md](ROADMAP.md) — plan de implementación por milestones (v1.0, v2.0)
-- [job-search-assistant.md](job-search-assistant.md) — PRD fundacional
-- [docs/DEPLOY.md](docs/DEPLOY.md) — cómo desplegar a staging/producción
-- [docs/CI_SETUP.md](docs/CI_SETUP.md) — pipeline de CI y secretos
-- [docs/audit/](docs/audit/) — auditoría de seguridad y remediación
+| Capa | Herramienta |
+|---|---|
+| Backend | FastAPI (Python 3.12, uv) |
+| Frontend | SvelteKit (TypeScript, npm) |
+| MCP Adapter | Python con SDK `mcp` oficial |
+| DB | PostgreSQL + pgvector (Neon en prod, docker local) |
+| Deploy | **Render** (backend, manual deploy) + **Cloudflare Pages** (frontend) |
+| LLM | Groq (razonamiento del match/adaptación) |
+| Embeddings | `gemini-embedding-001` vía Gemini API — free tier, sin tarjeta |
 
-Para detalle de cada componente:
+El detalle de cada decisión (por qué esta herramienta y no la alternativa, con la historia de los pivotes) está en [`STACK.md`](STACK.md). El plan de releases está en [`ROADMAP.md`](ROADMAP.md).
 
-- [backend/README.md](backend/README.md) — Backend FastAPI
-- [frontend/README.md](frontend/README.md) — Frontend SvelteKit
-- [mcp-adapter/README.md](mcp-adapter/README.md) — Adapter MCP
-- [infra/README.md](infra/README.md) — docker-compose y env de la DB local
+## Roadmap
 
-## Estado
+- **v1.0 — MVP Early Adopters** ✅: match + adaptación en producción, RLS, rate limiting, design system v2 (teal + clay)
+- **v2.0 — Lanzamiento público** (dic 2026): landing, pasarela Colombia (PSE), cron de ofertas, monitoreo
 
-v1.0 — MVP Early Adopters (release target: 14 oct 2026). Cubre las fases 0/1/2/3 del audit de remediación y las features críticas de match + adaptación + billing Stripe para early adopters manuales invitados uno-a-uno. Sin landing pública, sin pasarela Colombia, sin Claymorphism full. Ver el [milestone v1.0 en GitHub](https://github.com/danielCH26/asistcv/milestone/7) y [ROADMAP.md](ROADMAP.md).
+Ver [`ROADMAP.md`](ROADMAP.md) para el detalle.
+
+## Métricas
+
+Las métricas primarias y secundarias del documento fundacional, con números reales y análisis honesto: [`docs/metrics.md`](docs/metrics.md).
+
+## Contribuir
+
+Issues y PRs bienvenidos. Para cambios de código:
+
+1. Branch desde `main` (`feat/<nombre>`)
+2. Los tests corren en CI y bloquean el merge — `pytest` + `ruff` + `mypy` en backend, `vitest` + `svelte-check` en frontend
+3. El validador anti-alucinación (`adaptation_validator.py`) es la salvaguarda del producto: sus tests bloquean cualquier cambio que permita inventar skills
+
+Los docs del repo (ROADMAP, STACK, métricas) están en español; el código, los commits y los tests en inglés.
 
 ## Licencia
 
-Apache 2.0. Ver [LICENSE](LICENSE).
+Apache 2.0 — ver [LICENSE](LICENSE).

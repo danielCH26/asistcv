@@ -6,7 +6,7 @@ Asistente agéntico de búsqueda de empleo. Hoy entrega **Match JD ↔ perfil** 
 
 AsistCV es una herramienta personal que ayuda a aplicar mejor a los 5-10 puestos que valen la pena, en lugar de auto-aplicar a 100. La audiencia primaria es el propio autor durante su búsqueda de empleo; las audiencias secundarias son desarrolladores Latam que aplican a empresas US/EU, personas en transición de carrera y pequeños equipos de recruiting.
 
-**Estado actual (octubre 2026):** v1.0 MVP Early Adopters, release target 14 oct 2026. Cubre las fases 0/1/2/3 del [plan de remediación](./audit/PLAN.md) (seguridad, funcional P0/P1, honestidad + red de seguridad, docs + deuda) y entrega las features críticas de match, adaptación y billing Stripe para early adopters manuales invitados uno-a-uno. Sin landing pública, sin pasarela Colombia, sin Claymorphism full. El próximo paso es cerrar los issues abiertos de v1.0 (#54 design tokens, #61 tabs CV/JD, #59 MCP web_search) y mantener Fase 3 estable.
+**Estado actual (octubre 2026):** v1.0 MVP Early Adopters cerrado: las fases 0/1/2/3 del [plan de remediación](./audit/PLAN.md) y las features críticas están en producción — match verificado end-to-end (score honesto con embeddings Gemini, sin tarjeta), adaptación con validador anti-alucinación, billing Stripe, rate limiting, RLS y design system v2 (teal + clay, issue #60 slice 1). El stack es 100% free tier sin tarjeta de crédito. Métricas reales en [docs/metrics.md](./docs/metrics.md). El próximo paso es v2.0 (landing, pasarela Colombia, cron de ofertas) — ver [ROADMAP.md](./ROADMAP.md).
 
 ## El problema
 
@@ -20,7 +20,7 @@ Para alguien que busca trabajo en serio (3-6 meses), esto son 100+ horas de trab
 
 ## La solución
 
-Las capacidades del producto, en orden de uso natural: primero evaluar, después adaptar. Tracking de aplicaciones y outreach se difieren a v2.0 (ver [ROADMAP.md](./ROADMAP.md)).
+Las capacidades del producto, en orden de uso natural: primero evaluar, después adaptar. Tracking de aplicaciones y outreach se difieren a v2.0 (ver [ROADMAP.md](./ROADMAP.md)). Las métricas del documento con datos reales: [docs/metrics.md](./docs/metrics.md).
 
 ### Match JD ↔ Perfil
 

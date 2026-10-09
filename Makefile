@@ -40,7 +40,7 @@ help:
 	@echo "  migrate-down       Rollback last migration"
 	@echo ""
 	@echo "=== Deploy ==="
-	@echo "  Deploy is platform-managed: backend -> Render (auto-deploy from main),"
+	@echo "  Deploy is platform-managed: backend -> Render (manual deploy of the latest commit),"
 	@echo "  frontend -> Cloudflare Pages (build from GitHub). See docs/DEPLOY.md."
 
 # Compose the high-level targets so a wrapper script sees a meaningful exit
