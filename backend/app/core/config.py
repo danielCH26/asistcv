@@ -144,6 +144,11 @@ class Settings(BaseSettings):
         default="price_recruiter_agency", validation_alias="STRIPE_PRICE_RECRUITER_AGENCY"
     )
 
+    # Offer search configuration (issue #55)
+    offer_search_provider: str = Field(default="tavily", validation_alias="OFFER_SEARCH_PROVIDER")
+    tavily_api_key: str | None = Field(default=None, validation_alias="TAVILY_API_KEY")
+    offer_search_max_results: int = Field(default=10, validation_alias="OFFER_SEARCH_MAX_RESULTS")
+
     # Email delivery (verify-email flow, C3 / issue #46).
     # ``resend`` is the only provider that actually sends today; ``sendgrid``
     # and ``smtp`` are reserved names so the next branch in email_service is
