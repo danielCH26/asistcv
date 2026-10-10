@@ -55,7 +55,19 @@ def setup_test_db():
 
     yield engine
 
-    # After tests, revert migrations
+    # After tests, revert migrations to base.
+    # When migration 027 is in the history, job_offers exists with an FK to
+    # users. Downgrade to 026 first (removes RLS, keeps table), then
+    # explicitly drop job_offers to clear the FK chain, then go to base.
+    import sqlalchemy as sa
+
+    command.downgrade(alembic_cfg, "026_embedding_dim_768")
+
+    async def _drop_job_offers():
+        async with engine.begin() as conn:
+            await conn.execute(sa.text("DROP TABLE IF EXISTS public.job_offers CASCADE"))
+
+    asyncio.run(_drop_job_offers())
     command.downgrade(alembic_cfg, "base")
 
     # Restore original DATABASE_URL
@@ -509,6 +521,214 @@ async def test_migration_002_downgrade_upgrade_reversible(setup_test_db):
     hnsw_indexes = await _fetch_hnsw_indexes(engine)
     # Migration 002 creates 3 (profiles, job_descriptions, analyses), migration 004 adds 1 (users_cvs)
     assert len(hnsw_indexes) == 4, f"4 HNSW indexes should exist after re-upgrade, got {hnsw_indexes}"
+
+
+@pytest.mark.anyio
+async def test_migration_027_job_offers_and_offer_preferences(setup_test_db):
+    """027 crea la tabla job_offers con RLS y agrega users.offer_preferences JSONB.
+
+    Tabla job_offers:
+      - id (PK, serial)
+      - owner_user_id (FK users.id, NOT NULL)
+      - title (VARCHAR NOT NULL)
+      - company (VARCHAR nullable)
+      - url (VARCHAR NOT NULL — dedupe key)
+      - snippet (TEXT nullable)
+      - published_date (VARCHAR nullable — Tavily la devuelve frecuentemente nula)
+      - score (INTEGER nullable — ranking del pipeline)
+      - status (VARCHAR NOT NULL default 'new')
+      - search_query (TEXT nullable — auditoría de la query que la halló)
+      - created_at (TIMESTAMPTZ default now())
+      - Índice en (owner_user_id, created_at)
+      - Índice en (owner_user_id, url) para dedupe
+    RLS: ENABLE + FORCE + policy owner via app_current_user_id()
+    users.offer_preferences: JSONB nullable (frequency_hours, top_n, filters, email_frequency)
+    """
+    engine = setup_test_db
+
+    async def _column_exists(conn, table: str, column: str) -> bool:
+        result = await conn.execute(
+            text(
+                """
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = :t
+                  AND column_name = :c
+                """
+            ),
+            {"t": table, "c": column},
+        )
+        return result.fetchone() is not None
+
+    async def _rls_enabled(conn, table: str) -> bool:
+        result = await conn.execute(
+            text(
+                """
+                SELECT relrowsecurity
+                FROM   pg_class
+                WHERE  relname = :t
+                """
+            ),
+            {"t": table},
+        )
+        row = result.fetchone()
+        return row is not None and row[0] is True
+
+    async def _policy_count(conn, table: str) -> int:
+        result = await conn.execute(
+            text(
+                """
+                SELECT count(*)
+                FROM   pg_policies
+                WHERE  schemaname = 'public'
+                  AND  tablename  = :t
+                """
+            ),
+            {"t": table},
+        )
+        row = result.fetchone()
+        return 0 if row is None else row[0]
+
+    async with engine.connect() as conn:
+        # --- Tabla job_offers existe ---
+        result = await conn.execute(
+            text(
+                """
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'job_offers'
+                """
+            )
+        )
+        assert result.fetchone() is not None, "job_offers table should exist"
+
+        # --- Columnas clave ---
+        for col in ("id", "owner_user_id", "title", "url", "status", "created_at"):
+            assert (
+                await _column_exists(conn, "job_offers", col)
+            ), f"job_offers.{col} should exist"
+
+        # --- offer_preferences en users ---
+        result = await conn.execute(
+            text(
+                """
+                SELECT udt_name, is_nullable
+                FROM   information_schema.columns
+                WHERE  table_schema = 'public'
+                  AND  table_name   = 'users'
+                  AND  column_name  = 'offer_preferences'
+                """
+            )
+        )
+        row = result.fetchone()
+        assert row is not None, "users.offer_preferences should exist"
+        assert row[0] == "jsonb", (
+            f"users.offer_preferences should be jsonb, got {row[0]}"
+        )
+        assert row[1] == "YES", (
+            "users.offer_preferences should be nullable"
+        )
+
+        # --- RLS habilitado en job_offers ---
+        assert await _rls_enabled(conn, "job_offers"), (
+            "job_offers should have RLS enabled"
+        )
+
+        # --- Policies en job_offers (service + owner select/insert/update/delete = 5) ---
+        policy_count = await _policy_count(conn, "job_offers")
+        assert policy_count == 5, (
+            f"job_offers should have 5 policies (service_all + 4 owner), got {policy_count}"
+        )
+
+        # --- owner_user_id FK ---
+        result = await conn.execute(
+            text(
+                """
+                SELECT tc.constraint_name, kcu.column_name,
+                       ccu.table_name AS foreign_table, ccu.column_name AS foreign_column
+                FROM   information_schema.table_constraints AS tc
+                JOIN   information_schema.key_column_usage AS kcu
+                        ON tc.constraint_name = kcu.constraint_name
+                JOIN   information_schema.constraint_column_usage AS ccu
+                        ON ccu.constraint_name = tc.constraint_name
+                WHERE  tc.constraint_type = 'FOREIGN KEY'
+                  AND  tc.table_name      = 'job_offers'
+                  AND  kcu.column_name    = 'owner_user_id'
+                """
+            )
+        )
+        fk = result.fetchone()
+        assert fk is not None, "job_offers.owner_user_id should have an FK"
+        assert fk[2] == "users", (
+            f"FK should reference users, got {fk[2]}"
+        )
+        assert fk[3] == "id", (
+            f"FK should reference users.id, got {fk[3]}"
+        )
+
+
+@pytest.mark.anyio
+async def test_migration_027_job_offers_rls_downgrade_upgrade(setup_test_db):
+    """027 es reversible: down elimina RLS + policies; up los restaura."""
+    import asyncio
+
+    from alembic.config import Config
+
+    from alembic import command
+
+    alembic_cfg = Config("alembic.ini")
+    engine = setup_test_db
+
+    async def _policy_count(conn, table: str) -> int:
+        result = await conn.execute(
+            text(
+                """
+                SELECT count(*)
+                FROM   pg_policies
+                WHERE  schemaname = 'public'
+                  AND  tablename  = :t
+                """
+            ),
+            {"t": table},
+        )
+        row = result.fetchone()
+        return 0 if row is None else row[0]
+
+    async def _rls_enabled(conn, table: str) -> bool:
+        result = await conn.execute(
+            text(
+                """
+                SELECT relrowsecurity
+                FROM   pg_class
+                WHERE  relname = :t
+                """
+            ),
+            {"t": table},
+        )
+        row = result.fetchone()
+        return row is not None and row[0] is True
+
+    # --- downgrade 027: RLS + policies desaparecen ---
+    await asyncio.to_thread(
+        command.downgrade, alembic_cfg, "026_embedding_dim_768"
+    )
+    async with engine.connect() as conn:
+        assert not await _rls_enabled(conn, "job_offers"), (
+            "job_offers RLS should be disabled after downgrade"
+        )
+        assert await _policy_count(conn, "job_offers") == 0, (
+            "job_offers policies should be dropped after downgrade"
+        )
+        # La tabla persiste tras downgrade de 027 (no se dropea, RLS solo)
+
+    # --- re-apply: idempotente, deja el fixture en head ---
+    await asyncio.to_thread(command.upgrade, alembic_cfg, "head")
+    async with engine.connect() as conn:
+        assert await _rls_enabled(conn, "job_offers"), (
+            "job_offers RLS should be re-enabled after upgrade"
+        )
+        assert await _policy_count(conn, "job_offers") == 5, (
+            "job_offers should have 5 policies after re-upgrade"
+        )
 
 
 @pytest.mark.anyio

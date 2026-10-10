@@ -9,6 +9,7 @@ definida). `/health` y `/` quedan exentos; `/docs`, `/redoc` y
 contrato.
 """
 
+import asyncio
 import uuid
 from contextlib import asynccontextmanager
 from time import perf_counter
@@ -26,6 +27,7 @@ from app.api.v1 import (
     auth,
     cvs,
     health,
+    job_offers,
     match,
     ping,
     profiles,
@@ -39,6 +41,8 @@ from app.services.consent_gate import check_recruiter_consent
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
+    # Background tasks with a strong reference (asyncio GC gotcha).
+    _background_tasks: set[asyncio.Task[None]] = set()
     """Construye la app. `settings=None` usa el singleton cacheado.
 
     En modo protegido (`backend_api_key` definida) se desactivan docs y
@@ -59,6 +63,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             environment=settings.environment,
             auth_enabled=bool(settings.backend_api_key),
         )
+        # Offer catch-up (#55): fire-and-forget, never blocks startup.
+        # Render free stops the process on sleep; every wake boots a fresh
+        # process whose lifespan dispatches stale users' jobs here. Strong
+        # reference held: create_task without one can be GC'd mid-run.
+        from app.services.offer_catchup import run_offer_catchup
+
+        catchup_task = asyncio.create_task(run_offer_catchup(settings))
+        _background_tasks.add(catchup_task)
+        catchup_task.add_done_callback(_background_tasks.discard)
         yield
         logger.info("application_shutdown")
 
@@ -157,6 +170,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         match.router,
         prefix=settings.api_prefix,
         dependencies=[Depends(optional_auth)],
+    )
+    app.include_router(
+        job_offers.router,
+        prefix=settings.api_prefix,
     )
     app.include_router(
         analyses.router,

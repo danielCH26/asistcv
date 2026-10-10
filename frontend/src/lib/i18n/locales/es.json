@@ -9,6 +9,7 @@
       "profile": "Mi perfil",
       "recruiter": "Reclutador",
       "billing": "Plan",
+      "jobOffers": "Ofertas",
       "login": "Ingresar",
       "signup": "Crear cuenta",
       "logout": "Salir"
@@ -264,6 +265,33 @@
   "plan": {
     "limitReached": "Alcanzaste el límite de análisis de tu plan este mes. Mejorá tu plan para seguir analizando.",
     "upgradeCta": "Ver planes"
+  },
+  "jobOffers": {
+    "title": "Ofertas",
+    "heading": "Ofertas de empleo",
+    "loading": "Cargando ofertas…",
+    "loadError": "No se pudieron cargar las ofertas.",
+    "empty": "Todavía no hay ofertas. Configurá tus preferencias para recibir alertas.",
+    "emptyPreferencesCta": "Configurar preferencias",
+    "scoreLabel": "Score",
+    "archiveCta": "Archivar",
+    "archiving": "Archivando…",
+    "archived": "Archivada",
+    "archiveError": "No se pudo archivar la oferta.",
+    "externalLink": "Ver oferta",
+    "preferencesHeading": "Preferencias de alertas",
+    "frequencyLabel": "Frecuencia de búsqueda",
+    "frequencyHours": "{hours} horas",
+    "emailFrequencyLabel": "Recibir por email",
+    "emailNone": "Nunca",
+    "emailDaily": "Diario",
+    "emailWeekly": "Semanal",
+    "topNLabel": "Top N ofertas",
+    "savePreferences": "Guardar preferencias",
+    "saving": "Guardando…",
+    "saved": "Preferencias guardadas.",
+    "saveError": "No se pudieron guardar las preferencias.",
+    "featureDisabled": "La función de ofertas está temporalmente deshabilitada."
   },
   "adapt": {
     "title": "Adaptá tu CV",

@@ -45,6 +45,11 @@
 				{/if}
 				<a
 					class="app-shell__link"
+					class:is-active={pathname === '/job-offers'}
+					href="/job-offers">{$_('app.nav.jobOffers')}</a
+				>
+				<a
+					class="app-shell__link"
 					class:is-active={pathname === '/billing'}
 					href="/billing">{$_('app.nav.billing')}</a
 				>
