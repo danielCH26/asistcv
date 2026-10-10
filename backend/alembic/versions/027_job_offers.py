@@ -105,8 +105,12 @@ _DOWNGRADE_STATEMENTS = [
     f"ALTER TABLE public.{_TABLE} DISABLE ROW LEVEL SECURITY",
     f"DROP INDEX IF EXISTS idx_{_TABLE}_owner_url",
     f"DROP INDEX IF EXISTS idx_{_TABLE}_owner_created",
-    # La tabla se deja intacta en downgrade (decisión de diseño:
-    # persiste; se elimina en una migración explícita si se aborta).
+    # Full reversibility: the offers are regenerable scraped data (the
+    # user's preferences above are the only real loss, and they are
+    # re-enterable). Preserving the table here broke the chain's
+    # reversibility — migration 002's reversible cycle downgrades PAST
+    # this revision and the job_offers FK blocked dropping users.
+    f"DROP TABLE IF EXISTS public.{_TABLE}",
 ]
 
 
