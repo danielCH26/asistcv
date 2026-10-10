@@ -258,3 +258,25 @@ export class ApiError extends Error {
 		this.retryAfter = retryAfter;
 	}
 }
+
+// === Job Offers ===
+
+export interface JobOffer {
+	id: number;
+	title: string;
+	company: string;
+	url: string | null;
+	snippet: string;
+	published_date: string | null;
+	score: number | null;
+	status: string;
+	created_at: string;
+}
+
+export type EmailFrequency = 'none' | 'daily' | 'weekly';
+
+export interface OfferPreferences {
+	frequency_hours: number;
+	top_n: number;
+	email_frequency: EmailFrequency;
+}

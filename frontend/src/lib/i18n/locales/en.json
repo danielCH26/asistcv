@@ -9,6 +9,7 @@
       "profile": "My profile",
       "recruiter": "Recruiter",
       "billing": "Plan",
+      "jobOffers": "Job Offers",
       "login": "Log in",
       "signup": "Sign up",
       "logout": "Log out"
@@ -264,6 +265,33 @@
   "plan": {
     "limitReached": "You reached your plan's match limit this month. Upgrade your plan to keep analyzing.",
     "upgradeCta": "View plans"
+  },
+  "jobOffers": {
+    "title": "Job Offers",
+    "heading": "Job Offers",
+    "loading": "Loading offers…",
+    "loadError": "Could not load the job offers.",
+    "empty": "No offers yet. Configure your preferences to receive alerts.",
+    "emptyPreferencesCta": "Configure preferences",
+    "scoreLabel": "Score",
+    "archiveCta": "Archive",
+    "archiving": "Archiving…",
+    "archived": "Archived",
+    "archiveError": "Could not archive the offer.",
+    "externalLink": "View offer",
+    "preferencesHeading": "Alert preferences",
+    "frequencyLabel": "Search frequency",
+    "frequencyHours": "{hours} hours",
+    "emailFrequencyLabel": "Receive by email",
+    "emailNone": "Never",
+    "emailDaily": "Daily",
+    "emailWeekly": "Weekly",
+    "topNLabel": "Top N offers",
+    "savePreferences": "Save preferences",
+    "saving": "Saving…",
+    "saved": "Preferences saved.",
+    "saveError": "Could not save preferences.",
+    "featureDisabled": "The job offers feature is temporarily disabled."
   },
   "adapt": {
     "title": "Adapt your CV",
