@@ -91,6 +91,7 @@
 
 	{#if $analysisStore.status === 'done' && $analysisStore.result}
 		<MatchResult analysis={$analysisStore.result} />
+		<a class="home__adapt-cta" href="/adapt">{$_('home.adaptCta')}</a>
 	{/if}
 </section>
 
@@ -110,6 +111,32 @@
 	.home__intro p {
 		margin: 0 0 var(--space-2);
 		color: var(--color-ink-muted);
+	}
+
+	/* Match → adapt is the product's natural next step: the CTA rides the
+	   result with the primary control treatment (control, so clay). */
+	.home__adapt-cta {
+		align-self: flex-start;
+		padding: var(--space-2) var(--space-4);
+		border: var(--border-width) solid transparent;
+		border-radius: var(--radius-control);
+		background: var(--color-action);
+		color: var(--color-on-action);
+		font-weight: 600;
+		font-size: var(--text-sm);
+		text-decoration: none;
+		box-shadow: var(--clay-raised);
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.home__adapt-cta:hover {
+		text-decoration: none;
+		box-shadow: var(--clay-lifted);
+	}
+
+	.home__adapt-cta:focus-visible {
+		box-shadow: var(--clay-focus-ring), var(--clay-raised);
+		outline: none;
 	}
 
 	.home__profile {

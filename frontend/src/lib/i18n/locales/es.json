@@ -26,7 +26,8 @@
     "intro": "Pegá el texto de la descripción del puesto (mínimo 50 caracteres) y obtené una coincidencia honesta contra tu perfil.",
     "profileLabel": "Perfil activo",
     "profileMissing": "Todavía no tenés un perfil propio.",
-    "profileMissingCta": "Configurá tu perfil"
+    "profileMissingCta": "Configurá tu perfil",
+    "adaptCta": "Adaptá tu CV con esta búsqueda"
   },
   "form": {
     "placeholder": "Pegá acá el texto completo de la descripción del puesto…",

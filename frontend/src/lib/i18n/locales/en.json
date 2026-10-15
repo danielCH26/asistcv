@@ -26,7 +26,8 @@
     "intro": "Paste the job description text (minimum 50 characters) and get an honest match against your profile.",
     "profileLabel": "Active profile",
     "profileMissing": "You don't have a profile of your own yet.",
-    "profileMissingCta": "Set up your profile"
+    "profileMissingCta": "Set up your profile",
+    "adaptCta": "Adapt your CV with this job"
   },
   "form": {
     "placeholder": "Paste the full job description text here…",
