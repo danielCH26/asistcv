@@ -7,6 +7,7 @@
       "history": "Historial",
       "audit": "Auditoría gratis",
       "profile": "Mi perfil",
+      "jobAdapt": "Adaptar",
       "recruiter": "Reclutador",
       "billing": "Plan",
       "jobOffers": "Ofertas",
@@ -124,15 +125,7 @@
   "profile": {
     "title": "Mi perfil",
     "heading": "Mi perfil",
-    "userInfo": "{name} · {email}",
-    "matchHeading": "Analizar contra una descripción del puesto",
-    "tabCvVsJd": "CV vs JD",
-    "tabCvOnly": "Solo CV",
-    "cvOnlyHint": "Analiza tu CV por sí solo: calidad, claridad y señales de alarma. No necesita descripción del puesto y no produce un score de match.",
-    "jdLabel": "Descripción del puesto a analizar",
-    "jdIntro": "Pegá la descripción completa. Con tu CV activo, el sistema devuelve un score honesto de match, skills faltantes y cuánta energía vale la pena invertir.",
-    "matchWithCv": "Se usará la hoja de vida seleccionada: {name}",
-    "matchNoCv": "Subí o seleccioná una hoja de vida para dar contexto a tus análisis."
+    "userInfo": "{name} · {email}"
   },
   "onboarding": {
     "heading": "Bienvenido a AsistCV",
@@ -295,6 +288,7 @@
   },
   "adapt": {
     "title": "Adaptá tu CV",
+    "pageTitle": "Adaptar mi CV",
     "subtitle": "Reescribimos las descripciones de tu experiencia para que encajen mejor con la vacante, sin inventar nada.",
     "heading": "Adaptá tu CV",
     "cta": {

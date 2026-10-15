@@ -36,6 +36,11 @@
 					class:is-active={pathname === '/profile'}
 					href="/profile">{$_('app.nav.profile')}</a
 				>
+				<a
+					class="app-shell__link"
+					class:is-active={pathname === '/adapt'}
+					href="/adapt">{$_('app.nav.jobAdapt')}</a
+				>
 				{#if $isRecruiter}
 					<a
 						class="app-shell__link"
