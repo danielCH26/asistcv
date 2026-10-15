@@ -5,7 +5,7 @@
     "nav": {
       "home": "Home",
       "history": "History",
-      "audit": "Free audit",
+      "audit": "Audit",
       "profile": "My profile",
       "jobAdapt": "Adapt",
       "recruiter": "Recruiter",
@@ -225,7 +225,7 @@
     "loadError": "Could not load the plan catalog."
   },
   "audit": {
-    "title": "Free audit",
+    "title": "Audit",
     "heading": "Anonymous CV audit",
     "intro": "Paste your CV and get an instant quality audit. No sign-up needed (up to 3 per day).",
     "cvLabel": "Your CV (text)",
