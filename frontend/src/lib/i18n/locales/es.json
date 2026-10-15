@@ -5,7 +5,7 @@
     "nav": {
       "home": "Inicio",
       "history": "Historial",
-      "audit": "Auditoría gratis",
+      "audit": "Auditar",
       "profile": "Mi perfil",
       "jobAdapt": "Adaptar",
       "recruiter": "Reclutador",
@@ -225,7 +225,7 @@
     "loadError": "No se pudo cargar el catálogo de planes."
   },
   "audit": {
-    "title": "Auditoría gratis",
+    "title": "Auditar",
     "heading": "Auditoría anónima de tu hoja de vida",
     "intro": "Pegá tu hoja de vida y recibí una auditoría de calidad al instante. Sin registro (hasta 3 por día).",
     "cvLabel": "Tu CV (texto)",
