@@ -7,6 +7,7 @@
       "history": "History",
       "audit": "Free audit",
       "profile": "My profile",
+      "jobAdapt": "Adapt",
       "recruiter": "Recruiter",
       "billing": "Plan",
       "jobOffers": "Job Offers",
@@ -25,7 +26,8 @@
     "intro": "Paste the job description text (minimum 50 characters) and get an honest match against your profile.",
     "profileLabel": "Active profile",
     "profileMissing": "You don't have a profile of your own yet.",
-    "profileMissingCta": "Set up your profile"
+    "profileMissingCta": "Set up your profile",
+    "adaptCta": "Adapt your CV with this job"
   },
   "form": {
     "placeholder": "Paste the full job description text here…",
@@ -124,15 +126,7 @@
   "profile": {
     "title": "My profile",
     "heading": "My profile",
-    "userInfo": "{name} · {email}",
-    "matchHeading": "Analyze against a job description",
-    "tabCvVsJd": "CV vs JD",
-    "tabCvOnly": "CV only",
-    "cvOnlyHint": "Audits your CV on its own: quality, clarity and red flags. No job description needed and no match score.",
-    "jdLabel": "Job description to analyze",
-    "jdIntro": "Paste the full job description. With your active CV, the system returns an honest match score, missing skills, and how much energy is worth investing.",
-    "matchWithCv": "The selected CV will be used: {name}",
-    "matchNoCv": "Upload or select a CV to give context to your analyses."
+    "userInfo": "{name} · {email}"
   },
   "onboarding": {
     "heading": "Welcome to AsistCV",
@@ -295,6 +289,7 @@
   },
   "adapt": {
     "title": "Adapt your CV",
+    "pageTitle": "Adapt my CV",
     "subtitle": "We rewrite your experience descriptions to match the job better, without inventing anything.",
     "heading": "Adapt your CV",
     "cta": {

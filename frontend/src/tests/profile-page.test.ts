@@ -1,8 +1,8 @@
-﻿import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
+import { render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// /profile llama a estos métodos al montar y en cada sección. El mock cubre
-// el inventario completo (ver feature doc L2) para que el mount no toque red.
+// /profile muestra: user info + onboarding + CV list. El mock cubre los
+// métodos que la página llama al montar.
 vi.mock('$api/client', () => ({
 	apiClient: {
 		createCvStructured: vi.fn(),
@@ -11,11 +11,8 @@ vi.mock('$api/client', () => ({
 		getCv: vi.fn(),
 		getProfile: vi.fn(),
 		listCvs: vi.fn().mockResolvedValue([]),
-		match: vi.fn(),
 		updateCv: vi.fn(),
-		uploadCv: vi.fn(),
-		auditAnonymous: vi.fn(),
-		captureAuditEmail: vi.fn()
+		uploadCv: vi.fn()
 	}
 }));
 
@@ -34,157 +31,34 @@ vi.mock('$stores/session', async () => {
 });
 
 import { apiClient } from '$api/client';
-import type { AuditAnonymousResult, MatchAnalysis } from '$api/types';
 import ProfilePage from '../routes/profile/+page.svelte';
-
-const mockedMatch = vi.mocked(apiClient.match);
-const mockedAudit = vi.mocked(apiClient.auditAnonymous);
-
-const MATCH_RESULT: MatchAnalysis = {
-	score: 72,
-	strengths: ['Python'],
-	gaps: ['SQL'],
-	energy_level: 'high',
-	reasoning: 'Buen match.'
-};
-
-// Mismo shape que devuelve el funnel cv_only (AuditAnonymousResult).
-const CV_ONLY_RESULT: AuditAnonymousResult = {
-	audit_token: 'tok-123',
-	mode: 'cv_only',
-	score: 58,
-	strengths: ['Python'],
-	gaps: [],
-	energy_level: 'medium',
-	reasoning: 'CV razonable.',
-	problematicas: [{ seccion: 'experiencia', problema: 'Sin métricas', severidad: 'alta' }],
-	recomendaciones: ['Agregá números']
-};
 
 beforeEach(() => {
 	vi.clearAllMocks();
 	vi.mocked(apiClient.listCvs).mockResolvedValue([]);
-	// ensureProfile crea el perfil la primera vez; sin id resuelto, runMatch
-	// nunca llega a apiClient.match.
-	vi.mocked(apiClient.createProfile).mockResolvedValue({ id: 7 } as never);
 });
 
-const TAB_CV_VS_JD = /cv vs jd/i;
-const TAB_CV_ONLY = /solo cv|cv only/i;
-const JD_PLACEHOLDER =
-	/descripci(o|ó)n (completa )?del puesto|descripci(o|ó)n completa de la vacante|full job description|job description/i;
-
-/**
- * El textarea del JdForm vive dentro del tabpanel activo; la sección de
- * adaptación (fuera de los tabs) tiene su propio textarea con placeholder
- * parecido, así que todas las queries de JD se scopean al panel. El panel
- * sólo existe cuando la página pasó requireSession, así que se espera con
- * findBy antes de scoper.
- */
-async function panel() {
-	return within(await screen.findByRole('tabpanel'));
-}
-
-describe('profile page — tabs de análisis', () => {
-	it('muestra dos tabs con CV vs JD activa por defecto', async () => {
+describe('profile page — estructura básica', () => {
+	it('renderiza el heading y la info del usuario', async () => {
 		render(ProfilePage);
 
-		const tab1 = await screen.findByRole('tab', { name: TAB_CV_VS_JD });
-		const tab2 = screen.getByRole('tab', { name: TAB_CV_ONLY });
-		expect(tab1.getAttribute('aria-selected')).toBe('true');
-		expect(tab2.getAttribute('aria-selected')).toBe('false');
+		expect(await screen.findByRole('heading', { name: /mi perfil/i })).toBeTruthy();
+		// El texto del usuario está partido en nodos por el interpolador i18n.
+		expect(screen.getAllByText(/test@asistcv\.dev/i)[0]).toBeTruthy();
 	});
 
-	it('la tab CV vs JD muestra el input de JD (flujo match intacto)', async () => {
+	it('muestra la sección de CVs con la empty state cuando no hay ninguno', async () => {
 		render(ProfilePage);
 
-		expect(await (await panel()).findByPlaceholderText(JD_PLACEHOLDER)).toBeTruthy();
+		expect(await screen.findByText(/mis cv/i)).toBeTruthy();
+		// Texto i18n broken-up en nodos — se busca el fragmento único más robusto.
+		expect(screen.getAllByText(/CV cargados/i)[0]).toBeTruthy();
 	});
 
-	it('cambiar a Solo CV oculta el input de JD y muestra su pista de modo', async () => {
+	it('renderiza los controles de subida de CV', async () => {
 		render(ProfilePage);
 
-		await (await panel()).findByPlaceholderText(JD_PLACEHOLDER);
-		await fireEvent.click(screen.getByRole('tab', { name: TAB_CV_ONLY }));
-
-		expect(screen.getByRole('tab', { name: TAB_CV_ONLY }).getAttribute('aria-selected')).toBe(
-			'true'
-		);
-		expect((await panel()).queryByPlaceholderText(JD_PLACEHOLDER)).toBeNull();
-		expect(screen.getByText(/analiza tu cv|audits your cv/i)).toBeTruthy();
-	});
-
-	it('la tab CV vs JD sigue llamando apiClient.match con el JD pegado', async () => {
-		mockedMatch.mockResolvedValueOnce(MATCH_RESULT);
-		render(ProfilePage);
-
-		const jd = await (await panel()).findByPlaceholderText(JD_PLACEHOLDER);
-		await fireEvent.input(jd, { target: { value: 'x'.repeat(60) } });
-		await fireEvent.click(screen.getByRole('button', { name: /analizar|analyze/i }));
-
-		await waitFor(() => expect(mockedMatch).toHaveBeenCalledTimes(1));
-		const payload = mockedMatch.mock.calls[0][0] as { jd_text: string };
-		expect(payload.jd_text).toBe('x'.repeat(60));
-	});
-});
-
-describe('profile page — tab Solo CV (audit cv_only)', () => {
-	async function goToSoloTab() {
-		render(ProfilePage);
-		await (await panel()).findByPlaceholderText(JD_PLACEHOLDER);
-		await fireEvent.click(screen.getByRole('tab', { name: TAB_CV_ONLY }));
-		return await screen.findByRole('tabpanel');
-	}
-
-	async function selectSoloPdf(name = 'cv.pdf') {
-		const panelEl = await screen.findByRole('tabpanel');
-		const fileInput = panelEl.querySelector('input[type="file"]') as HTMLInputElement;
-		const file = new File(['%PDF-1.4 test'], name, { type: 'application/pdf' });
-		await fireEvent.change(fileInput, { target: { files: [file] } });
-		return file;
-	}
-
-	it('con archivo seleccionado el submit NO envía jd_text (modo cv_only)', async () => {
-		mockedAudit.mockResolvedValueOnce(CV_ONLY_RESULT);
-		await goToSoloTab();
-
-		const file = await selectSoloPdf();
-		await fireEvent.click(screen.getByRole('button', { name: /auditar mi cv|audit my cv/i }));
-
-		await waitFor(() => expect(mockedAudit).toHaveBeenCalledTimes(1));
-		const payload = mockedAudit.mock.calls[0][0];
-		expect(payload.jd_text).toBeUndefined();
-		expect(payload.cv_file).toBe(file);
-		expect(payload.cv_text).toBeUndefined();
-	});
-
-	it('con texto pegado envía cv_text sin jd_text', async () => {
-		mockedAudit.mockResolvedValueOnce(CV_ONLY_RESULT);
-		await goToSoloTab();
-
-		await fireEvent.click(screen.getByRole('button', { name: /pegar texto|paste text/i }));
-		const cvText = screen.getByPlaceholderText(
-			/texto de tu hoja de vida|paste your cv|resume text/i
-		);
-		await fireEvent.input(cvText, { target: { value: 'x'.repeat(80) } });
-		await fireEvent.click(screen.getByRole('button', { name: /auditar mi cv|audit my cv/i }));
-
-		await waitFor(() => expect(mockedAudit).toHaveBeenCalledTimes(1));
-		const payload = mockedAudit.mock.calls[0][0];
-		expect(payload.jd_text).toBeUndefined();
-		expect(payload.cv_text).toBe('x'.repeat(80));
-		expect(payload.cv_file).toBeUndefined();
-	});
-
-	it('renderiza el resultado cv_only (score + problemáticas)', async () => {
-		mockedAudit.mockResolvedValueOnce(CV_ONLY_RESULT);
-		await goToSoloTab();
-
-		await selectSoloPdf();
-		await fireEvent.click(screen.getByRole('button', { name: /auditar mi cv|audit my cv/i }));
-
-		expect(await screen.findByText('58')).toBeTruthy();
-		expect(await screen.findByText(/sin m(e|é)tricas/i)).toBeTruthy();
-		expect(await screen.findByText(/agregá n(u|ú)meros|add numbers/i)).toBeTruthy();
+		expect(await screen.findByText(/subir cv en pdf/i)).toBeTruthy();
+		expect(screen.getByText(/crear cv con el editor estructurado/i)).toBeTruthy();
 	});
 });
