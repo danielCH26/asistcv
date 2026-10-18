@@ -180,7 +180,7 @@ async def run_offer_search(
 
     # Step 7: deduplicate against existing URLs for this user.
     existing_urls: set[str] = await _get_existing_urls(user_id, session_factory)
-    to_persist = [r for r in ranked if r.url not in existing_urls]
+    to_persist = [pair for pair in ranked if pair[1].url not in existing_urls]
 
     # Step 8: persist new offers.
     new_offers = await _persist_offers(
@@ -306,14 +306,16 @@ async def _rank_results(
     profile_emb: list[float],
     provider: LLMProvider,
     min_score: int,
-) -> list[OfferSearchResult]:
+) -> list[tuple[int | None, OfferSearchResult]]:
     """Rank search results by cosine similarity to the profile embedding.
 
     Embeds every snippet, computes cosine similarity vs ``profile_emb``,
     discards results below ``min_score`` (score = round(similarity * 100)),
-    and returns the surviving results in descending score order.
+    and returns the surviving ``(score, result)`` pairs in descending score
+    order — the score persists with the offer so the UI can show it.
 
-    Falls back to the original list on any error (defensive).
+    Falls back to the original list unranked (score ``None``) on any error
+    (defensive).
     """
     if not raw_results:
         return []
@@ -321,7 +323,7 @@ async def _rank_results(
     try:
         profile_vec = np.asarray(profile_emb, dtype=np.float64)
         if profile_vec.ndim != 1:
-            return list(raw_results)
+            return [(None, r) for r in raw_results]
 
         snippet_texts = [r.snippet or r.title for r in raw_results]
 
@@ -358,11 +360,11 @@ async def _rank_results(
                 scored.append((score, raw_results[i]))
 
         scored.sort(key=lambda x: x[0], reverse=True)
-        return [r for _, r in scored]
+        return scored
 
     except Exception:
-        # Degrade gracefully: if ranking fails, return all results unfiltered.
-        return list(raw_results)
+        # Degrade gracefully: if ranking fails, return all results unranked.
+        return [(None, r) for r in raw_results]
 
 
 async def _get_existing_urls(
@@ -379,29 +381,31 @@ async def _get_existing_urls(
 
 async def _persist_offers(
     user_id: int,
-    results: list[OfferSearchResult],
+    ranked: list[tuple[int | None, OfferSearchResult]],
     session_factory: async_sessionmaker[AsyncSession],
     search_query: str,
 ) -> int:
-    """Persist new JobOffer rows and return the count inserted."""
-    if not results:
+    """Persist new JobOffer rows (with their ranking score) and return the
+    count inserted."""
+    if not ranked:
         return 0
 
     async with session_factory() as session:
         await set_rls_user(session, user_id, "job_seeker")
-        for r in results:
+        for score, r in ranked:
             row = JobOffer(
                 owner_user_id=user_id,
                 title=r.title or "",
                 url=r.url,
                 snippet=r.snippet or None,
                 published_date=r.published_date or None,
+                score=score,
                 status="new",
                 search_query=search_query,
             )
             session.add(row)
         await session.commit()
-        return len(results)
+        return len(ranked)
 
 
 async def _update_last_run_at(
