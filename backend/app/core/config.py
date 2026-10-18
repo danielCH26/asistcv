@@ -152,6 +152,28 @@ class Settings(BaseSettings):
         default=40, validation_alias="OFFER_SEARCH_MIN_SCORE",
         description="Minimum cosine-similarity score (0-100) for a found offer to persist",
     )
+    # Comma-separated list of domains to restrict Tavily search to.
+    # QA showed Tavily returns portal listing pages instead of individual offers,
+    # so we restrict to known job board domains by default.
+    offer_search_include_domains: str | None = Field(
+        default="linkedin.com,indeed.com,computrabajo.com.co,occtalent.com,remoteok.com,weworkremotely.com",
+        validation_alias="OFFER_SEARCH_INCLUDE_DOMAINS",
+        description="Comma-separated domains to restrict job search to (empty = open web)",
+    )
+    # LLM query refinement: use LLM to generate a targeted search query
+    # instead of the simple skills-template (default True).
+    offer_search_llm_query: bool = Field(
+        default=True,
+        validation_alias="OFFER_SEARCH_LLM_QUERY",
+        description="Use LLM to refine search query before Tavily call",
+    )
+    # LLM result classification: use LLM to filter out portal/listings pages
+    # and keep only individual job offers (default True).
+    offer_search_llm_classify: bool = Field(
+        default=True,
+        validation_alias="OFFER_SEARCH_LLM_CLASSIFY",
+        description="Use LLM to filter non-offer results after Tavily",
+    )
 
     # Email delivery (verify-email flow, C3 / issue #46).
     # ``resend`` is the only provider that actually sends today; ``sendgrid``

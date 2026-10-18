@@ -108,22 +108,39 @@ class TavilyOfferSearchClient:
             status_code=status_code,
         )
 
-    async def search(self, query: str, max_results: int = 10) -> list[OfferSearchResult]:
-        """Search for job offers and return normalized results."""
+    async def search(
+        self,
+        query: str,
+        max_results: int = 10,
+        include_domains: list[str] | None = None,
+    ) -> list[OfferSearchResult]:
+        """Search for job offers and return normalized results.
+
+        Args:
+            query: Search query string.
+            max_results: Maximum number of results to return (default 10).
+            include_domains: Optional list of domains to restrict the search to
+                (e.g. ["linkedin.com", "indeed.com"]). When None, Tavily
+                searches the open web without restriction.
+        """
         if not self._api_key:
             raise ValueError("offer_search no configurado: falta TAVILY_API_KEY.")
         client = await self._get_client()
+
+        body: dict[str, object] = {
+            "api_key": self._api_key,
+            "query": query,
+            "max_results": max_results,
+            "search_depth": "basic",
+            "include_answer": False,
+        }
+        # Only add include_domains when the caller explicitly sets it;
+        # omitting the key lets Tavily use its default (no domain filter).
+        if include_domains is not None:
+            body["include_domains"] = include_domains
+
         try:
-            response = await client.post(
-                "/search",
-                json={
-                    "api_key": self._api_key,
-                    "query": query,
-                    "max_results": max_results,
-                    "search_depth": "basic",
-                    "include_answer": False,
-                },
-            )
+            response = await client.post("/search", json=body)
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
             self._raise_for_status_error(e)

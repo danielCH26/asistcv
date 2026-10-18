@@ -53,6 +53,42 @@ class TestTavilyOfferSearchClient:
         return TavilyOfferSearchClient(api_key="test_api_key_123")
 
     @pytest.mark.asyncio
+    async def test_search_with_include_domains(self, client: TavilyOfferSearchClient):
+        """Should include include_domains in request body when provided."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"query": "test", "results": []}
+
+        mock_post = AsyncMock(return_value=mock_response)
+
+        with patch.object(httpx.AsyncClient, "post", mock_post):
+            client._client = httpx.AsyncClient()
+            await client.search(
+                "python developer",
+                include_domains=["linkedin.com", "indeed.com"],
+            )
+
+        call_kwargs = mock_post.call_args.kwargs
+        assert call_kwargs["json"]["include_domains"] == ["linkedin.com", "indeed.com"]
+
+    @pytest.mark.asyncio
+    async def test_search_without_include_domains(self, client: TavilyOfferSearchClient):
+        """Should NOT include include_domains key when None (Tavily default behaviour)."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"query": "test", "results": []}
+
+        mock_post = AsyncMock(return_value=mock_response)
+
+        with patch.object(httpx.AsyncClient, "post", mock_post):
+            client._client = httpx.AsyncClient()
+            await client.search("python developer", include_domains=None)
+
+        call_kwargs = mock_post.call_args.kwargs
+        # When include_domains is None, the key should not be in the JSON body
+        assert "include_domains" not in call_kwargs["json"]
+
+    @pytest.mark.asyncio
     async def test_search_sends_post_with_api_key_in_body(self, client: TavilyOfferSearchClient):
         """Should send POST request with api_key in the request body."""
         mock_response = MagicMock()
