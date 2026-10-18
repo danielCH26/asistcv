@@ -433,6 +433,7 @@ class TestRunOfferSearch:
             llm_provider=None,
             *,
             now=None,
+            force=False,
         ):
             calls.append(
                 {
