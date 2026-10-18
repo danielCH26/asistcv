@@ -408,6 +408,165 @@ class TestUpdateOfferPreferences:
             assert response.status_code == 200, f"email_frequency={freq} failed"
             assert response.json()["email_frequency"] == freq
 
+    @pytest.mark.asyncio
+    async def test_put_200_filter_fields_roundtrip(self, async_client, clean_db) -> None:
+        """remote_only, location, salary_min are persisted in filters and returned correctly."""
+        user = await _create_user(clean_db)
+
+        async with _override_current_user(user):
+            response = await async_client.put(
+                "/v1/me/offer-preferences",
+                json={
+                    "frequency_hours": 24,
+                    "top_n": 5,
+                    "email_frequency": "none",
+                    "remote_only": True,
+                    "location": "Colombia",
+                    "salary_min": 80000,
+                },
+            )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["filters"] == {
+            "remote_only": True,
+            "location": "Colombia",
+            "salary_min": 80000,
+        }
+
+        # DB persistence check
+        async with clean_db.session_factory() as session:
+            row = await session.get(User, user.id)
+            assert row is not None
+            prefs = row.offer_preferences or {}
+            assert prefs["filters"] == {
+                "remote_only": True,
+                "location": "Colombia",
+                "salary_min": 80000,
+            }
+
+    @pytest.mark.asyncio
+    async def test_put_200_filter_fields_partial_omitted_preserves_existing(
+        self, async_client, clean_db
+    ) -> None:
+        """Omitting remote_only/location/salary_min leaves existing filter values intact."""
+        user = await _create_user(clean_db)
+
+        # First set full filters
+        async with _override_current_user(user):
+            await async_client.put(
+                "/v1/me/offer-preferences",
+                json={
+                    "remote_only": True,
+                    "location": "Argentina",
+                    "salary_min": 60000,
+                },
+            )
+
+        # Second call: only update frequency, filters untouched
+        async with _override_current_user(user):
+            response = await async_client.put(
+                "/v1/me/offer-preferences",
+                json={"frequency_hours": 48},
+            )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        # Filters from first call must still be there
+        assert body["filters"] == {
+            "remote_only": True,
+            "location": "Argentina",
+            "salary_min": 60000,
+        }
+
+    @pytest.mark.asyncio
+    async def test_put_422_invalid_salary_min_not_integer(self, async_client, clean_db) -> None:
+        """salary_min must be an integer; string → 422."""
+        user = await _create_user(clean_db)
+        async with _override_current_user(user):
+            response = await async_client.put(
+                "/v1/me/offer-preferences",
+                json={"salary_min": "fifty thousand"},
+            )
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_put_422_invalid_remote_only_not_boolean(self, async_client, clean_db) -> None:
+        """remote_only must be a boolean; string → 422."""
+        user = await _create_user(clean_db)
+        async with _override_current_user(user):
+            response = await async_client.put(
+                "/v1/me/offer-preferences",
+                json={"remote_only": "yes"},
+            )
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_put_422_invalid_location_not_string(self, async_client, clean_db) -> None:
+        """location must be a string; array → 422."""
+        user = await _create_user(clean_db)
+        async with _override_current_user(user):
+            response = await async_client.put(
+                "/v1/me/offer-preferences",
+                json={"location": ["Bogotá", "Medellín"]},
+            )
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_put_422_salary_min_negative(self, async_client, clean_db) -> None:
+        """salary_min < 0 → 422."""
+        user = await _create_user(clean_db)
+        async with _override_current_user(user):
+            response = await async_client.put(
+                "/v1/me/offer-preferences",
+                json={"salary_min": -1},
+            )
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_put_200_salary_min_zero_allowed(self, async_client, clean_db) -> None:
+        """salary_min = 0 is a valid 'no minimum' signal."""
+        user = await _create_user(clean_db)
+        async with _override_current_user(user):
+            response = await async_client.put(
+                "/v1/me/offer-preferences",
+                json={"salary_min": 0},
+            )
+        assert response.status_code == 200
+        assert response.json()["filters"]["salary_min"] == 0
+
+    @pytest.mark.asyncio
+    async def test_put_200_filter_nulls_clear_individual_field(self, async_client, clean_db) -> None:
+        """Passing null for a filter field removes it from the persisted filters dict."""
+        user = await _create_user(clean_db)
+
+        # Set full filters first
+        async with _override_current_user(user):
+            await async_client.put(
+                "/v1/me/offer-preferences",
+                json={
+                    "remote_only": True,
+                    "location": "Colombia",
+                    "salary_min": 80000,
+                },
+            )
+
+        # Clear location only
+        async with _override_current_user(user):
+            response = await async_client.put(
+                "/v1/me/offer-preferences",
+                json={
+                    "location": None,
+                },
+            )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        filters = body["filters"]
+        assert "location" not in filters
+        assert filters["remote_only"] is True
+        assert filters["salary_min"] == 80000
+
 
 # === POST /v1/job-offers/run ====================================================
 

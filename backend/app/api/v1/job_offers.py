@@ -10,10 +10,10 @@ Job-offer endpoints: list, archive, run search, and preferences.
 from the list response — it is an internal pipeline detail, not user-facing.
 """
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import select
@@ -77,7 +77,13 @@ class OfferRunResponse(BaseModel):
 
 
 class OfferPreferencesRequest(BaseModel):
-    """Request body for PUT /v1/me/offer-preferences."""
+    """Request body for PUT /v1/me/offer-preferences.
+
+    ``remote_only``, ``location``, and ``salary_min`` are structured filter
+    fields.  They are folded into the JSONB ``filters`` column.  ``filters``
+    itself is accepted for backwards-compatibility but is ignored when any
+    structured field is present.
+    """
 
     frequency_hours: int | None = Field(
         default=None,
@@ -96,10 +102,33 @@ class OfferPreferencesRequest(BaseModel):
         description="When to email: none | daily | weekly",
         pattern=r"^(none|daily|weekly)$",
     )
-    filters: dict[str, Any] | None = Field(
+    remote_only: bool | None = Field(
         default=None,
-        description="Arbitrary offer filters (e.g. {'remote_only': True})",
+        description="Filter to remote-only offers",
+        strict=True,
     )
+    location: str | None = Field(
+        default=None,
+        description="Free-text location preference (e.g. 'Colombia', 'Buenos Aires')",
+    )
+    salary_min: Annotated[int | None, Field(ge=0)] = Field(
+        default=None,
+        description="Minimum annual salary in USD (0 = no minimum)",
+    )
+
+    _filters: dict[str, Any] = PrivateAttr(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _build_structured_filters(self) -> "OfferPreferencesRequest":
+        """Populate private ``_filters`` dict from structured fields."""
+        self._filters = {}
+        if self.remote_only is not None:
+            self._filters["remote_only"] = self.remote_only
+        if self.location is not None:
+            self._filters["location"] = self.location
+        if self.salary_min is not None:
+            self._filters["salary_min"] = self.salary_min
+        return self
 
 
 class OfferPreferencesResponse(BaseModel):
@@ -310,8 +339,19 @@ async def update_offer_preferences(
         raw["top_n"] = prefs.top_n
     if prefs.email_frequency is not None:
         raw["email_frequency"] = prefs.email_frequency
-    if prefs.filters is not None:
-        raw["filters"] = prefs.filters
+
+    # Merge structured filter fields into the persisted filters dict.
+    # Existing filter keys not covered by structured fields are preserved.
+    existing_filters = dict(raw.get("filters") or {})
+    if hasattr(prefs, "_filters") and prefs._filters:
+        # Structured fields take precedence over any raw filters dict.
+        for k, v in prefs._filters.items():
+            existing_filters[k] = v
+    if existing_filters:
+        raw["filters"] = existing_filters
+    elif "filters" in raw:
+        # Explicit None structured fields clear individual keys.
+        del raw["filters"]
 
     async with get_session_context() as session:
         user = await session.get(User, current_user.id)

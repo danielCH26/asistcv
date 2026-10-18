@@ -19,8 +19,13 @@
 	let prefs: OfferPreferences = {
 		frequency_hours: 24,
 		top_n: 5,
-		email_frequency: 'daily'
+		email_frequency: 'daily',
+		remote_only: undefined,
+		location: undefined,
+		salary_min: undefined
 	};
+	// Separate binding for remote_only select (string "any"|"remote" ↔ boolean|undefined)
+	let remoteMode: string = 'any';
 	let saveBusy = false;
 	let saved = false;
 	let saveError = '';
@@ -67,7 +72,10 @@
 		saved = false;
 		saveError = '';
 		try {
-			await apiClient.updateOfferPreferences(prefs);
+			await apiClient.updateOfferPreferences({
+				...prefs,
+				remote_only: remoteMode === 'any' ? undefined : true,
+			});
 			saved = true;
 			setTimeout(() => (saved = false), 3000);
 		} catch {
@@ -202,6 +210,36 @@
 						<option value="daily">{$_('jobOffers.emailDaily')}</option>
 						<option value="weekly">{$_('jobOffers.emailWeekly')}</option>
 					</select>
+				</label>
+
+				<label class="job-offers__field">
+					<span class="job-offers__field-label">{$_('jobOffers.remoteOnlyLabel')}</span>
+					<select class="job-offers__select" bind:value={remoteMode}>
+						<option value="any">{$_('jobOffers.remoteOnlyAny')}</option>
+						<option value="remote">{$_('jobOffers.remoteOnlyRemote')}</option>
+					</select>
+				</label>
+
+				<label class="job-offers__field">
+					<span class="job-offers__field-label">{$_('jobOffers.locationLabel')}</span>
+					<input
+						class="job-offers__input"
+						type="text"
+						placeholder={$_('jobOffers.locationPlaceholder')}
+						bind:value={prefs.location}
+					/>
+				</label>
+
+				<label class="job-offers__field">
+					<span class="job-offers__field-label">{$_('jobOffers.salaryMinLabel')}</span>
+					<input
+						class="job-offers__input job-offers__input--number"
+						type="number"
+						min="0"
+						step="1000"
+						placeholder={$_('jobOffers.salaryMinPlaceholder')}
+						bind:value={prefs.salary_min}
+					/>
 				</label>
 			</div>
 
@@ -436,6 +474,38 @@
 	.job-offers__select:focus {
 		outline: none;
 		box-shadow: var(--clay-raised), var(--clay-focus-ring);
+	}
+
+	.job-offers__input {
+		padding: var(--space-2) var(--space-3);
+		border: 1px solid var(--color-line);
+		border-radius: var(--radius-control);
+		background: var(--clay-fill);
+		color: var(--color-ink);
+		font-size: var(--text-sm);
+		box-shadow: var(--clay-raised);
+		width: 100%;
+		box-sizing: border-box;
+	}
+
+	.job-offers__input:focus {
+		outline: none;
+		box-shadow: var(--clay-raised), var(--clay-focus-ring);
+	}
+
+	.job-offers__input::placeholder {
+		color: var(--color-ink-muted);
+		font-size: var(--text-xs);
+	}
+
+	.job-offers__input--number {
+		-moz-appearance: textfield;
+	}
+
+	.job-offers__input--number::-webkit-outer-spin-button,
+	.job-offers__input--number::-webkit-inner-spin-button {
+		-webkit-appearance: none;
+		margin: 0;
 	}
 
 	.job-offers__prefs-footer {
