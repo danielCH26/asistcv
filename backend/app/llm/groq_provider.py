@@ -365,3 +365,35 @@ class GroqProvider:
         raise NotImplementedError(
             "Groq does not offer embeddings. Use HuggingFaceProvider for embeddings."
         )
+
+    async def generate_structured(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        output_schema: dict[str, Any],
+        *, max_tokens: int | None = None,
+    ) -> dict[str, Any]:
+        """Generate a structured JSON response with a custom schema.
+
+        This is a generic wrapper around the Groq JSON-mode API that accepts
+        arbitrary system/user prompts and output schema hints.
+        Used by offer_search for query refinement and result classification.
+
+        Args:
+            system_prompt: System message defining the task and output format.
+            user_prompt: User message with the input data.
+            output_schema: Hint for the expected output shape
+                (e.g. {"query": str} or {"keep_indices": list}).
+                The schema is used for documentation only; the model uses
+                JSON-object mode which returns any valid JSON object.
+            max_tokens: Per-call response token cap. When None, falls back
+                to ``self._max_tokens`` (800).
+
+        Returns:
+            Parsed JSON response as a dictionary.
+        """
+        return await self._complete_json(
+            system_prompt,
+            user_prompt,
+            max_tokens=max_tokens,
+        )

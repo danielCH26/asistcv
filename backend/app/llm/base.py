@@ -90,3 +90,24 @@ class LLMProvider(Protocol):
             Embedding with vector and model identifier
         """
         ...
+
+    async def generate_structured(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        output_schema: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        Generate a structured JSON response with arbitrary system/user prompts.
+
+        Used by offer_search for query refinement and result classification.
+
+        Args:
+            system_prompt: System message defining the task and output format.
+            user_prompt: User message with the input data.
+            output_schema: Hint for the expected output shape.
+
+        Returns:
+            Parsed JSON response as a dictionary.
+        """
+        ...

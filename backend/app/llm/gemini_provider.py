@@ -175,3 +175,20 @@ class GeminiEmbeddingProvider:
             "GeminiEmbeddingProvider only supports embeddings. "
             "Use GroqProvider for LLM operations."
         )
+
+    async def generate_structured(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        output_schema: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        Generate structured response is not supported by GeminiEmbeddingProvider.
+
+        Raises:
+            NotImplementedError: Always, use GroqProvider for LLM operations.
+        """
+        raise NotImplementedError(
+            "GeminiEmbeddingProvider only supports embeddings. "
+            "Use GroqProvider for LLM operations."
+        )

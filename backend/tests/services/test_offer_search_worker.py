@@ -675,6 +675,319 @@ class TestStructuredLogging:
 
 
 # ---------------------------------------------------------------------------
+# Tests: query refinement with LLM
+# ---------------------------------------------------------------------------
+
+class TestQueryRefinement:
+
+    @pytest.mark.asyncio
+    async def test_llm_refines_query_when_enabled(
+        self, mock_settings, mock_search_client, mock_embedding_provider, mock_session_factory
+    ):
+        """When llm_provider present and setting True, query is refined by LLM."""
+        mock_settings.offer_search_llm_query = True
+        mock_settings.offer_search_llm_classify = False  # Disable classify to isolate query test
+        profile = _make_profile(skills={"items": ["python", "fastapi"]})
+        user = _make_user(
+            offer_preferences={
+                "frequency_hours": 24,
+                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=UTC).isoformat(),
+            }
+        )
+
+        # Mock LLM returns a refined query
+        mock_llm = AsyncMock()
+        mock_llm.generate_structured = AsyncMock(return_value={"query": "Python FastAPI remote jobs"})
+
+        async def fake_get(uid, fac):
+            return user, profile
+
+        with patch("app.services.offer_search_worker._get_user_and_profile", fake_get):
+            with patch("app.services.offer_search_worker._get_existing_urls", AsyncMock(return_value=set())):
+                with patch("app.services.offer_search_worker._persist_offers", AsyncMock(return_value=3)):
+                    with patch("app.services.offer_search_worker._update_last_run_at", AsyncMock()):
+                        await run_offer_search(
+                            user_id=10,
+                            session_factory=mock_session_factory,
+                            settings=mock_settings,
+                            search_client=mock_search_client,
+                            embedding_provider=mock_embedding_provider,
+                            llm_provider=mock_llm,
+                            now=NOW,
+                        )
+
+        # LLM should have been called for query refinement
+        mock_llm.generate_structured.assert_awaited_once()
+        # The refined query should have been passed to Tavily
+        call_args = mock_search_client.search.call_args
+        assert "Python FastAPI remote jobs" in call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_fallback_to_template_when_llm_fails(
+        self, mock_settings, mock_search_client, mock_embedding_provider, mock_session_factory
+    ):
+        """When LLM query refinement fails, fallback to template query."""
+        mock_settings.offer_search_llm_query = True
+        mock_settings.offer_search_llm_classify = False  # Disable classify to isolate query test
+        profile = _make_profile(skills={"items": ["python", "fastapi"]})
+        user = _make_user(
+            offer_preferences={
+                "frequency_hours": 24,
+                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=UTC).isoformat(),
+            }
+        )
+
+        # Mock LLM raises an error
+        mock_llm = AsyncMock()
+        mock_llm.generate_structured = AsyncMock(side_effect=RuntimeError("LLM failed"))
+
+        async def fake_get(uid, fac):
+            return user, profile
+
+        with patch("app.services.offer_search_worker._get_user_and_profile", fake_get):
+            with patch("app.services.offer_search_worker._get_existing_urls", AsyncMock(return_value=set())):
+                with patch("app.services.offer_search_worker._persist_offers", AsyncMock(return_value=3)):
+                    with patch("app.services.offer_search_worker._update_last_run_at", AsyncMock()):
+                        result = await run_offer_search(
+                            user_id=10,
+                            session_factory=mock_session_factory,
+                            settings=mock_settings,
+                            search_client=mock_search_client,
+                            embedding_provider=mock_embedding_provider,
+                            llm_provider=mock_llm,
+                            now=NOW,
+                        )
+
+        # Pipeline continues with the REFINED query (LLM output used)
+        mock_search_client.search.assert_awaited_once()
+        query = mock_search_client.search.call_args[0][0]
+        assert query  # non-empty
+        assert result.skipped_stale is False
+
+    @pytest.mark.asyncio
+    async def test_template_used_when_setting_false(
+        self, mock_settings, mock_search_client, mock_embedding_provider, mock_session_factory
+    ):
+        """When offer_search_llm_query=False, template query is used directly."""
+        mock_settings.offer_search_llm_query = False
+        mock_settings.offer_search_llm_classify = False  # Disable classify to isolate query test
+        profile = _make_profile(skills={"items": ["python", "fastapi"]})
+        user = _make_user(
+            offer_preferences={
+                "frequency_hours": 24,
+                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=UTC).isoformat(),
+            }
+        )
+
+        mock_llm = AsyncMock()
+        mock_llm.generate_structured = AsyncMock()
+
+        async def fake_get(uid, fac):
+            return user, profile
+
+        with patch("app.services.offer_search_worker._get_user_and_profile", fake_get):
+            with patch("app.services.offer_search_worker._get_existing_urls", AsyncMock(return_value=set())):
+                with patch("app.services.offer_search_worker._persist_offers", AsyncMock(return_value=3)):
+                    with patch("app.services.offer_search_worker._update_last_run_at", AsyncMock()):
+                        await run_offer_search(
+                            user_id=10,
+                            session_factory=mock_session_factory,
+                            settings=mock_settings,
+                            search_client=mock_search_client,
+                            embedding_provider=mock_embedding_provider,
+                            llm_provider=mock_llm,
+                            now=NOW,
+                        )
+
+        # LLM should NOT be called
+        mock_llm.generate_structured.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Tests: LLM classification of results
+# ----------------------------------------------------------------------------
+
+class TestResultClassification:
+
+    @pytest.mark.asyncio
+    async def test_llm_filters_portal_results_when_enabled(
+        self, mock_settings, mock_search_client, mock_embedding_provider, mock_session_factory
+    ):
+        """When llm_provider present and setting True, LLM filters out portal results."""
+        mock_settings.offer_search_llm_query = False  # Disable query refinement to isolate classification
+        mock_settings.offer_search_llm_classify = True
+        profile = _make_profile(
+            embedding=[0.1] * 768,
+            embedding_model="gemini-embedding-001",
+        )
+        user = _make_user(
+            offer_preferences={
+                "frequency_hours": 24,
+                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=UTC).isoformat(),
+            }
+        )
+
+        # Mock LLM returns classification: keep indices 0 and 2, discard 1
+        mock_llm = AsyncMock()
+        mock_llm.generate_structured = AsyncMock(return_value={
+            "keep_indices": [0, 2],
+        })
+
+        async def fake_get(uid, fac):
+            return user, profile
+
+        with patch("app.services.offer_search_worker._get_user_and_profile", fake_get):
+            with patch("app.services.offer_search_worker._get_existing_urls", AsyncMock(return_value=set())):
+                with patch("app.services.offer_search_worker._persist_offers", AsyncMock(return_value=2)) as mock_persist:
+                    with patch("app.services.offer_search_worker._update_last_run_at", AsyncMock()):
+                        result = await run_offer_search(
+                            user_id=10,
+                            session_factory=mock_session_factory,
+                            settings=mock_settings,
+                            search_client=mock_search_client,
+                            embedding_provider=mock_embedding_provider,
+                            llm_provider=mock_llm,
+                            now=NOW,
+                        )
+
+        # Only 2 results should be persisted (indices 0 and 2 kept)
+        assert result.new_offers == 2
+        mock_persist.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_all_results_kept_when_llm_fails(
+        self, mock_settings, mock_search_client, mock_embedding_provider, mock_session_factory
+    ):
+        """When LLM classification fails, all results are kept (fallback)."""
+        mock_settings.offer_search_llm_query = False  # Disable query refinement to isolate classification
+        mock_settings.offer_search_llm_classify = True
+        profile = _make_profile(
+            embedding=[0.1] * 768,
+            embedding_model="gemini-embedding-001",
+        )
+        user = _make_user(
+            offer_preferences={
+                "frequency_hours": 24,
+                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=UTC).isoformat(),
+            }
+        )
+
+        # Mock LLM raises an error
+        mock_llm = AsyncMock()
+        mock_llm.generate_structured = AsyncMock(side_effect=RuntimeError("LLM failed"))
+
+        async def fake_get(uid, fac):
+            return user, profile
+
+        with patch("app.services.offer_search_worker._get_user_and_profile", fake_get):
+            with patch("app.services.offer_search_worker._get_existing_urls", AsyncMock(return_value=set())):
+                with patch("app.services.offer_search_worker._persist_offers", AsyncMock(return_value=3)) as mock_persist:
+                    with patch("app.services.offer_search_worker._update_last_run_at", AsyncMock()):
+                        result = await run_offer_search(
+                            user_id=10,
+                            session_factory=mock_session_factory,
+                            settings=mock_settings,
+                            search_client=mock_search_client,
+                            embedding_provider=mock_embedding_provider,
+                            llm_provider=mock_llm,
+                            now=NOW,
+                        )
+
+        # All 3 results should be persisted (fallback = keep all)
+        assert result.new_offers == 3
+        mock_persist.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_classification_skipped_when_setting_false(
+        self, mock_settings, mock_search_client, mock_embedding_provider, mock_session_factory
+    ):
+        """When offer_search_llm_classify=False, classification is skipped."""
+        mock_settings.offer_search_llm_query = False  # Disable query refinement to isolate classification
+        mock_settings.offer_search_llm_classify = False
+        profile = _make_profile(
+            embedding=[0.1] * 768,
+            embedding_model="gemini-embedding-001",
+        )
+        user = _make_user(
+            offer_preferences={
+                "frequency_hours": 24,
+                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=UTC).isoformat(),
+            }
+        )
+
+        mock_llm = AsyncMock()
+        mock_llm.generate_structured = AsyncMock()
+
+        async def fake_get(uid, fac):
+            return user, profile
+
+        with patch("app.services.offer_search_worker._get_user_and_profile", fake_get):
+            with patch("app.services.offer_search_worker._get_existing_urls", AsyncMock(return_value=set())):
+                with patch("app.services.offer_search_worker._persist_offers", AsyncMock(return_value=3)):
+                    with patch("app.services.offer_search_worker._update_last_run_at", AsyncMock()):
+                        await run_offer_search(
+                            user_id=10,
+                            session_factory=mock_session_factory,
+                            settings=mock_settings,
+                            search_client=mock_search_client,
+                            embedding_provider=mock_embedding_provider,
+                            llm_provider=mock_llm,
+                            now=NOW,
+                        )
+
+        # LLM should NOT be called for classification
+        mock_llm.generate_structured.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Tests: include_domains passes to client
+# ---------------------------------------------------------------------------
+
+class TestIncludeDomains:
+
+    @pytest.mark.asyncio
+    async def test_include_domains_from_settings(
+        self, mock_settings, mock_search_client, mock_embedding_provider, mock_session_factory
+    ):
+        """include_domains from settings should be passed to Tavily client."""
+        mock_settings.offer_search_include_domains = "linkedin.com,indeed.com,remoteok.com"
+        mock_settings.offer_search_llm_query = False  # Disable LLM to isolate domain test
+        mock_settings.offer_search_llm_classify = False
+        profile = _make_profile(
+            embedding=[0.1] * 768,
+            embedding_model="gemini-embedding-001",
+        )
+        user = _make_user(
+            offer_preferences={
+                "frequency_hours": 24,
+                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=UTC).isoformat(),
+            }
+        )
+
+        async def fake_get(uid, fac):
+            return user, profile
+
+        with patch("app.services.offer_search_worker._get_user_and_profile", fake_get):
+            with patch("app.services.offer_search_worker._get_existing_urls", AsyncMock(return_value=set())):
+                with patch("app.services.offer_search_worker._persist_offers", AsyncMock(return_value=3)):
+                    with patch("app.services.offer_search_worker._update_last_run_at", AsyncMock()):
+                        await run_offer_search(
+                            user_id=10,
+                            session_factory=mock_session_factory,
+                            settings=mock_settings,
+                            search_client=mock_search_client,
+                            embedding_provider=mock_embedding_provider,
+                            now=NOW,
+                        )
+
+        # Verify include_domains was passed to Tavily
+        mock_search_client.search.assert_awaited_once()
+        call_kwargs = mock_search_client.search.call_args.kwargs
+        assert "include_domains" in call_kwargs
+        assert call_kwargs["include_domains"] == ["linkedin.com", "indeed.com", "remoteok.com"]
+
+
+# ---------------------------------------------------------------------------
 # Tests: error propagation
 # ---------------------------------------------------------------------------
 

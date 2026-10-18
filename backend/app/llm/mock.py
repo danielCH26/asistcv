@@ -240,3 +240,37 @@ class MockProvider:
             vector = [v / magnitude for v in vector]
 
         return Embedding(vector=vector, model="mock-embedding-v1")
+
+    async def generate_structured(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        output_schema: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        Generate a deterministic structured response for testing.
+
+        Returns a mock response based on the output_schema hint.
+        Used for testing query refinement and result classification.
+
+        Args:
+            system_prompt: Ignored (mock behavior).
+            user_prompt: Ignored (mock behavior).
+            output_schema: Hint for the expected output shape.
+
+        Returns:
+            Mock structured response following the schema hint.
+        """
+        # Detect the expected output type from the schema
+        if "query" in output_schema:
+            # Query refinement: return a refined query based on user prompt keywords
+            if "python" in user_prompt.lower() or "fastapi" in user_prompt.lower():
+                return {"query": "Python FastAPI remote jobs"}
+            return {"query": "remote software developer jobs"}
+
+        if "keep_indices" in output_schema:
+            # Result classification: keep all results (default for mock)
+            return {"keep_indices": [0, 1, 2]}
+
+        # Default fallback
+        return {}

@@ -51,6 +51,42 @@ from app.services.rls_context import set_rls_user
 
 logger = get_logger("app.services.offer_search_worker")
 
+# ---------------------------------------------------------------------------
+# LLM prompt constants for query refinement and result classification
+# ---------------------------------------------------------------------------
+
+_QUERY_REFINEMENT_SYSTEM = """Eres un asistente que genera queries de búsqueda para encontrar ofertas de empleo individuales.
+
+REGLAS ESTRICTAS:
+1. Usa SOLO las skills/experiencia del perfil del candidato. NO inventes skills.
+2. Genera UNA query corta y específica (máximo 10-12 palabras).
+3. La query debe buscar OFERTAS DE EMPLEO INDIVIDUALES, no portales de listado.
+4. Incluye términos como "job", "empleo", "hiring" para evitar artículos y threads.
+5. No incluyas: "search", "page", "portal", "reddit", "forum".
+6. Responde ÚNICAMENTE con JSON válido: {"query": "..."}"""
+
+_QUERY_REFINEMENT_USER_TEMPLATE = """## Perfil del candidato:
+Skills: {skills}
+Experiencia: {experience}
+
+Genera una query de búsqueda específica para encontrar ofertas de empleo individuales."""
+
+_CLASSIFY_RESULTS_SYSTEM = """Eres un clasificador de resultados de búsqueda de empleo.
+
+REGLAS ESTRICTAS:
+1. Clasifica cada resultado como oferta individual de empleo o NO-oferta.
+2. DESCARTAR: portales de listado (LinkedIn search page, Indeed search, Remote.co listing),
+   artículos de blog, posts de Reddit/Forums, páginas de empresa sin vacante específica.
+3. MANTENER: páginas específicas de UNA vacante con título, descripción, y requisitos.
+4. Incluye en keep_indices SOLO los índices que sean ofertas individuales.
+5. Responde ÚNICAMENTE con JSON válido: {"keep_indices": [0, 3, 7]}
+6. Si TODOS los resultados son no-ofertas, responde: {"keep_indices": []}"""
+
+_CLASSIFY_RESULTS_USER_TEMPLATE = """## Resultados de búsqueda:
+{results}
+
+Identifica cuáles son ofertas de empleo individuales (mantener) y cuáles no (descartar)."""
+
 # Default minimum score for an offer to be persisted.
 _DEFAULT_MIN_SCORE = 40
 
@@ -146,13 +182,33 @@ async def run_offer_search(
         )
         return OfferRunResult(found=0, new_offers=0, skipped_stale=True)
 
-    # Step 3: build search query from skills.
-    query = _build_query(profile)
+    # Step 3a: build base query from skills.
+    base_query = _build_query(profile)
+
+    # Step 3b: optionally refine query with LLM.
+    use_llm_query = getattr(settings, "offer_search_llm_query", True)
+    if use_llm_query and llm_provider is not None:
+        query = await _refine_query_with_llm(llm_provider, profile)
+        logger.info(
+            "offer_search_query_refined",
+            user_id=user_id,
+            base_query=base_query,
+            refined_query=query,
+        )
+    else:
+        query = base_query
+
     max_results = getattr(settings, "offer_search_max_results", 10)
 
-    # Step 4: Tavily search (errors propagate).
+    # Step 4: parse include_domains from settings (comma-separated string → list).
+    include_domains: list[str] | None = None
+    domains_setting = getattr(settings, "offer_search_include_domains", None)
+    if domains_setting and isinstance(domains_setting, str) and domains_setting.strip():
+        include_domains = [d.strip() for d in domains_setting.split(",") if d.strip()]
+
+    # Step 5: Tavily search (errors propagate).
     raw_results: list[OfferSearchResult] = await search_client.search(
-        query, max_results=max_results
+        query, max_results=max_results, include_domains=include_domains
     )
     found = len(raw_results)
 
@@ -169,13 +225,37 @@ async def run_offer_search(
         )
         return OfferRunResult(found=0, new_offers=0, skipped_stale=False)
 
-    # Step 5: profile embedding (re-embed on-demand).
+    # Step 5b: optionally classify results with LLM to filter out portal pages.
+    use_llm_classify = getattr(settings, "offer_search_llm_classify", True)
+    if use_llm_classify and llm_provider is not None:
+        raw_results = await _classify_results_with_llm(llm_provider, raw_results)
+        logger.info(
+            "offer_search_results_classified",
+            user_id=user_id,
+            original_count=found,
+            classified_count=len(raw_results),
+        )
+        # Update found count to reflect filtered results
+        found = len(raw_results)
+        if found == 0:
+            await _update_last_run_at(user_id, session_factory, prefs, now)
+            logger.info(
+                "offer_search_run",
+                user_id=user_id,
+                found=0,
+                new_offers=0,
+                skipped_stale=False,
+                duration_ms=round((time.monotonic() - t0) * 1000),
+            )
+            return OfferRunResult(found=found, new_offers=0, skipped_stale=False)
+
+    # Step 6: profile embedding (re-embed on-demand).
     profile_emb = await _get_profile_embedding(
         profile, embedding_provider, settings, user_id
     )
     min_score = getattr(settings, "offer_search_min_score", _DEFAULT_MIN_SCORE)
 
-    # Step 6: rank + filter.
+    # Step 7: rank + filter.
     ranked = await _rank_results(raw_results, profile_emb, embedding_provider, min_score)
 
     # Step 7: deduplicate against existing URLs for this user.
@@ -430,6 +510,126 @@ async def _update_last_run_at(
         # re-serialise the whole dict so SQLAlchemy marks it dirty.
         user.offer_preferences = dict(raw)
         await session.commit()
+
+
+# ---------------------------------------------------------------------------
+# LLM helper functions
+# ---------------------------------------------------------------------------
+
+
+async def _refine_query_with_llm(
+    llm_provider: LLMProvider,
+    profile: Profile,
+) -> str:
+    """Refine the search query using LLM based on profile skills/experience.
+
+    Uses the Groq provider's structured output pattern to generate a
+    targeted search query for finding individual job offers.
+
+    Falls back to the template-based query on any error.
+    """
+    import inspect
+
+    skills_list: list[str] = []
+    raw_skills = getattr(profile, "skills", None)
+    if isinstance(raw_skills, dict):
+        raw_items = raw_skills.get("items")
+        if isinstance(raw_items, list):
+            skills_list = [str(s) for s in raw_items if s]
+
+    experience_text = getattr(profile, "experience", "") or ""
+
+    user_prompt = _QUERY_REFINEMENT_USER_TEMPLATE.format(
+        skills=", ".join(skills_list) if skills_list else "No skills listed",
+        experience=experience_text[:500] if experience_text else "No experience listed",
+    )
+
+    try:
+        result = llm_provider.generate_structured(
+            system_prompt=_QUERY_REFINEMENT_SYSTEM,
+            user_prompt=user_prompt,
+            output_schema={"query": str},
+        )
+        # Support both sync and async providers
+        if inspect.iscoroutine(result):
+            structured = await result
+        else:
+            structured = result
+
+        refined_query = structured.get("query") if isinstance(structured, dict) else None
+        if refined_query and isinstance(refined_query, str) and refined_query.strip():
+            return refined_query.strip()
+    except Exception as e:
+        logger.warning(
+            "offer_search_query_refine_failed",
+            error=str(e),
+        )
+
+    # Fallback: use template query
+    if skills_list:
+        return _SEARCH_QUERY_TEMPLATE.format(skills=" ".join(skills_list[:5]))
+    return "remote jobs for developers"
+
+
+async def _classify_results_with_llm(
+    llm_provider: LLMProvider,
+    results: list[OfferSearchResult],
+) -> list[OfferSearchResult]:
+    """Classify search results using LLM to filter out non-offer results.
+
+    Uses the Groq provider's structured output pattern to identify which
+    results are individual job offers vs portal pages, articles, etc.
+
+    Returns the filtered list of results (indices that are actual offers).
+    Falls back to returning all results on any error.
+    """
+    import inspect
+
+    if not results:
+        return results
+
+    # Build result descriptions for the LLM
+    result_descriptions = []
+    for i, r in enumerate(results):
+        result_descriptions.append(
+            f"[{i}] Title: {r.title}\nSnippet: {r.snippet[:200]}..."
+        )
+
+    user_prompt = _CLASSIFY_RESULTS_USER_TEMPLATE.format(
+        results="\n\n".join(result_descriptions)
+    )
+
+    try:
+        result = llm_provider.generate_structured(
+            system_prompt=_CLASSIFY_RESULTS_SYSTEM,
+            user_prompt=user_prompt,
+            output_schema={"keep_indices": list},
+        )
+        # Support both sync and async providers
+        if inspect.iscoroutine(result):
+            structured = await result
+        else:
+            structured = result
+
+        if isinstance(structured, dict):
+            keep_indices = structured.get("keep_indices")
+            if isinstance(keep_indices, list):
+                # Filter results to only keep those with indices in keep_indices
+                filtered = [
+                    results[i]
+                    for i in keep_indices
+                    if isinstance(i, int) and 0 <= i < len(results)
+                ]
+                if filtered:
+                    return filtered
+    except Exception as e:
+        logger.warning(
+            "offer_search_classify_failed",
+            error=str(e),
+        )
+
+    # Fallback: return all results if classification fails
+    return results
 
 
 # ---------------------------------------------------------------------------
