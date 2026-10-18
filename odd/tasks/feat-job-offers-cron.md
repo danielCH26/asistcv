@@ -76,4 +76,4 @@
 > **T10**: UI: selects de ubicación/remoto y rango salarial en las preferencias (el JSONB filters ya existe).
 
 > **T11**: Suite + PR.
-
+- L10: Slice 2 COMPLETO — PR #114 mergeada (CI 7/7): include_domains (job boards), query refinada con LLM (Groq, prompt sin inventar skills, fallback al template), clasificación LLM de resultados (descarta portales/artículos/reddit, fallback keep-all), LLMProvider.generate_structured (Groq lo implementa, Gemini/HF stub), filtros estructurados en preferencias (remote_only/location/salary_min con 422 matrix) + UI Modalidad/Ubicación/Salario. 3 settings nuevos documentados en .env.example.
