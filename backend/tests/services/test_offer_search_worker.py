@@ -412,6 +412,12 @@ class TestRanking:
         assert result.found == 3
         assert result.new_offers == 3
         mock_persist.assert_called_once()
+        # The ranking score persists with each offer (score badges in the UI).
+        ranked_pairs = mock_persist.call_args.args[1]
+        assert all(isinstance(score, int) and score >= 40 for score, _r in ranked_pairs)
+        assert [score for score, _r in ranked_pairs] == sorted(
+            [score for score, _r in ranked_pairs], reverse=True
+        )
 
     @pytest.mark.asyncio
     async def test_results_below_threshold_filtered_out(
