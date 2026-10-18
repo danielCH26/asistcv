@@ -65,3 +65,15 @@
 - L5: QA en prod del cron completo (2026-10-09/18): migración 027 aplicada, endpoints 200, catch-up automático CORRIÓ solo al reiniciar el backend (validación del diseño lazy en prod), run manual forzado con #111 (found:10, new_offers:10 persistidas), dedupe por URL verificado
 - L6: Fix de QA: las ofertas persistían con score NULL (_rank_results computaba el score pero lo dropeaba al devolver) — PR #112 mergeada (28e4a5e): los pares (score, resultado) fluyen hasta la persistencia; el fallback degradado persiste score=None visiblemente. Las 10 ofertas previas quedaron con score NULL (datos viejos); las nuevas traen score
 - L7: Limitación conocida del enfoque genérico (Tavily web search): los resultados son PÁGINAS de portales (remote.co, LinkedIn search, Reddit), no ofertas individuales — el issue lo anticipaba ("adapter por board si el genérico no es suficiente"). Slice 2: query refinada con LLM o adapters por board
+
+## Slice 2: calidad de resultados (2026-10)
+
+- L8: El QA en prod mostró la limitación del enfoque genérico: Tavily devuelve PÁGINAS de portales (remote.co, LinkedIn search, Reddit), no ofertas individuales. El score de ranking las dejó pasar (cosine alto por keywords remotas).
+- L9: Tavily soporta include_domains — restringir a job boards es el fix más barato y determinista.
+
+> **T9**: Calidad de búsqueda en el worker: (a) include_domains con job boards desde settings (OFFER_SEARCH_INCLUDE_DOMAINS, default linkedin.com/jobs, indeed.com, computrabajo.com.co, occtalent.com), (b) LLM refina la query desde los skills del perfil (Groq, detrás de OFFER_SEARCH_LLM_QUERY default true si hay groq), (c) clasificación LLM de resultados (descarta lo que no sea oferta individual). Test-first con mocks.
+
+> **T10**: UI: selects de ubicación/remoto y rango salarial en las preferencias (el JSONB filters ya existe).
+
+> **T11**: Suite + PR.
+
