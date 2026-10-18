@@ -243,6 +243,7 @@ async def run_offer_search_endpoint(
             settings=settings,
             search_client=search_client,
             embedding_provider=embedding_provider,
+            force=True,
         )
     except OfferSearchAuthError as exc:
         raise HTTPException(
