@@ -144,6 +144,56 @@ class Settings(BaseSettings):
         default="price_recruiter_agency", validation_alias="STRIPE_PRICE_RECRUITER_AGENCY"
     )
 
+    # Billing provider switch (slice 1 — feat/pasarela-pagos-56)
+    # Valid values: "mock" (default, dev/local), "stripe", "lemon_squeezy", "mercadopago"
+    # Slice 1 ships mock + stripe. Lemon Squeezy (slice 2) and Mercado Pago (slice 3)
+    # are stubs that raise NotImplementedError until their slices land.
+    billing_provider_active: str = Field(
+        default="mock",
+        validation_alias="BILLING_PROVIDER_ACTIVE",
+        description="Active billing provider: mock | stripe | lemon_squeezy | mercadopago",
+    )
+
+    # Lemon Squeezy — stub fields, validated and functional in slice 2
+    lemon_squeezy_api_key: str | None = Field(
+        default=None, validation_alias="LEMON_SQUEEZY_API_KEY"
+    )
+    lemon_squeezy_store_id: str | None = Field(
+        default=None, validation_alias="LEMON_SQUEEZY_STORE_ID"
+    )
+    lemon_squeezy_webhook_secret: str | None = Field(
+        default=None, validation_alias="LEMON_SQUEEZY_WEBHOOK_SECRET"
+    )
+    lemon_squeezy_signature_header: str = Field(
+        default="X-Signature",
+        validation_alias="LEMON_SQUEEZY_SIGNATURE_HEADER",
+        description="HTTP header LS sends with webhook payloads (default X-Signature)",
+    )
+    # LS variant IDs per plan (configure in your LS dashboard)
+    lemon_squeezy_variant_job_seeker_monthly: str | None = Field(
+        default=None, validation_alias="LEMON_SQUEEZY_VARIANT_JOB_SEEKER_MONTHLY"
+    )
+    lemon_squeezy_variant_recruiter_starter: str | None = Field(
+        default=None, validation_alias="LEMON_SQUEEZY_VARIANT_RECRUITER_STARTER"
+    )
+    lemon_squeezy_variant_recruiter_business: str | None = Field(
+        default=None, validation_alias="LEMON_SQUEEZY_VARIANT_RECRUITER_BUSINESS"
+    )
+    lemon_squeezy_variant_recruiter_agency: str | None = Field(
+        default=None, validation_alias="LEMON_SQUEEZY_VARIANT_RECRUITER_AGENCY"
+    )
+
+    # Mercado Pago — stub fields, validated and functional in slice 3
+    mercadopago_access_token: str | None = Field(
+        default=None, validation_alias="MERCADOPAGO_ACCESS_TOKEN"
+    )
+    mercadopago_public_key: str | None = Field(
+        default=None, validation_alias="MERCADOPAGO_PUBLIC_KEY"
+    )
+    mercadopago_webhook_secret: str | None = Field(
+        default=None, validation_alias="MERCADOPAGO_WEBHOOK_SECRET"
+    )
+
     # Offer search configuration (issue #55)
     offer_search_provider: str = Field(default="tavily", validation_alias="OFFER_SEARCH_PROVIDER")
     tavily_api_key: str | None = Field(default=None, validation_alias="TAVILY_API_KEY")

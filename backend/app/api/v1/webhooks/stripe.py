@@ -2,17 +2,28 @@
 Stripe webhook handler.
 
 Processes Stripe webhooks with signature verification and idempotency.
+
+BillingProvider adapter (feat/pasarela-pagos-56, slice 1):
+  Signature verification is delegated to ``StripeProvider.handle_webhook``,
+  which wraps ``stripe.Webhook.construct_event``. The endpoint owns
+  idempotency (DB commits) and dispatches to the same ``_handle_event``
+  helpers it used before — those helpers read/write the Subscription table
+  directly, which is the correct place for DB state (the provider SDK is
+  the payment source of truth, not our adapter layer).
+
+  The handler is ``StripeProvider.handle_webhook``, not a generic dispatcher.
+  Other providers (MockProvider, LemonSqueezy, MercadoPago) have their own
+  webhook endpoints in subsequent slices.
 """
 import logging
 from datetime import UTC, datetime
 
-import stripe
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 
-from app.core.config import get_settings
 from app.db.models import StripeWebhookEvent, Subscription
 from app.db.session import get_session_context
+from app.services.billing_provider import ProviderNotConfiguredError, get_billing_provider
 from app.services.rls_context import set_rls_service
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
@@ -22,61 +33,57 @@ logger = logging.getLogger(__name__)
 async def process_webhook(payload: bytes, sig_header: str | None) -> dict:
     """Process a Stripe webhook event.
 
-    Verifies signature, checks idempotency, and dispatches to handlers.
+    Verifies signature via ``StripeProvider.handle_webhook``, checks
+    idempotency, and dispatches to handlers.
     """
-    settings = get_settings()
-
-    if not settings.stripe_webhook_secret:
+    # Delegate signature verification and body parsing to the provider.
+    # The provider raises stripe.error.SignatureVerificationError on failure;
+    # we surface it as HTTP 400 in the endpoint.
+    try:
+        provider = get_billing_provider("stripe")
+    except ProviderNotConfiguredError:
+        raise HTTPException(status_code=503, detail="Stripe webhook not configured")
+    except ValueError:
         raise HTTPException(status_code=503, detail="Stripe webhook not configured")
 
-    # Verify signature
-    try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, settings.stripe_webhook_secret
-        )
-    except stripe.error.SignatureVerificationError:
-        raise HTTPException(status_code=400, detail="Invalid signature")
-
-    # stripe-python >= 15 returns a StripeObject: no dict methods (.get) and
-    # not JSON-serializable. Convert to a plain dict immediately after parsing.
-    event_dict = event.to_dict()
+    event = await provider.handle_webhook(payload, sig_header or "", {})
 
     # Check idempotency - don't process same event twice
     async with get_session_context() as session:
         await set_rls_service(session)
         result = await session.execute(
             select(StripeWebhookEvent).where(
-                StripeWebhookEvent.event_id == event_dict["id"]
+                StripeWebhookEvent.event_id == event.raw["id"]
             )
         )
         existing = result.scalar_one_or_none()
 
         if existing:
             if existing.processed_at:
-                logger.info(f"Webhook already processed: {event_dict['id']}")
-                logger.info(f"webhook_dedup: {event_dict['id']}")
+                logger.info(f"Webhook already processed: {event.raw['id']}")
+                logger.info(f"webhook_dedup: {event.raw['id']}")
                 return {"status": "already_processed"}
             # Event exists but not processed - continue processing
 
         # Record event for idempotency
         if not existing:
             webhook_event = StripeWebhookEvent(
-                event_id=event_dict["id"],
-                type=event_dict["type"],
-                payload_json=event_dict.get("data", {}).get("object", {}),
+                event_id=event.raw["id"],
+                type=event.raw["type"],
+                payload_json=event.raw.get("data", {}).get("object", {}),
             )
             session.add(webhook_event)
             await session.commit()
 
-    # Process event
-    await _handle_event(event_dict)
+    # Process event using the same helpers as before (DB state stays here)
+    await _handle_event(event.raw)
 
     # Mark as processed
     async with get_session_context() as session:
         await set_rls_service(session)
         result = await session.execute(
             select(StripeWebhookEvent).where(
-                StripeWebhookEvent.event_id == event_dict["id"]
+                StripeWebhookEvent.event_id == event.raw["id"]
             )
         )
         webhook_event = result.scalar_one()
@@ -246,6 +253,7 @@ async def _handle_payment_failed(data: dict) -> None:
             session.add(notification)
             await session.commit()
             logger.info(f"Payment failure notification recorded for user {sub.user_id}")
+
 
 
 @router.post("/stripe")

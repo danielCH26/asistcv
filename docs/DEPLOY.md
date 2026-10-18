@@ -45,6 +45,23 @@ secrets "environment variables"; they are injected at runtime, not committed):
 | `DATABASE_URL` | Neon connection string (`postgresql://neondb_owner:...@ep-...neon.tech/asistcv?sslmode=require&channel_binding=require`) |
 | `LLM_PROVIDER` | `groq` |
 | `REFRESH_TOKEN_RETENTION_DAYS` | Optional. Days of history kept for consumed/revoked rows in `users_refresh_tokens` by the `refresh-token-sweeper` cron. Defaults to `90`. Consumed/revoked rows are audit evidence, not active state, so the window is sized for incident response. **Active tokens are never deleted** — raising the value can never shorten a live session, and it does not affect the 30-day absolute session lifetime (`JWT_REFRESH_TTL`). |
+| `BILLING_PROVIDER_ACTIVE` | Billing provider switch. Set to `stripe` in production. `mock` is the default (local dev / tests). Slice 1 of issue #56. |
+| `STRIPE_SECRET_KEY` | **Required for Stripe.** Stripe secret key (`sk_live_...` or `sk_test_...`). |
+| `STRIPE_WEBHOOK_SECRET` | **Required for Stripe.** Stripe webhook signing secret (`whsec_...`). |
+| `STRIPE_PRICE_JOB_SEEKER_MONTHLY` | Stripe Price ID for the job_seeker_monthly plan. |
+| `STRIPE_PRICE_RECRUITER_STARTER` | Stripe Price ID for the recruiter_starter plan. |
+| `STRIPE_PRICE_RECRUITER_BUSINESS` | Stripe Price ID for the recruiter_business plan. |
+| `STRIPE_PRICE_RECRUITER_AGENCY` | Stripe Price ID for the recruiter_agency plan. |
+| `LEMON_SQUEEZY_API_KEY` | Lemon Squeezy API key. Configure in slice 2 of issue #56. |
+| `LEMON_SQUEEZY_STORE_ID` | LS store ID. Configure in slice 2. |
+| `LEMON_SQUEEZY_WEBHOOK_SECRET` | LS webhook HMAC secret. Configure in slice 2. |
+| `LEMON_SQUEEZY_VARIANT_JOB_SEEKER_MONTHLY` | LS variant ID for job_seeker_monthly. Configure in slice 2. |
+| `LEMON_SQUEEZY_VARIANT_RECRUITER_STARTER` | LS variant ID for recruiter_starter. Configure in slice 2. |
+| `LEMON_SQUEEZY_VARIANT_RECRUITER_BUSINESS` | LS variant ID for recruiter_business. Configure in slice 2. |
+| `LEMON_SQUEEZY_VARIANT_RECRUITER_AGENCY` | LS variant ID for recruiter_agency. Configure in slice 2. |
+| `MERCADOPAGO_ACCESS_TOKEN` | Mercado Pago access token. Configure in slice 3 of issue #56. |
+| `MERCADOPAGO_PUBLIC_KEY` | Mercado Pago public key. Configure in slice 3. |
+| `MERCADOPAGO_WEBHOOK_SECRET` | Mercado Pago webhook secret. Configure in slice 3. |
 
 Click **Save Changes** — Render redeploys automatically after env changes.
 
