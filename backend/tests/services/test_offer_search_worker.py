@@ -264,6 +264,39 @@ class TestStalenessShortCircuit:
         mock_search_client.search.assert_called_once()
         assert result.skipped_stale is False
 
+    @pytest.mark.asyncio
+    async def test_force_ignores_freshness(
+        self, mock_settings, mock_search_client, mock_embedding_provider, mock_session_factory
+    ):
+        """force=True (manual run) → the pipeline runs even when fresh."""
+        user = _make_user(
+            offer_preferences={
+                "frequency_hours": 24,
+                "last_offer_run_at": datetime(2025, 1, 10, 0, 0, 0, tzinfo=UTC).isoformat(),
+            }
+        )
+        profile = _make_profile()
+
+        async def fake_get(uid, fac):
+            return user, profile
+
+        with patch("app.services.offer_search_worker._get_user_and_profile", fake_get):
+            with patch("app.services.offer_search_worker._get_existing_urls", AsyncMock(return_value=set())):
+                with patch("app.services.offer_search_worker._persist_offers", AsyncMock(return_value=3)):
+                    with patch("app.services.offer_search_worker._update_last_run_at", AsyncMock()):
+                        result = await run_offer_search(
+                            user_id=10,
+                            session_factory=mock_session_factory,
+                            settings=mock_settings,
+                            search_client=mock_search_client,
+                            embedding_provider=mock_embedding_provider,
+                            now=NOW,
+                            force=True,
+                        )
+
+        mock_search_client.search.assert_called_once()
+        assert result.skipped_stale is False
+
 
 # ---------------------------------------------------------------------------
 # Tests: no profile

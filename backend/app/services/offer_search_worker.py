@@ -89,6 +89,7 @@ async def run_offer_search(
     llm_provider: LLMProvider | None = None,
     *,
     now: datetime | None = None,
+    force: bool = False,
 ) -> OfferRunResult:
     """Run the offer-search pipeline for one user.
 
@@ -129,9 +130,11 @@ async def run_offer_search(
         )
         return OfferRunResult(found=0, new_offers=0, skipped_stale=False)
 
-    # Step 2: staleness check (before any I/O).
+    # Step 2: staleness check (before any I/O). A manual run passes
+    # force=True: explicit user intent to search NOW overrides the
+    # frequency window — the staleness gate is for the automatic catch-up.
     prefs = get_offer_prefs(user)
-    if is_stale(user, prefs, now):
+    if not force and is_stale(user, prefs, now):
         # Not stale yet — skip the search call and record the decision.
         logger.info(
             "offer_search_run",
