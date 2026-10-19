@@ -20,16 +20,15 @@ import json
 import pytest
 
 from app.services.billing_provider import (
+    _PROVIDER_CACHE,
     BillingProvider,
     CheckoutSession,
     CheckoutUrls,
     ProviderNotConfiguredError,
     SubStatus,
     WebhookEvent,
-    _PROVIDER_CACHE,
     get_billing_provider,
 )
-
 
 # === Fixtures ===
 
