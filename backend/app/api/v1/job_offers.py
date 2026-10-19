@@ -10,10 +10,10 @@ Job-offer endpoints: list, archive, run search, and preferences.
 from the list response — it is an internal pipeline detail, not user-facing.
 """
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import select
@@ -77,7 +77,13 @@ class OfferRunResponse(BaseModel):
 
 
 class OfferPreferencesRequest(BaseModel):
-    """Request body for PUT /v1/me/offer-preferences."""
+    """Request body for PUT /v1/me/offer-preferences.
+
+    ``remote_only``, ``location``, and ``salary_min`` are structured filter
+    fields.  They are folded into the JSONB ``filters`` column.  ``filters``
+    itself is accepted for backwards-compatibility but is ignored when any
+    structured field is present.
+    """
 
     frequency_hours: int | None = Field(
         default=None,
@@ -96,10 +102,42 @@ class OfferPreferencesRequest(BaseModel):
         description="When to email: none | daily | weekly",
         pattern=r"^(none|daily|weekly)$",
     )
-    filters: dict[str, Any] | None = Field(
+    remote_only: bool | None = Field(
         default=None,
-        description="Arbitrary offer filters (e.g. {'remote_only': True})",
+        description="Filter to remote-only offers",
+        strict=True,
     )
+    location: str | None = Field(
+        default=None,
+        description="Free-text location preference (e.g. 'Colombia', 'Buenos Aires')",
+    )
+    salary_min: Annotated[int | None, Field(ge=0)] = Field(
+        default=None,
+        description="Minimum annual salary in USD (0 = no minimum)",
+    )
+
+    _filters: dict[str, Any] = PrivateAttr(default_factory=dict)
+    _cleared: set[str] = PrivateAttr(default_factory=set)
+
+    @model_validator(mode="after")
+    def _build_structured_filters(self) -> "OfferPreferencesRequest":
+        """Populate private ``_filters`` dict from structured fields.
+
+        Uses ``model_fields_set`` so we can distinguish "field absent from
+        request" (preserve existing value) from "field explicitly set to
+        None" (remove the key from the persisted filters dict). The latter
+        is needed to support per-field clearing via PUT 200 with nulls.
+        """
+        self._filters = {}
+        self._cleared = set()
+        for field_name in ("remote_only", "location", "salary_min"):
+            if field_name in self.model_fields_set:
+                value = getattr(self, field_name)
+                if value is None:
+                    self._cleared.add(field_name)
+                else:
+                    self._filters[field_name] = value
+        return self
 
 
 class OfferPreferencesResponse(BaseModel):
@@ -310,8 +348,23 @@ async def update_offer_preferences(
         raw["top_n"] = prefs.top_n
     if prefs.email_frequency is not None:
         raw["email_frequency"] = prefs.email_frequency
-    if prefs.filters is not None:
-        raw["filters"] = prefs.filters
+
+    # Merge structured filter fields into the persisted filters dict.
+    # Existing filter keys not covered by structured fields are preserved.
+    # Fields explicitly set to None remove their key from the persisted dict.
+    existing_filters = dict(raw.get("filters") or {})
+    if hasattr(prefs, "_filters") and prefs._filters:
+        # Structured fields take precedence over any raw filters dict.
+        for k, v in prefs._filters.items():
+            existing_filters[k] = v
+    if hasattr(prefs, "_cleared") and prefs._cleared:
+        # Per-field null clears the corresponding key.
+        for field_name in prefs._cleared:
+            existing_filters.pop(field_name, None)
+    if existing_filters:
+        raw["filters"] = existing_filters
+    elif "filters" in raw:
+        del raw["filters"]
 
     async with get_session_context() as session:
         user = await session.get(User, current_user.id)

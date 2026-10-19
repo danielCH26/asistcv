@@ -279,4 +279,7 @@ export interface OfferPreferences {
 	frequency_hours: number;
 	top_n: number;
 	email_frequency: EmailFrequency;
+	remote_only?: boolean | null;
+	location?: string | null;
+	salary_min?: number | null;
 }

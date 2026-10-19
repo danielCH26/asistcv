@@ -285,7 +285,14 @@
     "saving": "Saving…",
     "saved": "Preferences saved.",
     "saveError": "Could not save preferences.",
-    "featureDisabled": "The job offers feature is temporarily disabled."
+    "featureDisabled": "The job offers feature is temporarily disabled.",
+    "remoteOnlyLabel": "Work mode",
+    "remoteOnlyAny": "Any",
+    "remoteOnlyRemote": "Remote",
+    "locationLabel": "Location",
+    "locationPlaceholder": "e.g. Colombia, New York",
+    "salaryMinLabel": "Minimum salary USD/year",
+    "salaryMinPlaceholder": "e.g. 60000"
   },
   "adapt": {
     "title": "Adapt your CV",

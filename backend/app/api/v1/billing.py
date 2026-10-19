@@ -9,14 +9,25 @@ Auth resolver contract (C3, issue #46)
 ``(id, name, role, auth_method)`` — adding ``email`` / ``email_verified_at``
 would force a DB lookup on every authenticated request, even routes that
 don't care. The billing endpoints DO care: they gate checkout on
-``email_verified_at`` and pass ``email`` to Stripe. So inside each
-billing handler we re-load the full ``User`` row by id. The lookup is
+``email_verified_at`` and pass ``email`` to the billing provider. So inside
+each billing handler we re-load the full ``User`` row by id. The lookup is
 already a single ``Session.get`` and the resolver is the only thing the
 rest of the API pays a DB hit for.
+
+BillingProvider adapter (feat/pasarela-pagos-56, slice 1)
+-----------------------------------------------------
+``POST /v1/billing/checkout`` delegates to ``get_billing_provider()``.
+An optional ``?provider=`` query parameter overrides the default
+(``Settings.billing_provider_active``). The provider's ``create_checkout``
+method is called with the plan dict, user dict, and ``CheckoutUrls``.
+``ProviderNotConfiguredError`` is mapped to HTTP 503
+``PAYMENT_PROVIDER_UNCONFIGURED``.
+
+``GET /v1/billing/plans`` is untouched byte-for-byte.
 """
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,7 +35,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import CurrentUser, get_current_user
 from app.core.config import get_settings
 from app.db.models import Subscription, User
-from app.services import stripe_client, tier_limits
+from app.services import tier_limits
+from app.services.billing_provider import (
+    CheckoutUrls,
+    ProviderNotConfiguredError,
+    get_billing_provider,
+)
 from app.services.rls_context import bind_rls_context
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -158,8 +174,9 @@ async def create_checkout(
     request: CheckoutRequest,
     current_user: CurrentUser = Depends(get_current_user),
     idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
+    provider: str | None = Query(None, description="Override billing provider (e.g. 'stripe', 'mock'). Defaults to BILLING_PROVIDER_ACTIVE."),
 ):
-    """Create a Stripe Checkout session for plan purchase.
+    """Create a checkout session for plan purchase.
 
     Requires authenticated user with verified email.
 
@@ -200,8 +217,7 @@ async def create_checkout(
                 detail="Recruiter plans require recruiter role",
             )
 
-        # Snapshot what we need after the session closes: the Stripe call
-        # is a separate client (sync SDK) and runs after the with-block.
+        # Snapshot what we need after the session closes.
         customer_email = user.email
         user_id = user.id
 
@@ -210,19 +226,34 @@ async def create_checkout(
     cancel_url = f"{settings.frontend_url}/billing/plans"
 
     try:
-        # Same-key retries return the same session (Stripe-side idempotency); verified by test_checkout_idempotency_key_passthrough
-        result = await stripe_client.create_checkout_session(
-            user_id=user_id,
-            plan_id=request.plan_id,
-            payment_method=request.payment_method,
-            customer_email=customer_email,
-            success_url=success_url,
-            cancel_url=cancel_url,
+        billing_provider = get_billing_provider(provider)
+    except ProviderNotConfiguredError:
+        raise HTTPException(
+            status_code=503,
+            detail="PAYMENT_PROVIDER_UNCONFIGURED",
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+    plan = next(p for p in PLANS_CATALOG if p["plan_id"] == request.plan_id)
+    user_dict = {"id": user_id, "email": customer_email}
+    return_urls = CheckoutUrls(success_url=success_url, cancel_url=cancel_url)
+
+    try:
+        session = await billing_provider.create_checkout(
+            plan={**plan, "payment_method": request.payment_method},
+            user=user_dict,
+            return_urls=return_urls,
             idempotency_key=idempotency_key,
         )
-        return CheckoutResponse(checkout_url=result["checkout_url"])
+        return CheckoutResponse(checkout_url=session.checkout_url)
+    except ProviderNotConfiguredError:
+        raise HTTPException(status_code=503, detail="PAYMENT_PROVIDER_UNCONFIGURED")
     except ValueError:
-        # str(e) from Stripe can expose internal details (API key, network, config).
+        # str(e) from the provider can expose internal details.
         # Sanitize so only a code reaches the client.
         raise HTTPException(status_code=503, detail="BILLING_ERROR")
 
@@ -257,7 +288,7 @@ async def create_portal(current_user: CurrentUser = Depends(get_current_user)):
     return_url = f"{settings.frontend_url}/billing/subscription"
 
     try:
-        result = await stripe_client.create_portal_session(
+        result = await _stripe_portal_session(
             customer_id=sub.stripe_customer_id,
             return_url=return_url,
         )
@@ -265,6 +296,21 @@ async def create_portal(current_user: CurrentUser = Depends(get_current_user)):
     except ValueError:
         # Sanitize: portal errors may expose internal Stripe messages.
         raise HTTPException(status_code=503, detail="BILLING_ERROR")
+
+
+async def _stripe_portal_session(customer_id: str, return_url: str) -> dict[str, Any]:
+    """Create a Stripe Customer Portal session.
+
+    Extracted here so the existing test monkeypatch path
+    (``monkeypatch.setattr(stripe_client, "create_portal_session", ...)``)
+    continues to work without changes to test_billing.py.
+    """
+    from app.services import stripe_client
+
+    return await stripe_client.create_portal_session(
+        customer_id=customer_id,
+        return_url=return_url,
+    )
 
 
 @router.get("/subscription", response_model=SubscriptionResponse)

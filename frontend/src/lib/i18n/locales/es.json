@@ -285,7 +285,14 @@
     "saving": "Guardando…",
     "saved": "Preferencias guardadas.",
     "saveError": "No se pudieron guardar las preferencias.",
-    "featureDisabled": "La función de ofertas está temporalmente deshabilitada."
+    "featureDisabled": "La función de ofertas está temporalmente deshabilitada.",
+    "remoteOnlyLabel": "Modalidad",
+    "remoteOnlyAny": "Cualquiera",
+    "remoteOnlyRemote": "Remoto",
+    "locationLabel": "Ubicación",
+    "locationPlaceholder": "Ej. Colombia, Buenos Aires",
+    "salaryMinLabel": "Salario mínimo USD/año",
+    "salaryMinPlaceholder": "Ej. 60000"
   },
   "adapt": {
     "title": "Adaptá tu CV",
