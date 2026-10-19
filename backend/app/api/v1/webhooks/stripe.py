@@ -18,6 +18,7 @@ BillingProvider adapter (feat/pasarela-pagos-56, slice 1):
 import logging
 from datetime import UTC, datetime
 
+import stripe
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 
@@ -37,8 +38,6 @@ async def process_webhook(payload: bytes, sig_header: str | None) -> dict:
     idempotency, and dispatches to handlers.
     """
     # Delegate signature verification and body parsing to the provider.
-    # The provider raises stripe.error.SignatureVerificationError on failure;
-    # we surface it as HTTP 400 in the endpoint.
     try:
         provider = get_billing_provider("stripe")
     except ProviderNotConfiguredError:
@@ -46,7 +45,10 @@ async def process_webhook(payload: bytes, sig_header: str | None) -> dict:
     except ValueError:
         raise HTTPException(status_code=503, detail="Stripe webhook not configured")
 
-    event = await provider.handle_webhook(payload, sig_header or "", {})
+    try:
+        event = await provider.handle_webhook(payload, sig_header or "", {})
+    except stripe.error.SignatureVerificationError:
+        raise HTTPException(status_code=400, detail="Invalid signature")
 
     # Check idempotency - don't process same event twice
     async with get_session_context() as session:
