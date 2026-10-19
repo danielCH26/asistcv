@@ -117,17 +117,26 @@ class OfferPreferencesRequest(BaseModel):
     )
 
     _filters: dict[str, Any] = PrivateAttr(default_factory=dict)
+    _cleared: set[str] = PrivateAttr(default_factory=set)
 
     @model_validator(mode="after")
     def _build_structured_filters(self) -> "OfferPreferencesRequest":
-        """Populate private ``_filters`` dict from structured fields."""
+        """Populate private ``_filters`` dict from structured fields.
+
+        Uses ``model_fields_set`` so we can distinguish "field absent from
+        request" (preserve existing value) from "field explicitly set to
+        None" (remove the key from the persisted filters dict). The latter
+        is needed to support per-field clearing via PUT 200 with nulls.
+        """
         self._filters = {}
-        if self.remote_only is not None:
-            self._filters["remote_only"] = self.remote_only
-        if self.location is not None:
-            self._filters["location"] = self.location
-        if self.salary_min is not None:
-            self._filters["salary_min"] = self.salary_min
+        self._cleared = set()
+        for field_name in ("remote_only", "location", "salary_min"):
+            if field_name in self.model_fields_set:
+                value = getattr(self, field_name)
+                if value is None:
+                    self._cleared.add(field_name)
+                else:
+                    self._filters[field_name] = value
         return self
 
 
@@ -342,15 +351,19 @@ async def update_offer_preferences(
 
     # Merge structured filter fields into the persisted filters dict.
     # Existing filter keys not covered by structured fields are preserved.
+    # Fields explicitly set to None remove their key from the persisted dict.
     existing_filters = dict(raw.get("filters") or {})
     if hasattr(prefs, "_filters") and prefs._filters:
         # Structured fields take precedence over any raw filters dict.
         for k, v in prefs._filters.items():
             existing_filters[k] = v
+    if hasattr(prefs, "_cleared") and prefs._cleared:
+        # Per-field null clears the corresponding key.
+        for field_name in prefs._cleared:
+            existing_filters.pop(field_name, None)
     if existing_filters:
         raw["filters"] = existing_filters
     elif "filters" in raw:
-        # Explicit None structured fields clear individual keys.
         del raw["filters"]
 
     async with get_session_context() as session:

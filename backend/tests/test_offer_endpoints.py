@@ -312,7 +312,7 @@ class TestUpdateOfferPreferences:
                     "frequency_hours": 48,
                     "top_n": 10,
                     "email_frequency": "daily",
-                    "filters": {"remote_only": True},
+                    "remote_only": True,
                 },
             )
 
