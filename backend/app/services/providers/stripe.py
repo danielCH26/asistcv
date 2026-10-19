@@ -39,7 +39,10 @@ class StripeProvider(BillingProvider):
 
     def __init__(self) -> None:
         # Read settings once at construction so the factory surfaces the error
-        # immediately rather than on first use.
+        # immediately rather than on first use. Webhook-only tests must
+        # monkeypatch ``stripe_secret_key`` on the cached Settings instance
+        # *before* this constructor runs (autouse fixture in test_billing_provider
+        # clears ``_PROVIDER_CACHE`` between tests so caching is not an issue).
         from app.core.config import get_settings
 
         settings: Settings = get_settings()
@@ -55,8 +58,16 @@ class StripeProvider(BillingProvider):
         plan: dict,
         user: dict,
         return_urls: CheckoutUrls,
+        *,
+        idempotency_key: str | None = None,
     ) -> CheckoutSession:
         """Create a Stripe Checkout session via the existing client wrapper."""
+        if not self._settings.stripe_secret_key:
+            raise ProviderNotConfiguredError(
+                "Stripe billing provider is not configured: "
+                "STRIPE_SECRET_KEY is not set."
+            )
+
         from app.services import stripe_client
 
         user_id = user.get("id")
@@ -71,6 +82,7 @@ class StripeProvider(BillingProvider):
                 customer_email=user.get("email", ""),
                 success_url=return_urls.success_url,
                 cancel_url=return_urls.cancel_url,
+                idempotency_key=idempotency_key,
             )
         except ValueError:
             # The wrapper raises ValueError for unknown plan or missing key.

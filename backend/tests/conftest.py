@@ -16,13 +16,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import Session as SyncSession
 from sqlalchemy.pool import NullPool
 
-# Slice 1 (#56 BillingProvider): default the test suite to the Stripe provider
-# so existing test_billing.py / test_stripe_webhook.py continue to exercise
-# the real path. The MockProvider is exercised by tests/test_billing_provider.py
-# via explicit provider_id="mock". The settings override only kicks in when
-# BILLING_PROVIDER_ACTIVE is not already exported.
-os.environ.setdefault("BILLING_PROVIDER_ACTIVE", "stripe")
-
 # URL de la base de datos de test. Prioriza URLs con driver (+asyncpg) — las
 # sin driver (como la del CI: postgresql://) hay que normalizarlas.
 TEST_DATABASE_URL = (

@@ -36,6 +36,8 @@ class MockProvider(BillingProvider):
         plan: dict,
         user: dict,
         return_urls: CheckoutUrls,
+        *,
+        idempotency_key: str | None = None,
     ) -> CheckoutSession:
         """Return a deterministic mock checkout URL."""
         plan_id = plan.get("plan_id", plan.get("tier", "unknown"))
@@ -47,6 +49,7 @@ class MockProvider(BillingProvider):
             f"&plan={plan_id}"
             f"&user={user_id}"
             f"&success={return_urls.success_url}"
+            + (f"&idempotency_key={idempotency_key}" if idempotency_key else "")
         )
         return CheckoutSession(
             checkout_url=checkout_url,

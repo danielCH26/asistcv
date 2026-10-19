@@ -247,6 +247,7 @@ async def create_checkout(
             plan={**plan, "payment_method": request.payment_method},
             user=user_dict,
             return_urls=return_urls,
+            idempotency_key=idempotency_key,
         )
         return CheckoutResponse(checkout_url=session.checkout_url)
     except ProviderNotConfiguredError:

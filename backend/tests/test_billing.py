@@ -243,6 +243,7 @@ def fake_stripe_checkout(monkeypatch, settings):
         return SimpleNamespace(id="cs_test_123", url="https://checkout.stripe.com/test")
 
     monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_placeholder")
+    monkeypatch.setattr(settings, "billing_provider_active", "stripe")
     monkeypatch.setattr(stripe.checkout.Session, "create", _capture)
     return calls
 

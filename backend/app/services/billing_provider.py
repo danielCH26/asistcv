@@ -108,6 +108,8 @@ class BillingProvider(ABC):
         plan: dict,
         user: dict,
         return_urls: CheckoutUrls,
+        *,
+        idempotency_key: str | None = None,
     ) -> CheckoutSession:
         """Create a hosted checkout session.
 
@@ -115,6 +117,9 @@ class BillingProvider(ABC):
             plan: Plan dict from ``PLANS_CATALOG``.
             user: Dict with at least ``id`` and ``email``.
             return_urls: Success/cancel redirect URLs.
+            idempotency_key: Caller-supplied dedupe token (e.g. from a client
+                Idempotency-Key header). Providers that support it pass it
+                through to the underlying API; others ignore it.
 
         Returns:
             CheckoutSession with the hosted checkout URL.

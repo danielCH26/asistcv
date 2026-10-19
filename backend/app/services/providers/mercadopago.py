@@ -42,6 +42,8 @@ class MercadoPagoProvider(BillingProvider):
         plan: dict,
         user: dict,
         return_urls: CheckoutUrls,
+        *,
+        idempotency_key: str | None = None,
     ) -> CheckoutSession:
         raise NotImplementedError
 

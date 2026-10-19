@@ -101,8 +101,15 @@ async def _get_subscription(clean_db, user_id: int) -> Subscription | None:
 
 @pytest.fixture
 def webhook_secret(settings, monkeypatch):
-    """Configure the webhook secret on the cached settings singleton."""
+    """Configure Stripe webhook handling on the cached settings singleton.
+
+    Also pins the active provider to Stripe (slice 1 of #56) and fakes
+    STRIPE_SECRET_KEY so StripeProvider's create_checkout path stays usable
+    when handlers fan out to the same provider.
+    """
     monkeypatch.setattr(settings, "stripe_webhook_secret", SECRET)
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_placeholder")
+    monkeypatch.setattr(settings, "billing_provider_active", "stripe")
     return SECRET
 
 
