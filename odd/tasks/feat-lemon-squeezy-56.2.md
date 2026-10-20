@@ -75,7 +75,7 @@
 
 > **T6**: Settings `lemon_squeezy_test_mode` + `.env.example` + `DEPLOY.md` guía dashboard LS
 
-> **T7**: Suite + PR `feat(lemon-squeezy): provider + webhook + payment_methods (#56 slice 2)`
+> **T7**: ✅ PR #116 — squash commit `b4ea0ad` en `main` (2026-10-20). Incluye 4 commits intermedios: `5e6b4e7` (T1+T2+T6), migración+webhook (T3+T4+T5), `55a59df` (clean_db truncation + cancel status local), `037c0c1`+`eb1808c` (event-id por hash del payload + F821 fix). CI 7/7.
 
 ## Log
 
