@@ -182,6 +182,11 @@ class Settings(BaseSettings):
     lemon_squeezy_variant_recruiter_agency: str | None = Field(
         default=None, validation_alias="LEMON_SQUEEZY_VARIANT_RECRUITER_AGENCY"
     )
+    lemon_squeezy_test_mode: bool = Field(
+        default=True,
+        validation_alias="LEMON_SQUEEZY_TEST_MODE",
+        description="Use LS test-mode checkouts (default true; flip false only with live keys)",
+    )
 
     # Mercado Pago — stub fields, validated and functional in slice 3
     mercadopago_access_token: str | None = Field(

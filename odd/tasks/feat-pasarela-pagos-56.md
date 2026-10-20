@@ -80,7 +80,7 @@ Razón de orden: **LS primero** porque cubre el 90% del público objetivo (Job S
 
 > **T5**: Tests del slice 1: provider selection por config, 503 cuando provider no configurado, webhooks del mock provider, idempotencia en checkout. Suite verde.
 
-> **T6**: ✅ PR #56.1 — commit `da16d78` en `feat/pasarela-pagos-56`. Slice 1 cerrado.
+> **T6**: ✅ PR #56.1 — squash commit `88b4ef7` en `main` (merge squash de PR #115 el 2026-10-19). Branch `feat/pasarela-pagos-56` borrada. Slice 1 cerrado.
 
 > **T7** (siguiente PR): Lemon Squeezy provider + migración 028 `payment_methods`.
 
@@ -96,7 +96,8 @@ Razón de orden: **LS primero** porque cubre el 90% del público objetivo (Job S
 - L2: Revisión Engram + repo confirmó: stack free tier sin tarjeta (restricción del autor), Issue #56 marcado "KYC-gated" en ROADMAP, billing.py actual está roto pero el dominio está bien modelado (plan/feature/limit/sub/usage). Decisión: abstraer con Adapter, no rescribir.
 - L3: LS como provider primario (USD/MoR, persona natural OK, cubre Job Seekers + Recruiters globales). MP como secundario (COP/CO/PSE/Nequi). Wompi queda descartado por ahora (requiere SAS).
 - L4: Plan por slices vs "todo de una": cada PR acotado, suite verde por PR, deploy por PR. Aprende del patrón exitoso del #55 cron y del #101 embeddings.
-- L5: Slice 1 implementado (commit `da16d78`) — Adapter + factory + MockProvider + StripeProvider wrap + refactor billing.py + Settings + .env.example + DEPLOY.md + 17 tests DB-free. Ruff clean, mypy clean. Compromiso original `af8bf24` se hizo sobre `main` por confusión de rama y se descartó vía `git reset --soft 7574a17` + `git stash --include-untracked` (cambios preservados como cherry-pick `da16d78` en la feature branch). El feature doc se commiteó por separado (no se bundle con feat). Docker Desktop down en la máquina del usuario → pytest local no corre; CI de GitHub Actions verifica la suite completa en el push.
+- L5: Slice 1 implementado (commit `da16d78` final = cherry-pick desde `af8bf24`). Primer push a PR #115 falló CI en 4 categorías: (a) refactor de mi lado cambió el default de `billing_provider_active` a `mock` rompiendo 12 tests, (b) mi `git restore` previo borró 3 campos de `frontend/src/lib/api/types.ts` que el salario slice 2 de #55 necesitaba, (c) `test_offer_endpoints.py` tenía una test legacy que mandaba `filters` en lugar de `remote_only`, (d) implementación de null-clear en job_offers.py estaba incompleta. Tres rondas de fix: 7e88bcb + db23157 (ruff import / conftest test routing / null-clear / legacy test / types.ts / frontend) y luego 091d195 (idempotency_key en ABC + lazy Stripe secret check + tests routing por fixture explícito) y aa21cde (catch de `SignatureVerificationError` para 400). CI verde 7/7 en 4to push.
+- L6: **PR #115 squash-merged** en `main` (commit `88b4ef7`, +1730/-53, 21 files). Branch `feat/pasarela-pagos-56` borrado. Issue #56 sigue ABIERTO — quedan slices 2-5 (LS, MP, KYC, UX+tax).
 
 ## Migración necesaria
 
