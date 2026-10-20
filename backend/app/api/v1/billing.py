@@ -37,6 +37,7 @@ from app.core.config import get_settings
 from app.db.models import PaymentMethod, Subscription, User
 from app.services import tier_limits
 from app.services.billing_provider import (
+    VALID_PROVIDER_IDS,
     CheckoutUrls,
     ProviderNotConfiguredError,
     get_billing_provider,
@@ -53,6 +54,12 @@ class CheckoutRequest(BaseModel):
 
     plan_id: str
     payment_method: str = "card"
+    # Optional provider override. If not provided, uses BILLING_PROVIDER_ACTIVE.
+    # Supported values: "lemon_squeezy", "mercadopago", "wompi"
+    provider: str | None = None
+    # ISO 3166-1 alpha-2 country code (e.g., "CO", "US").
+    # Used to select the appropriate provider for the user's country.
+    country_code: str | None = None
 
 
 class CheckoutResponse(BaseModel):
@@ -209,7 +216,8 @@ async def create_checkout(
             raise HTTPException(status_code=400, detail="Invalid plan_id")
 
         # Validate payment method
-        if request.payment_method not in ["card", "pse"]:
+        valid_payment_methods = ["card", "pse", "nequi", "bancolombia"]
+        if request.payment_method not in valid_payment_methods:
             raise HTTPException(status_code=400, detail="Invalid payment_method")
 
         # Validate recruiter plans require recruiter role
@@ -227,8 +235,25 @@ async def create_checkout(
     success_url = f"{settings.frontend_url}/billing/subscription?status=success"
     cancel_url = f"{settings.frontend_url}/billing/plans"
 
+    # Resolve provider: body takes precedence over query, query over active setting
+    effective_provider = request.provider or provider
+
+    # Country code for provider selection (defaults to CO for Latin America)
+    country_code = (request.country_code or "CO").upper()
+
+    # If no explicit provider, use active provider but validate country support
+    if not effective_provider:
+        effective_provider = settings.billing_provider_active
+    else:
+        # Validate requested provider exists
+        if effective_provider not in VALID_PROVIDER_IDS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown provider: {effective_provider}. Valid: {sorted(VALID_PROVIDER_IDS)}",
+            )
+
     try:
-        billing_provider = get_billing_provider(provider)
+        billing_provider = get_billing_provider(effective_provider)
     except ProviderNotConfiguredError:
         raise HTTPException(
             status_code=503,
@@ -238,6 +263,29 @@ async def create_checkout(
         raise HTTPException(
             status_code=400,
             detail=str(exc),
+        )
+
+    # Validate provider supports the user's country
+    if not billing_provider.supports_country(country_code):
+        # Find an alternative provider that supports the country
+        alternative_provider = None
+        for pid in ["lemon_squeezy", "mercadopago", "wompi"]:
+            try:
+                alt = get_billing_provider(pid)
+                if alt.supports_country(country_code):
+                    alternative_provider = pid
+                    break
+            except ProviderNotConfiguredError:
+                continue
+
+        if alternative_provider:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Provider '{effective_provider}' not available in {country_code}. Try: {alternative_provider}",
+            )
+        raise HTTPException(
+            status_code=400,
+            detail=f"No payment provider available for country: {country_code}",
         )
 
     plan = next(p for p in PLANS_CATALOG if p["plan_id"] == request.plan_id)
@@ -426,6 +474,20 @@ async def cancel_subscription(current_user: CurrentUser = Depends(get_current_us
         raise HTTPException(status_code=400, detail=str(exc))
 
     await provider.cancel_subscription(user_id)
+
+    # Local state transition: the endpoint owns the DB status so cancellation
+    # is visible immediately regardless of provider internals (the remote
+    # provider confirms asynchronously via webhook). The real LS provider
+    # also writes this; the double write is idempotent.
+    async with get_session_context() as session:
+        await bind_rls_context(session, current_user.id, current_user.role)
+        result = await session.execute(
+            select(Subscription).where(Subscription.user_id == user_id)
+        )
+        sub = result.scalar_one_or_none()
+        if sub is not None:
+            sub.status = "canceled"
+            await session.commit()
 
     # Best-effort: also mark the newest lemon_squeezy PaymentMethod as canceled.
     # This write is fire-and-forget from the user's perspective; never fail
