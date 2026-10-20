@@ -43,6 +43,8 @@ secrets "environment variables"; they are injected at runtime, not committed):
 | `GROQ_API_KEY` | your Groq key (`gsk_...`) |
 | `HUGGINGFACE_API_KEY` | your HF token (`hf_...`) |
 | `DATABASE_URL` | Neon connection string (`postgresql://neondb_owner:...@ep-...neon.tech/asistcv?sslmode=require&channel_binding=require`) |
+| `BACKEND_API_KEY` | **Required.** Shared key for the protected `/v1` surface and for the internal cleanup crons. Setting it also disables `/docs` and `/openapi.json`. It must be byte-identical to the `BACKEND_API_KEY` **Actions secret** on GitHub and to `BACKEND_API_KEY` in the mcp-adapter settings — see Retention sweepers. |
+| `AUDIT_CLEANUP_TOKEN` | **Required for the audit retention cron.** Compared with the `{"token": ...}` body of `POST /internal/audit/cleanup`. Must be byte-identical to the `AUDIT_CLEANUP_TOKEN` **Actions secret** on GitHub. |
 | `LLM_PROVIDER` | `groq` |
 | `REFRESH_TOKEN_RETENTION_DAYS` | Optional. Days of history kept for consumed/revoked rows in `users_refresh_tokens` by the `refresh-token-sweeper` cron. Defaults to `90`. Consumed/revoked rows are audit evidence, not active state, so the window is sized for incident response. **Active tokens are never deleted** — raising the value can never shorten a live session, and it does not affect the 30-day absolute session lifetime (`JWT_REFRESH_TTL`). |
 | `BILLING_PROVIDER_ACTIVE` | Billing provider switch. Set to `stripe` in production. `mock` is the default (local dev / tests). Slice 1 of issue #56. |
@@ -78,16 +80,37 @@ Click **Save Changes** — Render redeploys automatically after env changes.
 ### Retention sweepers
 
 Three GitHub Actions crons POST to internal cleanup endpoints on the
-deployed backend. All of them authenticate with the `BACKEND_API_KEY`
-secret via the `X-Backend-API-Key` header and **fail closed (401)** when
-that key is unset, so `BACKEND_API_KEY` must be configured on the service
-for any of them to run.
+deployed backend. **Each one needs the credential in two places**: the
+service (Render → Environment) and the repository (GitHub → Settings →
+Secrets and variables → Actions). A value configured on only one side
+makes the cron fail with `401` on every run.
 
-| Workflow | Endpoint | Cadence | Deletes |
-|---|---|---|---|
-| `audit-retention.yml` | `POST /internal/audit/cleanup` | daily 03:17 UTC | expired `audit_uploads` |
-| `adaptation-sweeper.yml` | `POST /internal/adaptations/cleanup` | every 15 min | completed/orphaned `cv_adaptations` |
-| `refresh-token-sweeper.yml` | `POST /internal/auth/refresh-tokens/cleanup` | daily 04:23 UTC | consumed/revoked `users_refresh_tokens` older than `REFRESH_TOKEN_RETENTION_DAYS` |
+The two auth mechanisms are different, which is easy to mix up:
+
+| Workflow | Endpoint | Credential | GitHub secret | Cadence | Deletes |
+|---|---|---|---|---|---|
+| `adaptation-sweeper.yml` | `POST /internal/adaptations/cleanup` | `X-Backend-API-Key` header | `BACKEND_API_KEY` | every 15 min | completed/orphaned `cv_adaptations` |
+| `audit-retention.yml` | `POST /internal/audit/cleanup` | `{"token": ...}` in the body | `AUDIT_CLEANUP_TOKEN` | daily 03:17 UTC | expired `audit_uploads` |
+| `refresh-token-sweeper.yml` | `POST /internal/auth/refresh-tokens/cleanup` | `X-Backend-API-Key` header | `BACKEND_API_KEY` | daily 04:23 UTC | consumed/revoked `users_refresh_tokens` older than `REFRESH_TOKEN_RETENTION_DAYS` |
+
+Every endpoint **fails closed (401)** when its credential is unset, by
+design: an internal endpoint must never become an open DELETE-by-cron.
+
+Set a secret from the shell without pasting it into a PR, a commit or a
+screenshot:
+
+```bash
+gh secret set BACKEND_API_KEY        # prompts, hidden
+gh secret set AUDIT_CLEANUP_TOKEN
+```
+
+The sweeper runs every 15 minutes and the Render free tier sleeps after
+~15 min of inactivity, so a scheduled run can land on a booting container.
+The two sweepers therefore retry `502/503/504` up to 3 times with backoff;
+the cleanup is idempotent (it only deletes rows already past the retention
+thresholds), so replaying the call is safe. Any other non-2xx status is
+reported immediately, with the response body, as an Actions error
+annotation.
 
 
 **Note on the port**: Render auto-detects the port exposed by the Dockerfile
@@ -152,6 +175,16 @@ from the service dashboard.
   `JWT_SECRET` in Environment to a freshly generated value and redeploy.
 - **502/timeout right after Live**: the container is still waking up (cold
   start). Retry after 30-60s.
+- **A sweeper fails with `HTTP 401`**: the GitHub secret and the Render env
+  var are missing or not byte-identical. Copy the existing value from the
+  service into the secret; do **not** generate a new one, because
+  `mcp-adapter` authenticates with `BACKEND_API_KEY` too and a rotation
+  breaks it until that side is updated as well.
+- **A sweeper fails with `Missing secret`**: the credential is not set in
+  the repository at all. The run aborts before touching the service.
+- **A sweeper fails with `HTTP 502/503/504`**: the Render container is
+  asleep or down. The run already retried 3 times; check the service status
+  in the Render dashboard.
 - **`DATABASE_URL` errors at runtime**: confirm the Neon string includes
   `?sslmode=require&channel_binding=require` — our SQLAlchemy config strips
   libpq-only params for asyncpg automatically (see `app/db/session.py`).
