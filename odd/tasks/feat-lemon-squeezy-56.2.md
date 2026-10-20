@@ -104,3 +104,11 @@ LEMON_SQUEEZY_VARIANT_RECRUITER_AGENCY=
 - **R1 — Webhooks en Render free dormido**: LS reintenta ~3 días con backoff; el backend despierta con el POST. Igual que Stripe en slice 1 — aceptable para suscripciones.
 - **R2 — test_mode true en prod por descuido**: la setting default es `true`; el checklist de deploy debe incluirla. Mitigación: log warn al boot si `BILLING_PROVIDER_ACTIVE=lemon_squeezy` y `LEMON_SQUEEZY_TEST_MODE=true` en producción.
 - **R3 — Mapping de status LS**: LS usa `on_trial`/`paused` que nuestro dominio no tiene. Mapeo documentado en S2; tests pinnean cada caso.
+
+## S5 Correction (implemented)
+
+The spec above named `GET /v1/me/billing` and `DELETE /v1/me/billing`. In practice, the existing `GET /v1/billing/subscription` already returns plan/status/limits/usage — creating a parallel `/v1/me/billing` would duplicate it. Instead:
+- **Extended** `SubscriptionResponse` with `provider: str | None` and `cancel_at_period_end: bool`.
+- **Extended** the `GET /v1/billing/subscription` handler to populate `provider` from the newest `PaymentMethod` row (preferring `status='active'`).
+- **New** `DELETE /v1/billing/subscription` — same RLS pattern as the other protected endpoints, calls `provider.cancel_subscription(user_id)`, 404 if no paid `Subscription` row, 503 if provider unconfigured. Best-effort update of the user's newest LS `PaymentMethod` to `canceled`.
+- Both new fields are optional (`None` / `False` defaults) so existing API consumers are not broken.

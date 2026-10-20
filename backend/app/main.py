@@ -247,6 +247,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         include_in_schema=False,
     )
 
+    # Lemon Squeezy webhook endpoint (no auth - uses HMAC signature)
+    from app.api.v1.webhooks import lemonsqueezy as ls_webhook
+
+    app.include_router(
+        ls_webhook.router,
+        prefix="/api/v1",
+        include_in_schema=False,
+    )
+
     # Internal cleanup endpoint for the adaptation sweeper cron. No
     # router-level auth; per-endpoint BACKEND_API_KEY check inside the
     # handler. Mounted at /internal (no /v1 prefix) to match the

@@ -34,14 +34,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, get_current_user
 from app.core.config import get_settings
-from app.db.models import Subscription, User
+from app.db.models import PaymentMethod, Subscription, User
 from app.services import tier_limits
 from app.services.billing_provider import (
     CheckoutUrls,
     ProviderNotConfiguredError,
     get_billing_provider,
 )
-from app.services.rls_context import bind_rls_context
+from app.services.rls_context import bind_rls_context, set_rls_service
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -78,6 +78,8 @@ class SubscriptionResponse(BaseModel):
     overage: int = 0
     stripe_customer_id: str | None = None
     has_portal_access: bool = False
+    provider: str | None = None
+    cancel_at_period_end: bool = False
 
 
 # Statuses that grant access to the Stripe Customer Portal. A canceled or
@@ -334,6 +336,26 @@ async def get_subscription(current_user: CurrentUser = Depends(get_current_user)
         # Get plan limits and usage
         limits = await tier_limits.get_plan_limits(session, current_user.id, current_user.role)
 
+        # Resolve billing provider from PaymentMethod (prefer active row).
+        pm_result = await session.execute(
+            select(PaymentMethod).where(
+                and_(
+                    PaymentMethod.user_id == current_user.id,
+                    PaymentMethod.status == "active",
+                )
+            ).order_by(PaymentMethod.id.desc())
+        )
+        pm = pm_result.scalar_one_or_none()
+        if pm is None:
+            # Fall back: any PaymentMethod row for the user.
+            pm_result = await session.execute(
+                select(PaymentMethod).where(
+                    PaymentMethod.user_id == current_user.id
+                ).order_by(PaymentMethod.id.desc())
+            )
+            pm = pm_result.scalar_one_or_none()
+        provider: str | None = pm.provider if pm else None
+
     # Calculate overage: matches used beyond the plan limit
     overage = 0
     if limits.matches_per_month is not None:
@@ -358,7 +380,76 @@ async def get_subscription(current_user: CurrentUser = Depends(get_current_user)
             and sub.stripe_customer_id is not None
             and sub.status in _PORTAL_STATUSES
         ),
+        provider=provider,
+        cancel_at_period_end=False,
     )
+
+
+@router.delete("/subscription")
+async def cancel_subscription(current_user: CurrentUser = Depends(get_current_user)):
+    """Cancel the authenticated user's active subscription.
+
+    Calls the active billing provider's ``cancel_subscription`` method.
+    Returns 404 if the user has no paid Subscription row (free users).
+    Best-effort: also sets the user's newest lemon_squeezy PaymentMethod
+    to ``canceled``; failures in that secondary write never fail the request.
+    """
+    from app.db.session import get_session_context
+
+    async with get_session_context() as session:
+        await bind_rls_context(session, current_user.id, current_user.role)
+        result = await session.execute(
+            select(Subscription).where(
+                and_(
+                    Subscription.user_id == current_user.id,
+                    Subscription.status == "active",
+                )
+            )
+        )
+        sub = result.scalar_one_or_none()
+
+        if sub is None:
+            raise HTTPException(status_code=404, detail="NO_SUBSCRIPTION")
+
+        # Snapshot the user_id before the session closes.
+        user_id = current_user.id
+
+    # Delegate cancellation to the active billing provider.
+    try:
+        provider = get_billing_provider()
+    except ProviderNotConfiguredError:
+        raise HTTPException(
+            status_code=503,
+            detail="PAYMENT_PROVIDER_UNCONFIGURED",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    await provider.cancel_subscription(user_id)
+
+    # Best-effort: also mark the newest lemon_squeezy PaymentMethod as canceled.
+    # This write is fire-and-forget from the user's perspective; never fail
+    # the request over it.
+    try:
+        async with get_session_context() as session:
+            await set_rls_service(session)
+            pm_result = await session.execute(
+                select(PaymentMethod).where(
+                    and_(
+                        PaymentMethod.user_id == user_id,
+                        PaymentMethod.provider == "lemon_squeezy",
+                    )
+                ).order_by(PaymentMethod.id.desc())
+            )
+            pm = pm_result.scalar_one_or_none()
+            if pm:
+                pm.status = "canceled"
+                await session.commit()
+    except Exception:
+        # Swallow: we have already returned 200 to the user.
+        pass
+
+    return {"status": "canceled"}
 
 
 async def _load_user(session: AsyncSession, user_id: int) -> User:
