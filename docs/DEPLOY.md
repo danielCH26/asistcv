@@ -59,11 +59,21 @@ secrets "environment variables"; they are injected at runtime, not committed):
 | `LEMON_SQUEEZY_VARIANT_RECRUITER_STARTER` | LS variant ID for recruiter_starter. Configure in slice 2. |
 | `LEMON_SQUEEZY_VARIANT_RECRUITER_BUSINESS` | LS variant ID for recruiter_business. Configure in slice 2. |
 | `LEMON_SQUEEZY_VARIANT_RECRUITER_AGENCY` | LS variant ID for recruiter_agency. Configure in slice 2. |
+| `LEMON_SQUEEZY_TEST_MODE` | Use LS test-mode checkouts. Defaults to `true`; flip to `false` only when using live API keys. |
 | `MERCADOPAGO_ACCESS_TOKEN` | Mercado Pago access token. Configure in slice 3 of issue #56. |
 | `MERCADOPAGO_PUBLIC_KEY` | Mercado Pago public key. Configure in slice 3. |
 | `MERCADOPAGO_WEBHOOK_SECRET` | Mercado Pago webhook secret. Configure in slice 3. |
 
 Click **Save Changes** — Render redeploys automatically after env changes.
+
+> **Dónde encontrar cada valor en el dashboard de Lemon Squeezy**
+>
+> | Valor | Dónde encontrarlo en el dashboard |
+> |---|---|
+> | `LEMON_SQUEEZY_API_KEY` | **Settings → API** → crear o copiar la clave `api_key`. |
+> | `LEMON_SQUEEZY_STORE_ID` | Barra de URL del dashboard cuando estás en cualquier sección de tu tienda: `app.lemonsqueezy.com/settings/stores/<AQUÍ VA EL ID>` — también visible en **Settings → Stores**. |
+> | `LEMON_SQUEEZY_WEBHOOK_SECRET` | **Settings → Webhooks** → signing secret (o crear un webhook nuevo para copiar el secret). |
+> | `LEMON_SQUEEZY_VARIANT_*` | **Products → [tu producto] → Variants** → hacer clic en la variante → copiar el ID numérico de la URL (ej. `/variants/12345`). |
 
 ### Retention sweepers
 

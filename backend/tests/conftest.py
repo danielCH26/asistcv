@@ -534,7 +534,7 @@ async def clean_db(test_db):
         # TRUNCATE no está sujeto a RLS, corre como el user de test).
         # Use CASCADE to handle dependent tables
         await conn.execute(
-            text("TRUNCATE analyses, job_descriptions, profiles, audit_uploads, audit_funnel_events, users, users_refresh_tokens, token_revocation, auth_login_attempts, auth_security_events, subscriptions, payments, stripe_webhook_events, usage_counters, users_cvs, recruiter_candidates, recruiter_candidates_cvs, recruiter_analyses, recruiter_consents, recruiter_audit_log CASCADE")
+            text("TRUNCATE analyses, job_descriptions, profiles, audit_uploads, audit_funnel_events, users, users_refresh_tokens, token_revocation, auth_login_attempts, auth_security_events, subscriptions, payments, stripe_webhook_events, payment_methods, payment_webhook_events, usage_counters, users_cvs, recruiter_candidates, recruiter_candidates_cvs, recruiter_analyses, recruiter_consents, recruiter_audit_log CASCADE")
         )
 
 

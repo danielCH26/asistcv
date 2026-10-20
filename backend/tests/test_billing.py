@@ -801,3 +801,89 @@ async def test_pse_payment_records_currency(async_client, clean_db):
     handler either, so no webhook path persists payments yet; recording the
     PSE currency is deferred until that handler exists.
     """
+
+
+# === Slice 2: PaymentMethod provider field + DELETE subscription ===
+
+
+async def test_subscription_includes_provider(async_client, clean_db, billing_user):
+    """GET /v1/billing/subscription -> provider field populated from PaymentMethod."""
+    from app.db.models import PaymentMethod
+
+    # Insert a PaymentMethod row for the billing user.
+    async with clean_db.session_factory() as session:
+        pm = PaymentMethod(
+            user_id=billing_user.id,
+            provider="lemon_squeezy",
+            status="active",
+            plan_id="job_seeker_monthly",
+        )
+        session.add(pm)
+        await session.commit()
+
+    response = await async_client.get(
+        "/v1/billing/subscription",
+        headers=_auth_header(billing_user),
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["provider"] == "lemon_squeezy"
+    assert data["cancel_at_period_end"] is False
+
+
+async def test_subscription_provider_none_when_no_payment_method(
+    async_client, clean_db, billing_user
+):
+    """GET /v1/billing/subscription -> provider is None when no PaymentMethod row."""
+    response = await async_client.get(
+        "/v1/billing/subscription",
+        headers=_auth_header(billing_user),
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["provider"] is None
+
+
+async def test_delete_subscription_no_paid_row_404(async_client, clean_db, billing_user):
+    """DELETE /v1/billing/subscription -> 404 when user has no paid Subscription row."""
+    # billing_user has no Subscription row (only free plan) -> 404.
+    response = await async_client.delete(
+        "/v1/billing/subscription",
+        headers=_auth_header(billing_user),
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "NO_SUBSCRIPTION"
+
+
+async def test_delete_subscription_cancels(async_client, clean_db, billing_user, monkeypatch):
+    """DELETE /v1/billing/subscription -> 200 + Subscription.status=canceled."""
+    from app.api.v1 import billing as billing_module
+
+    # billing_user already has an active Subscription row from the billing_user fixture.
+    # Create the subscription row (billing_user fixture doesn't create one by default).
+    await _create_subscription(clean_db, billing_user.id, plan="job_seeker_monthly")
+
+    # Patch the billing module's get_billing_provider so we control the provider.
+    stub_provider = MagicMock()
+    stub_provider.cancel_subscription = AsyncMock()
+    monkeypatch.setattr(billing_module, "get_billing_provider", lambda: stub_provider)
+
+    response = await async_client.delete(
+        "/v1/billing/subscription",
+        headers=_auth_header(billing_user),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "canceled"}
+    stub_provider.cancel_subscription.assert_awaited_once_with(billing_user.id)
+
+    # Verify Subscription row was updated.
+    async with clean_db.session_factory() as session:
+        result = await session.execute(
+            select(Subscription).where(Subscription.user_id == billing_user.id)
+        )
+        sub = result.scalar_one()
+        assert sub.status == "canceled"

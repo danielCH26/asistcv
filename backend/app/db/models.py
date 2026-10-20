@@ -915,3 +915,101 @@ class JobOffer(SQLModel, table=True):
         default_factory=datetime.utcnow,
         sa_column=Column(DateTime(timezone=True), server_default="NOW()"),
     )
+
+
+# === Migration 028: Payment Methods ===
+
+
+class PaymentMethod(SQLModel, table=True):
+    """Normalised payment-method row shared by all billing providers.
+
+    Mirrors the ``Subscription`` table but carries the provider-specific
+    IDs (``provider_customer_id``, ``provider_subscription_id``) that let
+    us call back to the provider (cancel, status sync). One row per
+    active subscription; upserted on every ``subscription_created`` or
+    ``subscription_updated`` webhook event.
+
+    RLS (migration 028) enforces that users can only see their own rows.
+    The service writes via ``set_rls_service`` when processing webhooks.
+    """
+
+    __tablename__ = "payment_methods"
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("users.id"), nullable=False),
+        description="User who owns this payment method",
+    )
+    provider: str = Field(
+        max_length=30,
+        description="Billing provider: stripe | lemon_squeezy | mercadopago",
+    )
+    provider_customer_id: str | None = Field(
+        default=None, max_length=100, description="Provider's customer identifier"
+    )
+    provider_subscription_id: str | None = Field(
+        default=None,
+        max_length=100,
+        unique=True,
+        description="Provider's subscription identifier",
+    )
+    status: str = Field(
+        max_length=20,
+        description="Method status: active | canceled | past_due | incomplete",
+    )
+    plan_id: str = Field(
+        max_length=50,
+        description="Plan identifier: free | job_seeker_monthly | …",
+    )
+    current_period_end: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True)),
+        description="End of the current billing period",
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column=Column(DateTime(timezone=True), server_default="NOW()"),
+    )
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column=Column(DateTime(timezone=True), server_default="NOW()"),
+    )
+
+
+class PaymentWebhookEvent(SQLModel, table=True):
+    """Idempotency ledger for non-Stripe webhook events.
+
+    Stripe webhooks continue writing to ``stripe_webhook_events`` (migrating
+    it is a separate debt). This table is shared by Lemon Squeezy, Mercado
+    Pago, and any future provider that follows the same webhook pattern.
+
+    No RLS: the service writes via ``set_rls_service`` and the table is
+    append-only from the server side.
+    """
+
+    __tablename__ = "payment_webhook_events"
+
+    id: int | None = Field(default=None, primary_key=True)
+    provider: str = Field(
+        max_length=30,
+        description="Billing provider: stripe | lemon_squeezy | mercadopago",
+    )
+    event_id: str = Field(
+        max_length=100,
+        description="Provider's event identifier (unique within provider)",
+    )
+    type: str = Field(max_length=50, description="Event type string from the provider")
+    payload_json: dict | None = Field(
+        default=None,
+        sa_column=Column(JSON),
+        description="Full webhook payload for audit/replay",
+    )
+    processed_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True)),
+        description="When the event was fully processed",
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column=Column(DateTime(timezone=True), server_default="NOW()"),
+    )
