@@ -207,7 +207,7 @@ async def process_webhook(payload: bytes, signature: str | None) -> dict:
                 provider="lemon_squeezy",
                 event_id=event_id,
                 type=event.event_type,
-                payload_json=body_dict,
+                payload_json=event.raw,
             )
             session.add(webhook_event)
             await session.commit()
