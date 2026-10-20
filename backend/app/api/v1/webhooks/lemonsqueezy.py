@@ -41,6 +41,114 @@ _EVENT_SUBSCRIPTION_RESUMED = "subscription_resumed"
 _EVENT_SUBSCRIPTION_PAYMENT_SUCCESS = "subscription_payment_success"
 
 
+async def _handle_webhook_event(
+    provider_id: str,
+    payload: bytes,
+    signature: str,
+    headers: dict[str, str],
+) -> dict:
+    """Generic webhook event handler for any billing provider.
+
+    This function handles webhook processing for Mercado Pago, Wompi,
+    and other providers that follow the same pattern as Lemon Squeezy.
+
+    Args:
+        provider_id: The billing provider identifier (e.g., "mercadopago", "wompi")
+        payload: Raw request body
+        signature: Raw signature header value
+        headers: All request headers
+
+    Returns:
+        Dict with status and event_type
+    """
+    from app.services.billing_provider import WebhookEvent
+
+    # --- Provider / signature verification ---
+    try:
+        provider = get_billing_provider(provider_id)
+    except ProviderNotConfiguredError:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{provider_id} webhook not configured",
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{provider_id} webhook not configured",
+        )
+
+    try:
+        event: WebhookEvent = await provider.handle_webhook(payload, signature, headers)
+    except ValueError:
+        # Bad signature or unparseable JSON.
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+    # --- Event ID derivation ---
+    # Use hash of payload as fallback for providers without stable IDs
+    body_dict: dict[str, Any] = event.raw
+    data: dict[str, Any] = body_dict.get("data", {})
+    transaction: dict[str, Any] = data.get("transaction", {})
+
+    # Try various ID fields depending on provider
+    event_id: str = (
+        str(transaction.get("id"))
+        or str(data.get("id"))
+        or str(body_dict.get("id", ""))
+        or ""
+    )
+    if not event_id:
+        event_id = hashlib.sha256(payload).hexdigest()
+
+    # --- Idempotency ---
+    async with get_session_context() as session:
+        await set_rls_service(session)
+        result = await session.execute(
+            select(PaymentWebhookEvent).where(
+                and_(
+                    PaymentWebhookEvent.provider == provider_id,
+                    PaymentWebhookEvent.event_id == event_id,
+                )
+            )
+        )
+        existing = result.scalar_one_or_none()
+
+        if existing and existing.processed_at:
+            logger.info(f"{provider_id} webhook already processed: {event_id}")
+            return {"status": "already_processed", "event_type": event.event_type}
+
+        if not existing:
+            webhook_event = PaymentWebhookEvent(
+                provider=provider_id,
+                event_id=event_id,
+                type=event.event_type,
+                payload_json=body_dict,
+            )
+            session.add(webhook_event)
+            await session.commit()
+
+    # --- Dispatch ---
+    if event.user_id:
+        await _dispatch(event)
+
+    # --- Mark processed ---
+    async with get_session_context() as session:
+        await set_rls_service(session)
+        result = await session.execute(
+            select(PaymentWebhookEvent).where(
+                and_(
+                    PaymentWebhookEvent.provider == provider_id,
+                    PaymentWebhookEvent.event_id == event_id,
+                )
+            )
+        )
+        record = result.scalar_one_or_none()
+        if record:
+            record.processed_at = datetime.now(UTC)
+            await session.commit()
+
+    return {"status": "processed", "event_type": event.event_type}
+
+
 async def process_webhook(payload: bytes, signature: str | None) -> dict:
     """Process a Lemon Squeezy webhook event.
 
@@ -68,9 +176,14 @@ async def process_webhook(payload: bytes, signature: str | None) -> dict:
         raise HTTPException(status_code=400, detail="Invalid signature")
 
     # --- Event ID derivation ---
-    body_dict: dict[str, Any] = event.raw
-    data: dict[str, Any] = body_dict.get("data", {})
-    event_id: str = str(data.get("id")) if data.get("id") else hashlib.sha256(payload).hexdigest()
+    # LS webhooks carry no top-level event id. Deriving it from data.id is
+    # WRONG: distinct events about the SAME subscription (created →
+    # cancelled) share data.id and would collide in the idempotency ledger.
+    # The SHA-256 of the raw payload is the correct key: an LS retry
+    # delivers the exact same bytes (same hash → deduped), while any
+    # different event produces a different payload (different hash →
+    # processed).
+    event_id: str = hashlib.sha256(payload).hexdigest()
 
     # --- Idempotency ---
     async with get_session_context() as session:
@@ -123,19 +236,43 @@ async def process_webhook(payload: bytes, signature: str | None) -> dict:
 
 
 async def _dispatch(event) -> None:
-    """Dispatch to the appropriate handler based on ``event.event_type``."""
+    """Dispatch to the appropriate handler based on ``event.event_type``.
+
+    This function handles events from any provider by normalizing event types
+    to a common set that the handlers understand.
+    """
     et = event.event_type
 
-    if et in (_EVENT_SUBSCRIPTION_CREATED, _EVENT_SUBSCRIPTION_UPDATED):
+    # Normalize event types from different providers
+    # Mercado Pago: subscription.activated, subscription.payment_failed, etc.
+    # Wompi: payment.approved, payment.pending, etc.
+    if et in (
+        _EVENT_SUBSCRIPTION_CREATED,
+        _EVENT_SUBSCRIPTION_UPDATED,
+        "subscription.activated",
+        "subscription.created",
+        "payment.approved",
+    ):
         await _handle_subscription_upsert(event)
-    elif et in (_EVENT_SUBSCRIPTION_CANCELLED, _EVENT_SUBSCRIPTION_EXPIRED):
+    elif et in (
+        _EVENT_SUBSCRIPTION_CANCELLED,
+        _EVENT_SUBSCRIPTION_EXPIRED,
+        "subscription.cancelled",
+        "payment.voided",
+        "payment.refunded",
+    ):
         await _handle_subscription_cancelled(event)
     elif et == _EVENT_SUBSCRIPTION_RESUMED:
         await _handle_subscription_resumed(event)
-    elif et == _EVENT_SUBSCRIPTION_PAYMENT_SUCCESS:
+    elif et in (_EVENT_SUBSCRIPTION_PAYMENT_SUCCESS, "payment.completed"):
         await _handle_payment_success(event)
+    elif et in ("subscription.pending", "payment.pending"):
+        # Log pending events but don't activate subscription yet
+        logger.info(f"Pending payment event: {et} for user {event.user_id}")
+    elif et in ("subscription.payment_failed", "payment.declined", "payment.rejected"):
+        logger.warning(f"Payment failed: {et} for user {event.user_id}")
     else:
-        logger.info(f"Unhandled LS event type: {et}")
+        logger.info(f"Unhandled webhook event: provider={event.provider}, type={et}")
 
 
 async def _handle_subscription_upsert(event) -> None:
