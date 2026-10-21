@@ -299,9 +299,69 @@ os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 # above. setdefault() (not assignment) keeps an explicitly exported JWT_SECRET
 # winning, and the value is >= 32 bytes so PyJWT stops warning about short HMAC
 # keys.
+os.environ.setdefault("CLERK_PUBLISHABLE_KEY", "test-pk")
+os.environ.setdefault("CLERK_SECRET_KEY", "test-sk")
 os.environ.setdefault("JWT_SECRET", "test-only-jwt-secret-not-a-production-key")
 
 from app.main import app  # noqa: E402
+
+# ---------------------------------------------------------------------------
+# Auth-override helpers (S2: Clerk migration replaces legacy HS256 JWT path)
+# ---------------------------------------------------------------------------
+# After S2 removes the legacy JWT auth from deps.py, tests that exercise
+# BUSINESS LOGIC call set_auth_principal() instead of minting HS256 tokens.
+# Tests that exercise AUTH BEHAVIOR (401s, API-key) stay on the real
+# dependency path and must NOT use these helpers.
+# ---------------------------------------------------------------------------
+
+
+def set_auth_principal(principal) -> None:
+    """Override get_current_user for HTTP tests after legacy JWT removal (S2).
+
+    Tests that exercise BUSINESS LOGIC call this instead of minting HS256
+    tokens. Tests that exercise AUTH BEHAVIOR (401s, API key) must NOT use
+    it -- they exercise the real dependency.
+
+    Usage (matching billing_user pattern):
+        user = await create_user(clean_db, email="test@example.com")
+        set_auth_principal(CurrentUser(id=user.id, name=user.full_name, role=user.role, auth_method="clerk"))
+
+    Only overrides get_current_user (used by get_current_user_required endpoints).
+    For endpoints that use optional_auth (profiles GET/PATCH), also call
+    set_optional_auth_principal() in the same test.
+    """
+    from app.api.deps import get_current_user
+
+    app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides[get_current_user] = lambda: principal
+
+
+def set_optional_auth_principal(principal) -> None:
+    """Override optional_auth for HTTP tests after legacy JWT removal (S2).
+
+    Use together with set_auth_principal() for endpoints that declare
+    ``Depends(optional_auth)`` (e.g. GET/PATCH /v1/profiles).
+    Clears first to prevent cross-test pollution.
+    """
+    from app.api.deps import optional_auth
+
+    app.dependency_overrides.pop(optional_auth, None)
+    app.dependency_overrides[optional_auth] = lambda: principal
+
+
+def clear_auth_principal() -> None:
+    """Remove the get_current_user override set by set_auth_principal()."""
+    from app.api.deps import get_current_user
+
+    app.dependency_overrides.pop(get_current_user, None)
+
+
+def clear_optional_auth_principal() -> None:
+    """Remove the optional_auth override set by set_optional_auth_principal()."""
+    from app.api.deps import optional_auth
+
+    app.dependency_overrides.pop(optional_auth, None)
+
 
 # Estado global: el setup de la DB de test corre una sola vez por sesión,
 # aunque pytest-asyncio re-instancie fixtures (loop scopes distintos).
@@ -534,8 +594,13 @@ async def clean_db(test_db):
         # TRUNCATE no está sujeto a RLS, corre como el user de test).
         # Use CASCADE to handle dependent tables
         await conn.execute(
-            text("TRUNCATE analyses, job_descriptions, profiles, audit_uploads, audit_funnel_events, users, users_refresh_tokens, token_revocation, auth_login_attempts, auth_security_events, subscriptions, payments, stripe_webhook_events, payment_methods, payment_webhook_events, usage_counters, users_cvs, recruiter_candidates, recruiter_candidates_cvs, recruiter_analyses, recruiter_consents, recruiter_audit_log CASCADE")
+            text("TRUNCATE analyses, job_descriptions, profiles, audit_uploads, audit_funnel_events, users, users_refresh_tokens, token_revocation, auth_login_attempts, auth_security_events, subscriptions, payments, stripe_webhook_events, payment_methods, payment_webhook_events, usage_counters, users_cvs, recruiter_candidates, recruiter_candidates_cvs, recruiter_analyses, recruiter_consents, recruiter_audit_log RESTART IDENTITY CASCADE")
         )
+    # Also clear any auth dependency overrides to prevent cross-test pollution.
+    # This handles tests that call _bearer/set_auth_principal without using override_get_session.
+    from app.api.deps import get_current_user, optional_auth
+    app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(optional_auth, None)
 
 
 @pytest.fixture
@@ -550,6 +615,11 @@ def override_get_session(clean_db):
     app.dependency_overrides[get_session] = _override
     yield
     app.dependency_overrides.pop(get_session, None)
+    # Also clear auth overrides to prevent cross-test pollution from helpers
+    # like _bearer that set get_current_user without cleaning up.
+    from app.api.deps import get_current_user, optional_auth
+    app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(optional_auth, None)
 
 
 @pytest.fixture

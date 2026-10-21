@@ -230,7 +230,7 @@ class Settings(BaseSettings):
         description="Use LLM to filter non-offer results after Tavily",
     )
 
-    # Email delivery (verify-email flow, C3 / issue #46).
+    # Email delivery (offer notifications via email_service).
     # ``resend`` is the only provider that actually sends today; ``sendgrid``
     # and ``smtp`` are reserved names so the next branch in email_service is
     # a straight diff, not a refactor. ``resend_api_key=None`` triggers a

@@ -1,12 +1,10 @@
 """
 API dependencies (auth).
 
-Centralizes authentication with three-path support:
+Centralizes authentication with two-path support:
 1. Clerk session token (RS256) — active when CLERK_PUBLISHABLE_KEY is set.
    A Clerk-format token is verified end-to-end and never falls through.
-2. Legacy JWT (HS256, "ey" heuristic) — kept for S2 migration; not
-   touched in S1.
-3. API key fallback — for MCP adapter / service mode.
+2. API key — for MCP adapter / service mode.
 
 When BACKEND_API_KEY is NOT defined (open mode), some endpoints remain accessible
 without authentication to allow testing and anonymous usage.
@@ -26,7 +24,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
-from app.core.security import decode_access_token
 from app.db.models import User
 from app.db.session import get_session
 from app.services.clerk_auth import (
@@ -41,7 +38,6 @@ _security = APIKeyHeader(name="Authorization", auto_error=False)
 _logger = get_logger("app.api.auth")
 
 _BEARER_PREFIX = "bearer"
-_JWT_HEURISTIC_PREFIX = "ey"  # JWT tokens start with this in base64
 
 # Clerk Backend API base URL for user provisioning
 _CLERK_API_BASE = "https://api.clerk.com"
@@ -59,11 +55,11 @@ def is_auth_required() -> bool:
 
 @dataclass
 class CurrentUser:
-    """Represents the authenticated user (Clerk, JWT, or API key)."""
+    """Represents the authenticated user (Clerk or API key)."""
     id: int
     name: str
     role: str
-    auth_method: str  # "clerk" | "jwt" | "api_key" | "open"
+    auth_method: str  # "clerk" | "api_key" | "open"
 
 
 def _extract_bearer(header_value: str | None) -> str | None:
@@ -82,33 +78,6 @@ def _extract_bearer(header_value: str | None) -> str | None:
     if scheme != _BEARER_PREFIX or not token:
         return None
     return token
-
-
-def _try_jwt(token: str) -> CurrentUser | None:
-    """Attempt to authenticate with legacy JWT. Returns user if valid, None otherwise."""
-    try:
-        # Quick heuristic: JWT tokens start with "ey" (base64 encoded header)
-        if not token.startswith(_JWT_HEURISTIC_PREFIX):
-            return None
-
-        payload = decode_access_token(token)
-        user_id = int(payload.get("sub", 0))
-        role = payload.get("role", "job_seeker")
-
-        return CurrentUser(
-            id=user_id,
-            name=f"user_{user_id}",
-            role=role,
-            auth_method="jwt"
-        )
-    except jwt.ExpiredSignatureError:
-        _logger.debug("jwt_expired")
-        return None
-    except jwt.InvalidTokenError as e:
-        _logger.debug("jwt_invalid", error=str(e))
-        return None
-    except (ValueError, TypeError):
-        return None
 
 
 def _try_api_key(token: str) -> CurrentUser | None:
@@ -339,19 +308,19 @@ async def get_current_user(
     api_key_header: str | None = Depends(_security),
     db: AsyncSession = Depends(get_session),
 ) -> CurrentUser:
-    """Three-path authentication: Clerk → legacy JWT → API key.
+    """Two-path authentication: Clerk → API key.
 
     When Clerk is enabled and the token has RS256 + kid, the Clerk path is
     attempted first. If verification succeeds, the local user is resolved
     (auto-provisioned if clerk_secret_key is set). A Clerk-format token
-    that fails verification raises 401 immediately — it is never treated
-    as a legacy token.
+    that fails verification raises 401 immediately.
 
     Returns:
-        CurrentUser with clerk/jwt data if valid credentials provided
+        CurrentUser with clerk data if valid Clerk session provided
         CurrentUser(id=0, role="service") if valid API key provided
         401 if no valid credentials
     """
+
     token = _extract_bearer(api_key_header)
     if not token:
         raise HTTPException(
@@ -380,12 +349,7 @@ async def get_current_user(
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-    # 2. Legacy JWT
-    user = _try_jwt(token)
-    if user:
-        return user
-
-    # 3. API key
+    # 2. API key
     user = _try_api_key(token)
     if user:
         return user
@@ -431,7 +395,7 @@ async def optional_auth(
     UNLESS a Clerk token is provided (to support Clerk-first migration).
     In protected mode (BACKEND_API_KEY defined), this requires valid credentials:
     - Valid Clerk token → Clerk path (provisioning enabled)
-    - Valid JWT or API key → returns user
+    - Valid API key → returns user
     - No credentials or invalid credentials → raises 401
     """
     # Try Clerk token first if provided — even in open mode, a Clerk token
@@ -451,7 +415,7 @@ async def optional_auth(
                     return await _resolve_clerk_user(claims, db)
             except ClerkTokenInvalidError:
                 _logger.debug("clerk_token_invalid_optional", reason="verification_failed")
-                # Fall through to legacy JWT / protected-mode checks below.
+                # Fall through to API-key / protected-mode checks below.
 
     # In open mode (no BACKEND_API_KEY), skip auth entirely - return service user.
     # ``auth_method="open"`` (not "api_key") so the audit log in
@@ -501,12 +465,7 @@ async def optional_auth(
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-    # 2. Legacy JWT
-    user = _try_jwt(token)
-    if user:
-        return user
-
-    # 3. API key
+    # 2. API key
     user = _try_api_key(token)
     if user:
         return user

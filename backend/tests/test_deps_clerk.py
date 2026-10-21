@@ -1,5 +1,5 @@
 """
-Tests for the Clerk auth path in app.api.deps (ODD slice S1).
+Tests for the Clerk auth path in app.api.deps (ODD slice S1+S2).
 
 Covers:
 - Valid Clerk token + existing local row → CurrentUser with auth_method "clerk".
@@ -8,11 +8,11 @@ Covers:
 - Provisioning idempotency: concurrent IntegrityError → re-select.
 - No clerk_secret_key → USER_NOT_SYNCED 401.
 - API key still works → auth_method "api_key".
-- Invalid Clerk-format token → 401 (never falls through to legacy JWT).
+- Invalid Clerk-format token → 401.
 - Clerk token with recruiter role → role "recruiter".
 - Clerk token with unverified email → email_verified_at is None.
 - optional_auth with Clerk token → same behavior.
-- Legacy JWT still works when Clerk is enabled.
+- Legacy JWT returns 401 when Clerk is enabled (removed in S2).
 """
 from __future__ import annotations
 
@@ -538,12 +538,14 @@ async def test_optional_auth_clerk_token(
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_legacy_jwt_still_works_when_clerk_enabled(
+async def test_legacy_jwt_returns_401_when_clerk_enabled(
     clerk_test_env,
     clean_db,
 ):
-    """When Clerk is enabled, legacy HS256 JWT tokens authenticate normally."""
-    from app.core.security import create_access_token
+    """Legacy HS256 JWT tokens → 401 when Clerk is enabled (legacy auth removed in S2)."""
+    import jwt
+
+    from app.core.config import get_settings
 
     # Seed a user
     async with clean_db.session_factory() as session:
@@ -558,15 +560,22 @@ async def test_legacy_jwt_still_works_when_clerk_enabled(
         await session.refresh(user)
         uid = user.id
 
-    token = create_access_token({"sub": str(uid), "role": "job_seeker"})
+    # Build a legacy HS256 JWT using the same secret as create_access_token used.
+    settings = get_settings()
+    token = jwt.encode(
+        {"sub": str(uid), "role": "job_seeker", "exp": 9999999999},
+        settings.jwt_secret,
+        algorithm=settings.jwt_algorithm,
+    )
 
     async with clean_db.session_factory() as session:
-        # Legacy JWT has alg=HS256, so it won't match the Clerk RS256 sniff.
-        result = await get_current_user(
-            api_key_header=f"Bearer {token}",
-            db=session,
-        )
+        from fastapi import HTTPException
 
-    assert result.auth_method == "jwt"
-    assert result.id == uid
-    assert result.role == "job_seeker"
+        with pytest.raises(HTTPException) as exc_info:
+            await get_current_user(
+                api_key_header=f"Bearer {token}",
+                db=session,
+            )
+
+    # Falls through to API key path → no match → 401.
+    assert exc_info.value.status_code == 401

@@ -21,7 +21,6 @@ import pytest
 from sqlalchemy import select
 
 import app.api.v1.recruiter_candidates as recruiter_candidates_module
-from app.core.security import create_access_token
 from app.db.models import (
     RecruiterAuditLog,
     RecruiterCandidate,
@@ -323,13 +322,17 @@ class TestCandidateIsolation:
             recruiter_candidates_module, "get_session_context", _session_context
         )
 
-        # Real JWT: the router-level verify_api_key guard calls
-        # get_current_user() directly, bypassing dependency overrides
-        token = create_access_token({"sub": str(attacker.id), "role": attacker.role})
+        # Auth via get_current_user dependency override (S2: Clerk migration).
+        from app.api.deps import CurrentUser
+        from tests.conftest import set_auth_principal, set_optional_auth_principal
+
+        principal = CurrentUser(id=attacker.id, name=attacker.full_name, role=attacker.role, auth_method="clerk")
+        set_auth_principal(principal)
+        set_optional_auth_principal(principal)
         response = await async_client.post(
             f"/v1/recruiter/candidates/{foreign_candidate_id}/match",
             json={"jd_text": jd_text},
-            headers={"Authorization": f"Bearer {token}"},
+            headers={},
         )
 
         assert response.status_code == 404
@@ -413,7 +416,12 @@ class TestConsentIdentityFromJWT:
         how the impostor got into the payload.
         """
         recruiter = await _seed_recruiter_user(clean_db, "consent-jwt@test.com")
-        token = create_access_token({"sub": str(recruiter.id), "role": recruiter.role})
+        from app.api.deps import CurrentUser
+        from tests.conftest import set_auth_principal, set_optional_auth_principal
+
+        principal = CurrentUser(id=recruiter.id, name=recruiter.full_name, role=recruiter.role, auth_method="clerk")
+        set_auth_principal(principal)
+        set_optional_auth_principal(principal)
 
         impostor_id = 999
         response = await async_client.post(
@@ -432,7 +440,7 @@ class TestConsentIdentityFromJWT:
                     "auth_method": "jwt",
                 },
             },
-            headers={"Authorization": f"Bearer {token}"},
+            headers={},
         )
 
         assert response.status_code == 201, response.text
@@ -530,11 +538,16 @@ class TestConsentIdentityFromJWT:
             )
             await session.commit()
 
-        token = create_access_token({"sub": str(recruiter.id), "role": recruiter.role})
+        from app.api.deps import CurrentUser
+        from tests.conftest import set_auth_principal, set_optional_auth_principal
+
+        principal = CurrentUser(id=recruiter.id, name=recruiter.full_name, role=recruiter.role, auth_method="clerk")
+        set_auth_principal(principal)
+        set_optional_auth_principal(principal)
 
         response = await async_client.get(
             "/v1/recruiter/consent",
-            headers={"Authorization": f"Bearer {token}"},
+            headers={},
         )
 
         assert response.status_code == 200, response.text
@@ -625,7 +638,12 @@ class TestCreateCandidateMultipartContract:
         recruiter = await self._seed_recruiter_with_consent(
             clean_db, "cand-flat@test.com"
         )
-        token = create_access_token({"sub": str(recruiter.id), "role": recruiter.role})
+        from app.api.deps import CurrentUser
+        from tests.conftest import set_auth_principal, set_optional_auth_principal
+
+        principal = CurrentUser(id=recruiter.id, name=recruiter.full_name, role=recruiter.role, auth_method="clerk")
+        set_auth_principal(principal)
+        set_optional_auth_principal(principal)
 
         response = await async_client.post(
             "/v1/recruiter/candidates",
@@ -635,7 +653,7 @@ class TestCreateCandidateMultipartContract:
                 "phone": "+54 11 5555 1234",
                 "notes": "Frontend shape with no file",
             },
-            headers={"Authorization": f"Bearer {token}"},
+            headers={},
         )
 
         assert response.status_code == 201, response.text
@@ -659,7 +677,12 @@ class TestCreateCandidateMultipartContract:
         recruiter = await self._seed_recruiter_with_consent(
             clean_db, "cand-file@test.com"
         )
-        token = create_access_token({"sub": str(recruiter.id), "role": recruiter.role})
+        from app.api.deps import CurrentUser
+        from tests.conftest import set_auth_principal, set_optional_auth_principal
+
+        principal = CurrentUser(id=recruiter.id, name=recruiter.full_name, role=recruiter.role, auth_method="clerk")
+        set_auth_principal(principal)
+        set_optional_auth_principal(principal)
 
         pdf_bytes = _tiny_pdf_bytes(
             "Grace Hopper. COBOL. Compiler pioneer. Forty years at the Navy."
@@ -680,7 +703,7 @@ class TestCreateCandidateMultipartContract:
                     "application/pdf",
                 )
             },
-            headers={"Authorization": f"Bearer {token}"},
+            headers={},
         )
 
         assert response.status_code == 201, response.text

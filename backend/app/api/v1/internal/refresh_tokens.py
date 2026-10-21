@@ -13,9 +13,10 @@ Both predicates are anchored on the *terminal* timestamp, not
 ``created_at``: a row created 200 days ago and rotated yesterday is still
 useful evidence and is kept.
 
-Active rows (never consumed, never revoked) are never deleted. They are
-the only rows that can still be exchanged at ``POST /v1/auth/refresh``,
-so this sweep can never shorten a live session.
+Active rows (never consumed, never revoked) are never deleted.
+Note: the legacy ``POST /v1/auth/refresh`` endpoint was removed in the
+Clerk migration (S2); this sweeper now cleans up stale rows from the
+deprecated refresh-token table without shortening any live session.
 
 Retention window
 ----------------

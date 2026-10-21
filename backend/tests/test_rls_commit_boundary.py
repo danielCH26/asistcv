@@ -1,4 +1,6 @@
 """
+Auth via get_current_user dependency override (legacy JWT removed -- Clerk migration S2).
+
 RED phase for issue #50, second half: the commit-then-read RLS boundary.
 
 The defect under test
@@ -54,7 +56,8 @@ from sqlalchemy.exc import InvalidRequestError
 
 from app.api.deps import get_runner
 from app.core.config import get_settings
-from app.core.security import create_access_token
+
+# Auth via get_current_user dependency override (legacy JWT removed -- Clerk migration S2).
 from app.db.models import (
     RecruiterCandidate,
     RecruiterCandidateCV,
@@ -110,9 +113,24 @@ async def strict_http():
 
 
 def _auth_headers(user: User) -> dict[str, str]:
-    """A real bearer token for ``user`` (``sub``/``role`` per deps._try_jwt)."""
-    token = create_access_token({"sub": str(user.id), "role": user.role})
-    return {"Authorization": f"Bearer {token}"}
+    """Auth via get_current_user dependency override (legacy JWT removed -- Clerk migration S2).
+
+    Sets both get_current_user and optional_auth overrides.
+    """
+    from app.api.deps import CurrentUser
+    from tests.conftest import (
+        clear_auth_principal,
+        clear_optional_auth_principal,
+        set_auth_principal,
+        set_optional_auth_principal,
+    )
+
+    clear_auth_principal()
+    clear_optional_auth_principal()
+    principal = CurrentUser(id=user.id, name=user.full_name, role=user.role, auth_method="clerk")
+    set_auth_principal(principal)
+    set_optional_auth_principal(principal)
+    return {}
 
 
 def _consent_payload(user: User, tos_version: str) -> dict[str, Any]:

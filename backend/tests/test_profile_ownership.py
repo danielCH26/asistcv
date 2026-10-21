@@ -24,6 +24,8 @@ Every test pins ``BACKEND_API_KEY`` so `optional_auth` resolves real JWT
 principals instead of collapsing every caller to the service user (id 0).
 In open mode there are no principals to tell apart, so the cross-user
 assertions would be vacuous.
+
+Auth via get_current_user dependency override (legacy JWT removed -- Clerk migration S2).
 """
 from unittest.mock import AsyncMock, MagicMock
 
@@ -31,7 +33,8 @@ import pytest
 from sqlmodel import select
 
 import app.api.v1.match as match_module
-from app.core.security import create_access_token
+
+# Auth via get_current_user dependency override (legacy JWT removed -- Clerk migration S2).
 from app.db.models import Profile, User
 from app.llm.schemas import Embedding, MatchAnalysis
 
@@ -101,8 +104,17 @@ def open_mode(monkeypatch: pytest.MonkeyPatch):
 
 
 def _jwt_header(user: User) -> dict[str, str]:
-    token = create_access_token({"sub": str(user.id), "role": user.role})
-    return {"Authorization": f"Bearer {token}"}
+    """Auth via get_current_user dependency override (legacy JWT removed -- Clerk migration S2).
+
+    Sets both get_current_user (create_profile) and optional_auth (GET/PATCH profiles).
+    """
+    from app.api.deps import CurrentUser
+    from tests.conftest import set_auth_principal, set_optional_auth_principal
+
+    principal = CurrentUser(id=user.id, name=user.full_name, role=user.role, auth_method="clerk")
+    set_auth_principal(principal)
+    set_optional_auth_principal(principal)
+    return {}
 
 
 @pytest.fixture
