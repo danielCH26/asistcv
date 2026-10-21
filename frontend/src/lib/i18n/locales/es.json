@@ -109,7 +109,8 @@
     "consentRejected": "Faltan datos requeridos o el consentimiento no fue aceptado.",
     "genericError": "No se pudo crear la cuenta. Reintentá.",
     "haveAccount": "¿Ya tenés cuenta?",
-    "loginLink": "Ingresá"
+    "loginLink": "Ingresá",
+    "loading": "Preparando tu cuenta…"
   },
   "login": {
     "title": "Ingresar",
@@ -121,7 +122,8 @@
     "invalidCredentials": "Email o contraseña incorrectos.",
     "rateLimited": "Demasiados intentos. Esperá unos minutos y reintentá.",
     "noAccount": "¿No tenés cuenta?",
-    "signupLink": "Creá una"
+    "signupLink": "Creá una",
+    "loading": "Cargando acceso seguro…"
   },
   "profile": {
     "title": "Mi perfil",

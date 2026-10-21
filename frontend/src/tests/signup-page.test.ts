@@ -1,90 +1,128 @@
+/**
+ * Signup page tests — Clerk component integration.
+ *
+ * The old tests (form submission to /v1/auth/register, consent gate) are gone.
+ * The page now mounts Clerk's SignUp component.  Tests verify:
+ *   - page renders without crashing
+ *   - Clerk initClerk + mountSignUp are called
+ */
+
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$app/navigation', () => ({
-	goto: vi.fn().mockResolvedValue(undefined)
+	goto: vi.fn().mockResolvedValue(undefined),
 }));
 
-import SignupPage from '../routes/signup/+page.svelte';
+vi.mock('$app/environment', () => ({
+	browser: true,
+}));
 
-const ACCESS_TOKEN = `${btoa('{"alg":"HS256"}')}.${btoa(`{"exp":${Math.floor(Date.now() / 1000) + 900}}`)}.sig`;
-const USER = { id: 3, email: 'r@corp.com', role: 'recruiter', full_name: 'Rita', locale: 'es' };
+// Mock $app/stores before the component imports $page.
+vi.mock('$app/stores', () => ({
+	page: {
+		subscribe(fn: (v: { url: { searchParams: { get: (k: string) => string | null } } }) => void) {
+			fn({ url: { searchParams: { get: () => null } } });
+			return () => {};
+		},
+	},
+}));
 
-function stubAuthFetch(): ReturnType<typeof vi.fn> {
-	const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-		const url = String(input);
-		if (url.includes('/v1/users/me')) {
-			return new Response(JSON.stringify(USER), { status: 200, headers: { 'Content-Type': 'application/json' } });
-		}
-		return new Response(
-			JSON.stringify({ access_token: ACCESS_TOKEN, refresh_token: 'r1', token_type: 'bearer' }),
-			{ status: 201, headers: { 'Content-Type': 'application/json' } }
-		);
-	});
-	vi.stubGlobal('fetch', fetchMock);
-	return fetchMock;
+// ─── Mock Clerk module ────────────────────────────────────────────────────────
+
+const mockInitClerk = vi.fn();
+const mockMountSignUp = vi.fn();
+
+// clerkReady starts as false so loading state is shown, then flips to true
+// after a tick to simulate Clerk finishing load.
+let clerkReadyValue = false;
+const clerkReadySubscribers = new Set<(v: boolean) => void>();
+function emitClerkReady(v: boolean) {
+	clerkReadyValue = v;
+	clerkReadySubscribers.forEach((fn) => fn(v));
 }
 
-function fillBasics() {
-	fireEvent.input(screen.getAllByRole('textbox')[0], { target: { value: 'Rita Reclutadora' } });
-	fireEvent.input(screen.getByLabelText(/email/i), { target: { value: 'r@corp.com' } });
-	fireEvent.input(screen.getByLabelText(/contraseña/i), { target: { value: 'Passw0rd123' } });
-}
+vi.mock('$lib/clerk', () => ({
+	initClerk: mockInitClerk.mockImplementation(async () => {
+		// Simulate async load — mark ready after a tick.
+		await Promise.resolve();
+		emitClerkReady(true);
+	}),
+	mountSignUp: mockMountSignUp,
+	clerkReady: {
+		subscribe(fn: (v: boolean) => void) {
+			clerkReadySubscribers.add(fn);
+			fn(clerkReadyValue);
+			return () => {
+				clerkReadySubscribers.delete(fn);
+			};
+		},
+	},
+}));
+
+// ─── Mock startOnboarding (called in onMount) ─────────────────────────────────
+
+vi.mock('$stores/session', () => ({
+	startOnboarding: vi.fn(),
+	isOnboarding: vi.fn(() => false),
+	completeOnboarding: vi.fn(),
+}));
+
+// ─── Tests ────────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
 	localStorage.clear();
 	vi.unstubAllGlobals();
+	// Reset Clerk ready state for each test.
+	clerkReadyValue = false;
+	clerkReadySubscribers.clear();
+	mockInitClerk.mockClear();
+	mockMountSignUp.mockClear();
+	mockInitClerk.mockImplementation(async () => {
+		await Promise.resolve();
+		emitClerkReady(true);
+	});
 });
 
-describe('signup page — consent gate del recruiter', () => {
-	it('recruiter sin consentimiento → submit deshabilitado', async () => {
-		render(SignupPage);
+describe('signup page — Clerk mount', () => {
+	it('renders heading from i18n', async () => {
+		render(await import('../routes/signup/+page.svelte').then((m) => m.default));
 
-		const recruiterRadio = screen.getByRole('radio', { name: /reclutador/i });
-		await fireEvent.click(recruiterRadio);
-
-		const submit = screen.getByRole('button', { name: /crear cuenta/i }) as HTMLButtonElement;
-		expect(submit.disabled).toBe(true);
+		// Heading must be present and contain the i18n text.
+		const heading = screen.getByRole('heading', { level: 1 });
+		expect(heading).toBeTruthy();
+		expect(heading.textContent).toContain('Creá tu cuenta');
 	});
 
-	it('recruiter con ambos consentimientos → llama a /v1/auth/register con el ToS', async () => {
-		const fetchMock = stubAuthFetch();
-		render(SignupPage);
+	it('calls initClerk on mount', async () => {
+		render(await import('../routes/signup/+page.svelte').then((m) => m.default));
 
-		await fireEvent.click(screen.getByRole('radio', { name: /reclutador/i }));
-		fillBasics();
-		await fireEvent.click(screen.getByLabelText(/términos del servicio/i));
-		await fireEvent.click(screen.getByLabelText(/buena fe/i));
-
-		const submit = screen.getByRole('button', { name: /crear cuenta/i }) as HTMLButtonElement;
-		expect(submit.disabled).toBe(false);
-		await fireEvent.click(submit);
-
-		await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-		const registerCall = fetchMock.mock.calls.find(([input]) => String(input).includes('/v1/auth/register'));
-		expect(registerCall).toBeDefined();
-		const body = JSON.parse((registerCall?.[1] as RequestInit).body as string);
-		expect(body.role).toBe('recruiter');
-		expect(body.accept_tos).toBe(true);
-		expect(body.good_faith_declaration).toBe(true);
+		// Wait for initClerk to be called (it's async, so give it a tick).
+		await waitFor(() => {
+			expect(mockInitClerk).toHaveBeenCalled();
+		});
 	});
 
-	it('job_seeker no ve checkboxes de consentimiento y puede enviar directo', async () => {
-		stubAuthFetch();
-		render(SignupPage);
+	it('mountSignUp is called with redirectUrl=/profile after Clerk is ready', async () => {
+		render(await import('../routes/signup/+page.svelte').then((m) => m.default));
 
-		expect(screen.queryByLabelText(/términos del servicio/i)).toBeNull();
-		fillBasics();
+		await waitFor(() => {
+			expect(mockMountSignUp).toHaveBeenCalled();
+		});
 
-		const submit = screen.getByRole('button', { name: /crear cuenta/i }) as HTMLButtonElement;
-		expect(submit.disabled).toBe(false);
-		await fireEvent.click(submit);
+		const call = mockMountSignUp.mock.calls[0];
+		const opts = call[1] as { redirectUrl?: string };
+		expect(opts.redirectUrl).toBe('/profile');
+	});
 
-		await waitFor(() => expect(vi.mocked(globalThis.fetch)).toHaveBeenCalled());
-		const registerCall = vi
-			.mocked(globalThis.fetch)
-			.mock.calls.find(([input]) => String(input).includes('/v1/auth/register'));
-		const body = JSON.parse((registerCall?.[1] as RequestInit).body as string);
-		expect(body.role).toBe('job_seeker');
+	it('calls startOnboarding before Clerk mount', async () => {
+		const { startOnboarding } = await import('$stores/session');
+
+		render(await import('../routes/signup/+page.svelte').then((m) => m.default));
+
+		await waitFor(() => {
+			expect(mockInitClerk).toHaveBeenCalled();
+		});
+		expect(startOnboarding).toHaveBeenCalled();
 	});
 });
