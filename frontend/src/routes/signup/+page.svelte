@@ -1,70 +1,32 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { _ } from 'svelte-i18n';
-	import { get } from 'svelte/store';
-	import { goto } from '$app/navigation';
-	import { sessionEvent } from '$stores/session';
-	import { signup, startOnboarding, getPendingAuditToken, clearPendingAuditToken } from '$stores/session';
-	import { apiClient } from '$api/client';
-	import { ApiError, type Role } from '$api/types';
-	import { canSubmitSignup, homeForRole, isPasswordValid, TOS_VERSION } from '$auth/rules';
+	import { page } from '$app/stores';
+	import { clerkReady, initClerk, mountSignUp } from '$lib/clerk';
+	import { startOnboarding } from '$stores/session';
 
-	let email = '';
-	let password = '';
-	let fullName = '';
-	let role: Role = 'job_seeker';
-	let acceptTos = false;
-	let goodFaith = false;
-	let status: 'idle' | 'loading' | 'error' | 'done' = 'idle';
-	let errorMessage = '';
-	let notice = get(sessionEvent) === 'token_reused' ? 'banner' : '';
+	let container: HTMLDivElement;
+	let loading = true;
+	let mounted = false;
 
-	$: consentRequired = role === 'recruiter';
-	$: consentGiven = canSubmitSignup({ role, acceptTos, goodFaith });
-	$: submitDisabled = status === 'loading' || !consentGiven;
+	$: reason = $page.url.searchParams.get('reason') ?? null;
 
-	async function handleSubmit() {
-		if (!isPasswordValid(password)) {
-			errorMessage = $_('signup.passwordInvalid');
-			status = 'error';
-			return;
-		}
-		status = 'loading';
-		errorMessage = '';
-		try {
-			const result = await signup({
-				email,
-				password,
-				role,
-				full_name: fullName.trim() || email,
-				locale: 'es',
-				accept_tos: consentRequired ? acceptTos : false,
-				good_faith_declaration: consentRequired ? goodFaith : false,
-				tos_version: TOS_VERSION
-			});
-			status = 'done';
-			if (getPendingAuditToken()) {
-				clearPendingAuditToken();
-				apiClient.clearAuditToken();
-			}
-			startOnboarding();
-			if (result.analysis_id !== undefined) {
-				await goto(`/history/${result.analysis_id}`);
-				return;
-			}
-			await goto(homeForRole(result.user.role));
-		} catch (err) {
-			status = 'error';
-			if (err instanceof ApiError) {
-				errorMessage =
-					err.code === 'EMAIL_TAKEN'
-						? $_('signup.emailTaken')
-						: err.status === 422
-							? $_('signup.consentRejected')
-							: err.message;
-			} else {
-				errorMessage = $_('signup.genericError');
-			}
-		}
+	onMount(async () => {
+		await initClerk();
+		// Start onboarding wizard immediately so it is ready when the
+		// post-signup page (the Clerk redirect target) mounts.
+		startOnboarding();
+	});
+
+	// Reactive mount: $clerkReady may flip after initClerk resolves. Guard
+	// against double-mounting on subsequent reactive runs. After Clerk
+	// finishes the signup flow it redirects to `/profile` where the
+	// onboarding wizard is rendered; the backend auto-provisions the user
+	// on the first authenticated API call.
+	$: if ($clerkReady && container && !mounted) {
+		mounted = true;
+		loading = false;
+		mountSignUp(container, { redirectUrl: '/profile' });
 	}
 </script>
 
@@ -75,64 +37,18 @@
 <section class="signup">
 	<h1>{$_('signup.heading')}</h1>
 
-	{#if notice === 'banner'}
-		<p class="signup__banner" role="alert">{$_('session.tokenReused')}</p>
+	{#if reason === 'required'}
+		<p class="signup__notice" role="alert">{$_('session.required')}</p>
 	{/if}
 
-	<form class="signup__form" on:submit|preventDefault={handleSubmit}>
-		<label>
-			{$_('signup.fullName')}
-			<input type="text" bind:value={fullName} autocomplete="name" />
-		</label>
+	{#if loading}
+		<div class="signup__loading" aria-live="polite" aria-busy="true">
+			<div class="signup__spinner" aria-hidden="true"></div>
+			<p>{$_('signup.loading')}</p>
+		</div>
+	{/if}
 
-		<label>
-			{$_('signup.email')}
-			<input type="email" bind:value={email} required autocomplete="email" />
-		</label>
-
-		<label>
-			{$_('signup.password')}
-			<input type="password" bind:value={password} required autocomplete="new-password" />
-		</label>
-
-		<fieldset>
-			<legend>{$_('signup.roleLabel')}</legend>
-			<label class="signup__role">
-				<input type="radio" bind:group={role} value="job_seeker" />
-				{$_('signup.roleSeeker')}
-			</label>
-			<label class="signup__role">
-				<input type="radio" bind:group={role} value="recruiter" />
-				{$_('signup.roleRecruiter')}
-			</label>
-		</fieldset>
-
-		{#if consentRequired}
-			<div class="signup__consent">
-				<label>
-					<input type="checkbox" bind:checked={acceptTos} />
-					{$_('signup.acceptTos')}
-				</label>
-				<label>
-					<input type="checkbox" bind:checked={goodFaith} />
-					{$_('signup.goodFaith')}
-				</label>
-			</div>
-		{/if}
-
-		{#if status === 'error' && errorMessage}
-			<p class="signup__error" role="alert">{errorMessage}</p>
-		{/if}
-
-		<button type="submit" disabled={submitDisabled}>
-			{status === 'loading' ? $_('signup.submitting') : $_('signup.submit')}
-		</button>
-	</form>
-
-	<p class="signup__login">
-		{$_('signup.haveAccount')}
-		<a href="/login">{$_('signup.loginLink')}</a>
-	</p>
+	<div class="signup__clerk" bind:this={container} class:is-hidden={loading}></div>
 </section>
 
 <style>
@@ -150,121 +66,44 @@
 		color: var(--color-ink-strong);
 	}
 
-	.signup__banner {
+	.signup__notice {
 		padding: var(--space-3) var(--space-4);
-		border: 1px solid var(--color-error);
+		border: 1px solid var(--color-line);
 		border-radius: var(--radius-card);
-		background: var(--color-error-bg);
-		color: var(--color-error);
-		margin: 0;
-	}
-
-	.signup__form {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-4);
-	}
-
-	.signup__form label {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-1);
-		font-size: var(--text-sm);
+		background: var(--color-surface);
 		color: var(--color-ink);
+		margin: 0;
+		font-size: var(--text-sm);
 	}
 
-	.signup__form input[type='text'],
-	.signup__form input[type='email'],
-	.signup__form input[type='password'] {
-		padding: var(--space-2) var(--space-3);
-		border: 1px solid var(--color-line);
-		border-radius: var(--radius-control);
-		background: var(--clay-fill);
-		color: var(--color-ink-strong);
-		box-shadow: var(--clay-raised);
-		transition: box-shadow var(--duration-fast) var(--ease-standard);
-	}
-
-	.signup__form input[type='text']:focus-visible,
-	.signup__form input[type='email']:focus-visible,
-	.signup__form input[type='password']:focus-visible {
-		box-shadow: var(--clay-focus-ring), var(--clay-raised);
-		outline: none;
-	}
-
-	fieldset {
-		border: 1px solid var(--color-line);
-		border-radius: var(--radius-card);
-		padding: var(--space-3);
+	.signup__loading {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-2);
-	}
-
-	legend {
-		font-size: var(--text-sm);
-		color: var(--color-ink-muted);
-		padding: 0 var(--space-1);
-	}
-
-	.signup__role {
-		flex-direction: row !important;
 		align-items: center;
-		gap: var(--space-2) !important;
+		gap: var(--space-3);
+		padding: var(--space-6);
 	}
 
-	.signup__consent {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-		padding: var(--space-3);
-		border: 1px solid var(--color-line);
-		border-radius: var(--radius-card);
-		background: var(--color-surface-alt, var(--color-surface));
+	.signup__spinner {
+		width: var(--space-5);
+		height: var(--space-5);
+		border-radius: 50%;
+		border: 2px solid var(--color-line);
+		border-top-color: var(--color-action);
+		animation: spin 0.9s linear infinite;
 	}
 
-	.signup__consent label {
-		flex-direction: row;
-		align-items: flex-start;
-		gap: var(--space-2);
-		font-size: var(--text-sm);
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
-	.signup__error {
-		margin: 0;
-		color: var(--error);
-		font-size: var(--text-sm);
+	.signup__clerk {
+		min-height: 480px;
 	}
 
-	button[type='submit'] {
-		padding: var(--space-3) var(--space-4);
-		border: none;
-		border-radius: var(--radius-card);
-		background: var(--color-action);
-		color: var(--color-on-action);
-		font-weight: 600;
-		cursor: pointer;
-		box-shadow: var(--clay-raised);
-		transition: box-shadow var(--duration-fast) var(--ease-standard);
-	}
-
-	button[type='submit']:hover:not(:disabled) {
-		box-shadow: var(--clay-lifted);
-	}
-
-	button[type='submit']:focus-visible {
-		box-shadow: var(--clay-focus-ring), var(--clay-raised);
-		outline: none;
-	}
-
-	button[type='submit']:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.signup__login {
-		margin: 0;
-		font-size: var(--text-sm);
-		color: var(--color-ink-muted);
+	.signup__clerk.is-hidden {
+		display: none;
 	}
 </style>

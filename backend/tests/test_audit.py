@@ -12,6 +12,10 @@ Covers:
 - Email capture (valid/invalid/expired)
 - Audit retrieval
 - Retention cleanup
+
+Auth via get_current_user dependency override (legacy JWT removed -- Clerk migration S2).
+Tests that assert auth behavior (401s, API-key) exercise the real dependency and are NOT
+modified.
 """
 import io
 from datetime import UTC, datetime, timedelta
@@ -151,11 +155,20 @@ async def _seed_claimable_audit(email: str) -> tuple[int, str, str]:
 
 
 def _bearer(user_id: int) -> dict[str, str]:
-    """Authorization header for a real JWT principal (see tests/test_rls.py)."""
-    from app.core.security import create_access_token
+    """Authorization header for a real JWT principal (see tests/test_rls.py).
 
-    token = create_access_token({"sub": str(user_id), "role": "job_seeker"})
-    return {"Authorization": f"Bearer {token}"}
+    Auth via get_current_user dependency override (legacy JWT removed -- Clerk migration S2).
+    Tests that assert auth behavior stay on the real dependency path.
+    """
+    from app.api.deps import CurrentUser
+    from tests.conftest import clear_auth_principal, set_auth_principal
+
+    # Clear any existing override first to ensure clean state
+    clear_auth_principal()
+    set_auth_principal(CurrentUser(id=user_id, name=f"user_{user_id}", role="job_seeker", auth_method="clerk"))
+    # Return empty dict so every call-site is unchanged (the override injects the principal).
+    # clear_auth_principal() is called in the test's finally/cleanup, not here.
+    return {}
 
 
 # Mock the LLM provider for tests

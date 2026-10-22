@@ -230,7 +230,7 @@ class Settings(BaseSettings):
         description="Use LLM to filter non-offer results after Tavily",
     )
 
-    # Email delivery (verify-email flow, C3 / issue #46).
+    # Email delivery (offer notifications via email_service).
     # ``resend`` is the only provider that actually sends today; ``sendgrid``
     # and ``smtp`` are reserved names so the next branch in email_service is
     # a straight diff, not a refactor. ``resend_api_key=None`` triggers a
@@ -238,6 +238,31 @@ class Settings(BaseSettings):
     # keeps working in dev — the token still gets persisted and the link is
     # visible in the logs.
     email_provider: str = Field(default="resend", validation_alias="EMAIL_PROVIDER")
+
+    # Clerk authentication (passwordless email codes — feat/clerk-auth-migration S1).
+    # ``clerk_publishable_key`` activates Clerk auth: when set, the backend
+    # verifies Clerk session JWTs (RS256, signed by Clerk's JWKS) in addition
+    # to the legacy HS256 JWT and API key paths.
+    clerk_publishable_key: str | None = Field(
+        default=None, validation_alias="CLERK_PUBLISHABLE_KEY"
+    )
+    # ``clerk_secret_key`` enables auto-provisioning: when a Clerk token is
+    # presented but no local user with that clerk_id exists, the backend
+    # fetches the user profile from api.clerk.com and creates a local row.
+    clerk_secret_key: str | None = Field(
+        default=None, validation_alias="CLERK_SECRET_KEY"
+    )
+    # ``clerk_webhook_signing_secret`` is for S2 webhook handling; reserved
+    # for now but stored so the field is wired and backwards-compatible.
+    clerk_webhook_signing_secret: str | None = Field(
+        default=None, validation_alias="CLERK_WEBHOOK_SIGNING_SECRET"
+    )
+    # ``clerk_authorized_parties`` restricts the azp claim in Clerk tokens.
+    # Comma-separated string; empty / None falls back to ``frontend_url``.
+    # If the resulting list is empty, the azp check is skipped.
+    clerk_authorized_parties: str | None = Field(
+        default=None, validation_alias="CLERK_AUTHORIZED_PARTIES"
+    )
     resend_api_key: str | None = Field(default=None, validation_alias="RESEND_API_KEY")
     email_from: str = Field(
         default="AsistCV <noreply@asistcv.com>", validation_alias="EMAIL_FROM"

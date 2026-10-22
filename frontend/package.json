@@ -28,6 +28,8 @@
     "vitest": "^2.1.9"
   },
   "dependencies": {
+    "@clerk/clerk-js": "^6.40.0",
+    "@clerk/localizations": "^4.24.0",
     "svelte-i18n": "^4.0.0"
   }
 }
