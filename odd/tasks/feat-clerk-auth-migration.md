@@ -95,10 +95,16 @@ Resend no está enviando ningún email (ni confirmaciones de correo ni resúmene
 - [ ] Backend y frontend despliegan JUNTOS (S2 es breaking: tokens legacy ya no verifican)
 - [ ] Smoke test: signup con código de email → primer /users/me crea la fila → login → flujo match completo
 
-## QA pendiente del usuario (requiere keys reales de Clerk)
-- Login real E2E en producción (los suites automatizados mockean Clerk)
-- Webhook recibido en el dashboard de Clerk (attempt log 200)
-- Rol recruiter: signup entra siempre como job_seeker; upgrade vía flujo de consent existente
+## Estado de QA / deploy (2026-10)
+
+- [x] PR #121 mergeado (squash `05ae8fe`), CI 7/7, issue #120 cerrado
+- [x] Migración 029 aplicada en Neon (verificada: clerk_id nullable + ix_users_clerk_id, 13 usuarios intactos)
+- [x] Backend en prod con código nuevo: `/v1/auth/login` → 404 (legacy fuera)
+- [x] Webhook vivo en **`/api/v1/webhooks/clerk`** (prefijo /api/v1, patrón lemonsqueezy): probe sin firma → 400 MISSING_SVIX_HEADERS
+- [x] Frontend en prod con build nuevo (clerk-js incluido en chunks)
+- [ ] `PUBLIC_CLERK_PUBLISHABLE_KEY` inlineada en el build de Cloudflare Pages (la key tiene que aparecer en `chunks/clerk.*.js`; si el hash de ese chunk no cambia entre deploys, el build corrió sin ella)
+- [ ] Webhook registrado en dashboard Clerk (URL con /api/v1)
+- [ ] QA E2E: signup con código → auto-provisioning en users → login → match
 
 ## Issue aparte (Resend)
 - Resend no envía NINGÚN email: las confirmaciones las resuelve Clerk, pero el resumen de ofertas del cron (#55) sigue roto → issue GitHub dedicado.
