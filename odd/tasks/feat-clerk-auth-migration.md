@@ -75,7 +75,7 @@ Resend no está enviando ningún email (ni confirmaciones de correo ni resúmene
 - [ ] Crear aplicación: habilitar **Email code** (passwordless) como método de primer factor
 - [ ] Copiar `Publishable key` (pk_...) y `Secret key` (sk_...)
 - [ ] **Allowed origins / redirect**: producción (dominio de Cloudflare Pages) + `http://localhost:5173` para dev
-- [ ] **Webhooks → Add endpoint**: URL `https://<render-backend>/v1/webhooks/clerk`, eventos `user.created`, `user.updated`, `user.deleted`; copiar el `Signing secret` (whsec_...)
+- [ ] **Webhooks → Add endpoint**: URL `https://<render-backend>/api/v1/webhooks/clerk`, eventos `user.created`, `user.updated`, `user.deleted`; copiar el `Signing secret` (whsec_...)
 - [ ] Branding: nombre/logo AsistCV (los componentes heredan teal vía appearance)
 
 ### 2. Render (backend)
