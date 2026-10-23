@@ -65,6 +65,28 @@ secrets "environment variables"; they are injected at runtime, not committed):
 | `MERCADOPAGO_ACCESS_TOKEN` | Mercado Pago access token. Configure in slice 3 of issue #56. |
 | `MERCADOPAGO_PUBLIC_KEY` | Mercado Pago public key. Configure in slice 3. |
 | `MERCADOPAGO_WEBHOOK_SECRET` | Mercado Pago webhook secret. Configure in slice 3. |
+| `CLERK_PUBLISHABLE_KEY` | **Required for Clerk auth.** The publishable key of the Clerk instance (`pk_live_...` in production). The backend derives the Frontend API domain from it to fetch the JWKS and validate session tokens. Must be the **same** key the frontend uses — otherwise the backend cannot resolve the signing keys. See "Clerk authentication" below. |
+| `CLERK_SECRET_KEY` | **Required for Clerk auth.** Clerk Backend API key (`sk_live_...`). Enables auto-provisioning: when a Clerk token arrives for an unknown user, the backend fetches the profile from `api.clerk.com` and creates the local row. |
+| `CLERK_WEBHOOK_SIGNING_SECRET` | **Required for the Clerk webhook.** Svix signing secret (`whsec_...`) from the Clerk dashboard endpoint's "Signing Secret". The webhook verifies the HMAC-SHA256 signature manually — no extra dependency. |
+| `CLERK_AUTHORIZED_PARTIES` | Comma-separated list of origins allowed in the `azp` claim, e.g. `https://asistcv-frontend.pages.dev`. Empty falls back to `frontend_url`. |
+
+### Clerk authentication
+
+Auth is passwordless: Clerk sends a 6-digit email code and issues a short-lived session JWT (~60 s, auto-renewed by the SDK). The frontend sends it as `Authorization: Bearer <clerk session token>`; the backend verifies the RS256 signature against Clerk's JWKS, then resolves the local `users` row by `clerk_id`.
+
+Three things must line up, or sign-up silently fails:
+
+| Where | What |
+|---|---|
+| Cloudflare Pages env | `PUBLIC_CLERK_PUBLISHABLE_KEY` — the same instance as the backend |
+| Render env | `CLERK_PUBLISHABLE_KEY` (same key), `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SIGNING_SECRET` |
+| Clerk dashboard | The webhook endpoint, pointing at `https://<backend>/api/v1/webhooks/clerk` (note the `/api/v1` prefix) |
+
+**How to tell a broken publishable key apart from a broken backend:** the Clerk Frontend API answers `GET https://<frontend-api>/v1/client` with HTTP 200 but `"client": null` when the key does not resolve to a client on that instance. Clerk JS then has no UI to mount and the page never finishes loading. The backend, meanwhile, keeps serving `/health` normally — a green backend does **not** mean auth works.
+
+> **A `pk_test_` key on a `*.clerk.accounts.dev` domain is a development instance.** Clerk deletes inactive development instances, and a dev instance is not a production identity provider. Use a production instance (`pk_live_...`) for the deployed environment.
+
+**Do not put `PUBLIC_BACKEND_API_KEY` in the Cloudflare Pages environment.** With `adapter-static`, every `PUBLIC_*` variable is published in `/_app/env.js`, which is served to every visitor — the service key would be readable by anyone. The frontend authenticates exclusively with the Clerk session token; the service key belongs only in Render, the `mcp-adapter` settings and the GitHub Actions secret. The build fails on purpose if it is present (`scripts/check-env.mjs` and `scripts/check-build.mjs`).
 
 Click **Save Changes** — Render redeploys automatically after env changes.
 
@@ -117,7 +139,22 @@ annotation.
 (EXPOSE 7860) via its `PORT` mechanism. If the service doesn't bind, set
 explicitly: Environment → `PORT` = `7860`.
 
-## 3. Verify the deploy
+## 3. Apply the migrations (Neon)
+
+The Dockerfile does **not** run migrations on startup — `alembic upgrade head` is a separate, manual step against Neon:
+
+```bash
+cd backend
+uv sync --all-extras
+uv run alembic upgrade head
+uv run alembic current   # → <revision> (head)
+```
+
+Run it whenever the migration chain gains a revision. The backend serves traffic against the schema it finds; a missing migration shows up as a runtime error (`column "clerk_id" does not exist`), not as a failed boot.
+
+Neon suspends the server after inactivity; the first query after the sleep adds ~500 ms. That is expected and does not affect the migration step.
+
+## 4. Verify the deploy
 
 When the deploy status turns **Live**:
 
@@ -135,7 +172,7 @@ curl -X POST https://<your-url>.onrender.com/v1/match \
 # → MatchAnalysis with real score from Qwen via Groq
 ```
 
-## 4. Automatic deploys
+## 5. Automatic deploys
 
 By default, Render **auto-deploys on every push to `main`**. Combined with the
 GitHub Actions CI (which must pass first if you enable branch protection), the
@@ -185,6 +222,16 @@ from the service dashboard.
 - **A sweeper fails with `HTTP 502/503/504`**: the Render container is
   asleep or down. The run already retried 3 times; check the service status
   in the Render dashboard.
+- **`AUDIT_CLEANUP_TOKEN` mismatched (the retention cron answers HTTP 401)**:
+  the token in Render and the GitHub Actions secret are different values, or
+  the Render one is unset. The endpoint compares the body `{"token": ...}`
+  with `AUDIT_CLEANUP_TOKEN` using `hmac.compare_digest` and fails closed
+  when unset. Copy the value from the service into the secret — do **not**
+  generate a new one.
+- **Sign-up page loads forever**: the Clerk publishable key does not resolve
+  to a client on its instance. Check `GET https://<frontend-api>/v1/client`
+  with the key: `"client": null` means the key is wrong, stale, or belongs
+  to another instance. The backend staying healthy does not rule this out.
 - **`DATABASE_URL` errors at runtime**: confirm the Neon string includes
   `?sslmode=require&channel_binding=require` — our SQLAlchemy config strips
   libpq-only params for asyncpg automatically (see `app/db/session.py`).
