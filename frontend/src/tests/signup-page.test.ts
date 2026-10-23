@@ -49,6 +49,7 @@ vi.mock('$lib/clerk', () => ({
 		emitClerkReady(true);
 	}),
 	mountSignUp: mockMountSignUp,
+	resetClerkError: vi.fn(),
 	clerkReady: {
 		subscribe(fn: (v: boolean) => void) {
 			clerkReadySubscribers.add(fn);
@@ -57,6 +58,14 @@ vi.mock('$lib/clerk', () => ({
 				clerkReadySubscribers.delete(fn);
 			};
 		},
+	},
+	// The page reads the failure channel of the Clerk module: a null value
+	// means "no error", so the page stays on the loading state.
+	clerkError: {
+		subscribe(fn: (v: string | null) => void) {
+			fn(null);
+			return () => {};
+		}
 	},
 }));
 

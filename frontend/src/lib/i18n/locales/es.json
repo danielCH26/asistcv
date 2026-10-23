@@ -112,6 +112,11 @@
     "loginLink": "Ingresá",
     "loading": "Preparando tu cuenta…"
   },
+  "clerk": {
+    "errorTitle": "No pudimos cargar el acceso",
+    "errorBody": "El servicio de autenticación no está disponible en este momento. Revisá tu conexión o intentá de nuevo en unos segundos.",
+    "retry": "Reintentar"
+  },
   "login": {
     "title": "Ingresar",
     "heading": "Iniciá sesión",

@@ -22,8 +22,48 @@ import type { SignedInSessionResource } from '@clerk/shared/types/session';
 let _clerkPromise: Promise<Clerk> | null = null;
 let _clerkInstance: Clerk | null = null;
 
+/**
+ * How long Clerk gets to finish loading before we give up on it.
+ *
+ * `clerk.load()` neither resolves nor rejects when the publishable key
+ * points at an instance that cannot serve a client (Clerk answers HTTP 200
+ * with `"client": null`). Without this bound the page waits forever.
+ */
+const CLERK_INIT_TIMEOUT_MS = 15_000;
+
+/** Options for a Clerk initialization attempt. */
+export interface ClerkInitOptions {
+	/**
+	 * Milliseconds to wait for Clerk to finish loading before failing.
+	 * Defaults to {@link CLERK_INIT_TIMEOUT_MS}.
+	 */
+	timeoutMs?: number;
+}
+
+/** Diagnostic codes for a failed Clerk initialization. */
+export type ClerkInitErrorCode = 'missing_key' | 'timeout' | 'load_failed';
+
+/** Error thrown when Clerk cannot be initialized. Carries a diagnostic code. */
+export class ClerkInitError extends Error {
+	readonly code: ClerkInitErrorCode;
+
+	constructor(code: ClerkInitErrorCode, cause?: unknown) {
+		super(`Clerk initialization failed: ${code}`);
+		this.name = 'ClerkInitError';
+		this.code = code;
+		if (cause !== undefined) this.cause = cause;
+	}
+}
+
 /** Svelte store: null until Clerk finishes loading. */
 export const clerkReady = writable(false);
+
+/**
+ * Svelte store: diagnostic code of the last Clerk initialization failure,
+ * `null` when healthy. The UI renders a translated message; the code stays
+ * for logs and tests, so a failed initialization is never silent.
+ */
+export const clerkError = writable<ClerkInitErrorCode | null>(null);
 
 /** Svelte store: Clerk UserResource when signed in, null otherwise. */
 export const clerkUser = writable<UserResource | null>(null);
@@ -36,30 +76,60 @@ export const clerkSession = writable<SignedInSessionResource | null>(null);
  * Safe to call from `onMount` / dynamic event handlers; never from
  * module-level (top-level) code.
  */
-export async function initClerk(): Promise<Clerk> {
+export async function initClerk(options: ClerkInitOptions = {}): Promise<Clerk> {
 	if (!browser) throw new Error('Clerk may only be initialised in the browser.');
 	if (_clerkInstance) return _clerkInstance;
 
 	if (!_clerkPromise) {
-		_clerkPromise = (async () => {
-			// Dynamic import keeps Clerk out of the SSR bundle.
-			const { Clerk: ClerkClass } = await import('@clerk/clerk-js');
-			const { esES } = await import('@clerk/localizations');
+		_clerkPromise = initializeClerk(options.timeoutMs ?? CLERK_INIT_TIMEOUT_MS).catch(
+			(err: unknown) => {
+				// A failed attempt must never be cached: a retry has to be able to
+				// initialize Clerk from scratch, not re-await the rejected promise.
+				_clerkPromise = null;
+				clerkError.set(err instanceof ClerkInitError ? err.code : 'load_failed');
+				throw err;
+			}
+		);
+	}
 
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			// Use $env/dynamic/public so the key is available at runtime.
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const env = await import('$env/dynamic/public') as any;
-		const PUBLIC_CLERK_PUBLISHABLE_KEY = env.PUBLIC_CLERK_PUBLISHABLE_KEY;
+	return _clerkPromise;
+}
 
-			const clerk = new ClerkClass(PUBLIC_CLERK_PUBLISHABLE_KEY) as Clerk;
+/**
+ * Performs the actual Clerk initialization: loads the SDK, registers the
+ * listeners and waits for `clerk.load()` to settle — with a timeout, so a
+ * load that never settles becomes an error instead of an eternal wait.
+ */
+async function initializeClerk(timeoutMs: number): Promise<Clerk> {
+	// Dynamic import keeps Clerk out of the SSR bundle.
+	const { Clerk: ClerkClass } = await import('@clerk/clerk-js');
+	const { esES } = await import('@clerk/localizations');
 
-			clerk.addListener(({ user, session }) => {
-				clerkUser.set(user ?? null);
-				clerkSession.set(session ?? null);
-			});
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	// Use $env/dynamic/public so the key is available at runtime.
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const env = await import('$env/dynamic/public') as any;
+	const PUBLIC_CLERK_PUBLISHABLE_KEY = env.PUBLIC_CLERK_PUBLISHABLE_KEY;
 
-			await clerk.load({
+	if (!PUBLIC_CLERK_PUBLISHABLE_KEY) {
+		throw new ClerkInitError('missing_key');
+	}
+
+	const clerk = new ClerkClass(PUBLIC_CLERK_PUBLISHABLE_KEY) as Clerk;
+
+	clerk.addListener(({ user, session }) => {
+		clerkUser.set(user ?? null);
+		clerkSession.set(session ?? null);
+	});
+
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const timeout = new Promise<never>((_resolve, reject) => {
+		timer = setTimeout(() => reject(new ClerkInitError('timeout')), timeoutMs);
+	});
+
+	try {
+		await Promise.race([
+			clerk.load({
 				localization: esES,
 				appearance: {
 					variables: {
@@ -68,15 +138,19 @@ export async function initClerk(): Promise<Clerk> {
 						colorPrimary: '#0f766e',
 					},
 				},
-			});
-
-			clerkReady.set(true);
-			_clerkInstance = clerk;
-			return clerk;
-		})();
+			}),
+			timeout
+		]);
+	} catch (err) {
+		throw err instanceof ClerkInitError ? err : new ClerkInitError('load_failed', err);
+	} finally {
+		// Clear on both paths: a settled timer would keep the event loop alive.
+		if (timer !== undefined) clearTimeout(timer);
 	}
 
-	return _clerkPromise;
+	clerkReady.set(true);
+	_clerkInstance = clerk;
+	return clerk;
 }
 
 /** Returns the current Clerk JWT (short-lived, auto-refreshed by Clerk). */
@@ -92,8 +166,17 @@ export async function clerkSignOut(): Promise<void> {
 	_clerkInstance = null;
 	_clerkPromise = null;
 	clerkReady.set(false);
+	clerkError.set(null);
 	clerkUser.set(null);
 	clerkSession.set(null);
+}
+
+/**
+ * Clears a previous initialization failure so the UI can offer a retry.
+ * The next `initClerk()` call starts a fresh attempt.
+ */
+export function resetClerkError(): void {
+	clerkError.set(null);
 }
 
 /** Mounts Clerk's pre-built SignIn component into `el`. */
