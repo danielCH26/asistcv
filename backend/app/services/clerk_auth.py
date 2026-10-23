@@ -51,9 +51,19 @@ class ClerkTokenInvalidError(ClerkAuthError):
 def _parse_publishable_key(key: str) -> str:
     """Derive the Frontend API domain (fsa) from a Clerk publishable key.
 
-    Clerk publishable keys have the format::
+    Handles every publishable-key shape observed in the wild:
 
-        pk_test_<base64url(JSON with key "fsa")>_$
+    * Modern JSON payload (current dashboard format)::
+
+        pk_test_<base64url(JSON with key "fsa")>[[_$]|[$]]
+
+      the trailing "$" (and any "_" right before it) may or may not be
+      present depending on where the key was copied from.
+    * Legacy payload::
+
+        pk_test_<base64url("<front-api-domain>$")>
+
+      the decoded value is the bare Frontend API domain followed by "$".
 
     Returns the fsa string, e.g. ``clerk.example.com``. Raises
     ``ClerkTokenInvalidError`` if the key cannot be parsed.
@@ -61,13 +71,17 @@ def _parse_publishable_key(key: str) -> str:
     if not key.startswith("pk_"):
         raise ClerkTokenInvalidError("clerk_publishable_key does not start with pk_")
 
-    # Strip prefix ("pk_test_" + first char of encoded = 8 chars) and suffix ("_$" = 2 chars).
-    # key = "pk_test_" + encoded (starts with "_") + "_$"
-    # encoded = key[8:-2] (strip 8 from front, 2 from back)
-    inner = key[8:-2]
+    # Strip the scheme prefix ("pk_test_" / "pk_live_" = 8 chars) and a
+    # literal trailing "_$" or "$" if present. Copy-paste sources keep or
+    # drop these inconsistently, so tolerate both.
+    inner = key[8:]
+    if inner.endswith("_$"):
+        inner = inner[:-2]
+    elif inner.endswith("$"):
+        inner = inner[:-1]
     if not inner:
         raise ClerkTokenInvalidError(
-            "clerk_publishable_key does not match expected format pk_..._$"
+            "clerk_publishable_key does not match expected format pk_..."
         )
 
     try:
@@ -83,6 +97,22 @@ def _parse_publishable_key(key: str) -> str:
 
     try:
         decoded_str = decoded_bytes.decode("utf-8")
+    except (UnicodeDecodeError, TypeError) as exc:
+        raise ClerkTokenInvalidError(
+            f"clerk_publishable_key decode/parse failed: {exc}"
+        ) from exc
+
+    # Legacy shape: the decoded payload is the bare front-api domain with a
+    # trailing "$" separator (e.g. "immense-lamb-7783.clerk.accounts.dev$").
+    if not decoded_str.lstrip().startswith("{"):
+        legacy_fsa = decoded_str.rstrip("$")
+        if "." in legacy_fsa:
+            return legacy_fsa
+        raise ClerkTokenInvalidError(
+            "clerk_publishable_key legacy payload is not a valid domain"
+        )
+
+    try:
         payload = json.loads(decoded_str)
         fsa = payload.get("fsa")
         if not fsa:
@@ -90,7 +120,7 @@ def _parse_publishable_key(key: str) -> str:
                 "clerk_publishable_key JSON payload missing 'fsa' key"
             )
         return fsa
-    except (json.JSONDecodeError, UnicodeDecodeError, TypeError) as exc:
+    except json.JSONDecodeError as exc:
         raise ClerkTokenInvalidError(
             f"clerk_publishable_key decode/parse failed: {exc}"
         ) from exc

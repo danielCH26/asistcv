@@ -171,8 +171,8 @@ def test_parse_publishable_key_missing_prefix_raises():
         _parse_publishable_key("sk_live_something")
 
 
-def test_parse_publishable_key_missing_trailer_raises():
-    """Key not ending with _$ raises ClerkTokenInvalidError."""
+def test_parse_publishable_key_non_base64_garbage_raises():
+    """Undecodable payload raises ClerkTokenInvalidError (no valid domain/JSON)."""
     with pytest.raises(ClerkTokenInvalidError):
         _parse_publishable_key("pk_test_abcdef")
 
@@ -181,6 +181,31 @@ def test_parse_publishable_key_invalid_base64_raises():
     """Key with un-decodable base64 raises ClerkTokenInvalidError."""
     with pytest.raises(ClerkTokenInvalidError):
         _parse_publishable_key("pk_test_!!!not-base64!!!_$")
+
+
+def test_parse_publishable_key_legacy_domain_format():
+    """Legacy keys decode to the bare front-api domain + trailing '$'."""
+    # Real-world shape observed in production (2026-10): the dashboard value
+    # was pk_test_<b64url('immense-lamb-7783.clerk.accounts.dev$')>.
+    payload = "immense-lamb-7783.clerk.accounts.dev$"
+    encoded = urlsafe_b64encode(payload.encode()).rstrip(b"=").decode()
+    assert _parse_publishable_key(f"pk_test_{encoded}") == (
+        "immense-lamb-7783.clerk.accounts.dev"
+    )
+
+
+def test_parse_publishable_key_json_without_trailer():
+    """Modern JSON payload without any trailing $/ _$ still parses."""
+    payload_bytes = json.dumps({"fsa": "clerk.example.com"}).encode()
+    encoded = urlsafe_b64encode(payload_bytes).rstrip(b"=").decode()
+    assert _parse_publishable_key(f"pk_test_{encoded}") == "clerk.example.com"
+
+
+def test_parse_publishable_key_json_with_literal_dollar():
+    """Modern JSON payload with a literal trailing $ (copy variants) parses."""
+    payload_bytes = json.dumps({"fsa": "clerk.example.com"}).encode()
+    encoded = urlsafe_b64encode(payload_bytes).rstrip(b"=").decode()
+    assert _parse_publishable_key(f"pk_test_{encoded}$") == "clerk.example.com"
 
 
 def test_parse_publishable_key_missing_fsa_raises():
