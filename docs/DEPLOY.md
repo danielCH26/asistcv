@@ -215,6 +215,10 @@ The frontend is a static SPA (`@sveltejs/adapter-static`, `ssr = false`). Cloudf
 
 Both required variables are build-time: `adapter-static` inlines them into the bundle. `scripts/check-env.mjs` (prebuild) fails the build when one is missing or when `PUBLIC_BACKEND_API_KEY` is defined in the build environment, and `scripts/check-build.mjs` (postbuild) fails when that key reaches the published artifact.
 
+> **Set the variables for the Preview environment too, not only Production.** Cloudflare Pages runs a separate build for every pull request, and each environment has its own variable set. A preview build without these two variables fails in the prebuild guard with
+> `Faltan variables de entorno requeridas para build: PUBLIC_API_URL, PUBLIC_CLERK_PUBLISHABLE_KEY`,
+> which shows up as a red **Cloudflare Pages** check on the pull request. The publishable key is public by design, so it is safe in the preview environment.
+
 ### Verify the deploy
 
 ```bash
