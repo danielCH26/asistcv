@@ -15,6 +15,7 @@ import { goto } from '$app/navigation';
 import { derived, get, writable } from 'svelte/store';
 import type { Readable } from 'svelte/store';
 import type { Role, SessionUser } from '$api/types';
+import type { UserResource } from '@clerk/shared/types/user';
 import { ApiError } from '$api/types';
 import { API_BASE } from '$api/base';
 import {
@@ -173,6 +174,22 @@ export interface Session {
  * The `Session` shape intentionally matches the old surface so that
  * `$session?.user.email` etc. continue to work in existing templates.
  */
+/**
+ * Email carried by the Clerk session.
+ *
+ * Used when the backend record is not there (yet): the local `users` row is
+ * created by the first `/v1/users/me`, so until that call answers — or when
+ * it fails — Clerk's own email is what the UI can show.
+ */
+function clerkEmail(user: UserResource | null): string | null {
+	if (!user) return null;
+	const direct = user.primaryEmailAddress?.emailAddress;
+	if (direct) return direct;
+	const addresses = user.emailAddresses ?? [];
+	const primary = addresses.find((a) => a.id === user.primaryEmailAddressId);
+	return primary?.emailAddress ?? addresses[0]?.emailAddress ?? null;
+}
+
 export const session: Readable<Session | null> = derived(
 	[clerkUser, backendUser],
 	([$clerkUser, $backendUser]) => {
@@ -181,7 +198,28 @@ export const session: Readable<Session | null> = derived(
 	}
 );
 
-export const isAuthenticated = derived(session, ($s) => $s !== null);
+/**
+ * Signed-in state: Clerk holds a session.
+ *
+ * Deliberately NOT "the backend returned a profile". Those are two different
+ * facts, and the second one is slower and failure-prone: the first
+ * `/v1/users/me` after a sign-in has to provision the local user, and it
+ * fails on its own whenever the service is not configured for Clerk.
+ * Deriving the navigation from it made a signed-in user look signed-out —
+ * the header offered "Ingresar" to someone who had a live session, with no
+ * way to tell that they were logged in.
+ */
+export const isAuthenticated = derived(clerkUser, ($u) => $u !== null);
+
+/**
+ * Email of the signed-in user: the backend record when it is loaded, Clerk's
+ * own email otherwise.
+ */
+export const sessionEmail: Readable<string | null> = derived(
+	[clerkUser, backendUser],
+	([$clerkUser, $backendUser]) => $backendUser?.email ?? clerkEmail($clerkUser)
+);
+
 export const isRecruiter = derived(session, ($s) => $s?.user.role === 'recruiter');
 
 /** Role from the authoritative backend user record. */

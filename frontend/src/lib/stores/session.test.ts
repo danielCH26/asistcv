@@ -83,8 +83,13 @@ vi.mock('$lib/clerk', () => ({
 const BACKEND_USER = { id: 7, email: 'a@b.com', role: 'job_seeker', full_name: 'Ana', locale: 'es' };
 const RECRUITER_USER = { id: 8, email: 'r@c.com', role: 'recruiter', full_name: 'Rita', locale: 'es' };
 
-function makeClerkUser(id: string) {
-	return { id, primaryEmailAddressId: 'e1', emailAddresses: [], publicMetadata: {} } as unknown;
+function makeClerkUser(id: string, email?: string) {
+	return {
+		id,
+		primaryEmailAddressId: 'e1',
+		emailAddresses: email ? [{ id: 'e1', emailAddress: email }] : [],
+		publicMetadata: {}
+	} as unknown;
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -156,6 +161,47 @@ describe('isAuthenticated / isRecruiter / currentRole', () => {
 		await new Promise((r) => setTimeout(r, 50));
 
 		expect(get(isRecruiter)).toBe(true);
+	});
+});
+
+describe('isAuthenticated follows the Clerk session, not the backend profile', () => {
+	it('is true as soon as Clerk has a session, even when the backend rejects the profile', async () => {
+		// The backend answers 401: the profile is not provisioned yet, or the
+		// service has no Clerk configuration. The user IS signed in — the
+		// navigation must not pretend otherwise.
+		vi.stubGlobal('fetch', vi.fn(async () => jsonRes({ detail: 'Invalid credentials' }, 401)));
+		const { isAuthenticated, session } = await import('$stores/session');
+		clerkUser.set(makeClerkUser('u3'));
+		await new Promise((r) => setTimeout(r, 50));
+
+		expect(get(isAuthenticated)).toBe(true);
+		// The backend profile is a separate fact and is still missing.
+		expect(get(session)).toBeNull();
+	});
+
+	it('is false when there is no Clerk session', async () => {
+		vi.stubGlobal('fetch', vi.fn(async () => jsonRes(BACKEND_USER, 200)));
+		const { isAuthenticated } = await import('$stores/session');
+		await new Promise((r) => setTimeout(r, 50));
+		expect(get(isAuthenticated)).toBe(false);
+	});
+
+	it('sessionEmail falls back to the Clerk email while the backend profile is missing', async () => {
+		vi.stubGlobal('fetch', vi.fn(async () => jsonRes({ detail: 'Invalid credentials' }, 401)));
+		const { sessionEmail } = await import('$stores/session');
+		clerkUser.set(makeClerkUser('u4', 'ana@example.com'));
+		await new Promise((r) => setTimeout(r, 50));
+
+		expect(get(sessionEmail)).toBe('ana@example.com');
+	});
+
+	it('sessionEmail prefers the backend record when it is loaded', async () => {
+		vi.stubGlobal('fetch', vi.fn(async () => jsonRes(BACKEND_USER, 200)));
+		const { sessionEmail } = await import('$stores/session');
+		clerkUser.set(makeClerkUser('u5', 'ana@example.com'));
+		await new Promise((r) => setTimeout(r, 50));
+
+		expect(get(sessionEmail)).toBe('a@b.com');
 	});
 });
 

@@ -4,7 +4,7 @@
 	import LanguageToggle from '$components/LanguageToggle.svelte';
 	import { page } from '$app/stores';
 	import { _ } from 'svelte-i18n';
-	import { isAuthenticated, isRecruiter, logout, session } from '$stores/session';
+	import { isAuthenticated, isRecruiter, logout, sessionEmail } from '$stores/session';
 	import { initClerk } from '$lib/clerk';
 	import { onMount } from 'svelte';
 
@@ -72,7 +72,7 @@
 				<button
 					type="button"
 					class="app-shell__session"
-					title={$session?.user.email}
+					title={$sessionEmail}
 					on:click={() => logout()}>{$_('app.nav.logout')}</button
 				>
 			{:else}
