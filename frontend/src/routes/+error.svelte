@@ -18,8 +18,9 @@
 			? 'Algo salió mal en el servidor. Reintentá en unos minutos.'
 			: $page.error?.message ?? 'Ocurrió un error inesperado.';
 
-	$: showHome = isAuthenticated;
-	$: homeHref = isAuthenticated ? '/profile' : '/';
+	// The store itself is always truthy — the signed-in state is its value.
+	$: showHome = $isAuthenticated;
+	$: homeHref = $isAuthenticated ? '/profile' : '/';
 </script>
 
 <div class="error-page">
