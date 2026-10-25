@@ -14,6 +14,8 @@
 
 import { browser } from '$app/environment';
 import { writable } from 'svelte/store';
+import { PUBLIC_CLERK_PUBLISHABLE_KEY } from '$env/static/public';
+import { clerkUIBundleConstructor, loadClerkUIBundle } from '$lib/clerk-ui';
 import type { Clerk } from '@clerk/clerk-js';
 import type { UserResource } from '@clerk/shared/types/user';
 import type { SignedInSessionResource } from '@clerk/shared/types/session';
@@ -105,17 +107,20 @@ async function initializeClerk(timeoutMs: number): Promise<Clerk> {
 	const { Clerk: ClerkClass } = await import('@clerk/clerk-js');
 	const { esES } = await import('@clerk/localizations');
 
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	// Use $env/dynamic/public so the key is available at runtime.
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const env = await import('$env/dynamic/public') as any;
-	const PUBLIC_CLERK_PUBLISHABLE_KEY = env.PUBLIC_CLERK_PUBLISHABLE_KEY;
-
-	if (!PUBLIC_CLERK_PUBLISHABLE_KEY) {
+	// Build-time literal. `$env/static/public` inlines the value into the
+	// client bundle at build time (same pattern as `$lib/api/base.ts` uses
+	// for PUBLIC_API_URL).
+	//
+	// Do NOT use `$env/dynamic/public`: its browser module exports a single
+	// `env` object, so `mod.PUBLIC_CLERK_PUBLISHABLE_KEY` is always
+	// `undefined` — that was the root cause of the "Clerk keys are missing
+	// from your environment" failure in prod (QA 2026-10).
+	const publishableKey = (PUBLIC_CLERK_PUBLISHABLE_KEY ?? '').trim();
+	if (!publishableKey) {
 		throw new ClerkInitError('missing_key');
 	}
 
-	const clerk = new ClerkClass(PUBLIC_CLERK_PUBLISHABLE_KEY) as Clerk;
+	const clerk = new ClerkClass(publishableKey) as Clerk;
 
 	clerk.addListener(({ user, session }) => {
 		clerkUser.set(user ?? null);
@@ -129,16 +134,28 @@ async function initializeClerk(timeoutMs: number): Promise<Clerk> {
 
 	try {
 		await Promise.race([
-			clerk.load({
-				localization: esES,
-				appearance: {
-					variables: {
-						// Teal primary matching AsistCV's `--color-action` token
-						// (palette['--color-action'] = '#0f766e').
-						colorPrimary: '#0f766e',
+			(async () => {
+				// The UI bundle must be present BEFORE `clerk.load()` — the SDK
+				// resolves `ui.ClerkUI` at load time and never fetches it
+				// itself. It runs INSIDE the timeout on purpose: a CDN that
+				// never answers must surface as a timeout, not as an eternal
+				// wait (the exact failure this module exists to prevent).
+				await loadClerkUIBundle(publishableKey);
+
+				await clerk.load({
+					localization: esES,
+					appearance: {
+						variables: {
+							// Teal primary matching AsistCV's `--color-action` token
+							// (palette['--color-action'] = '#0f766e').
+							colorPrimary: '#0f766e',
+						},
 					},
-				},
-			}),
+					// Clerk v6: the prebuilt components come from the @clerk/ui
+					// bundle loaded above (sets window.__internal_ClerkUICtor).
+					ui: { ClerkUI: clerkUIBundleConstructor() },
+				});
+			})(),
 			timeout
 		]);
 	} catch (err) {

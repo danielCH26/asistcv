@@ -265,7 +265,13 @@ async def verify_clerk_session_token(token: str) -> ClerkClaims:
 
     # Step 3: decode RS256 token
     # Clerk session tokens have no aud claim; issuer is the Frontend API domain.
-    issuer = f"https://{_parse_publishable_key(publishable_key)}/"
+    #
+    # Clerk emits ``iss`` WITHOUT a trailing slash
+    # (e.g. "https://immense-lamb-7783.clerk.accounts.dev"), so the issuer
+    # must be built exactly that way. A trailing slash made every real
+    # session token fail with "Token issuer mismatch" → 401
+    # "Invalid credentials" (QA 2026-10, bug in the S1-S4 Clerk commit).
+    issuer = f"https://{_parse_publishable_key(publishable_key)}"
 
     try:
         payload = jwt.decode(

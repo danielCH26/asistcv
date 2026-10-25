@@ -173,15 +173,41 @@ jobs:
       # ENVIRONMENT, not from the source: with adapter-static every
       # PUBLIC_* var is published in /_app/env.js. A negative test proves
       # the guard still rejects that case.
+      #
+      # The Clerk publishable key is required too, so the negative test has
+      # to provide it: otherwise the guard would fail for the missing key
+      # and the test would keep passing even if the service-key check rotted.
       - name: Guard - the env guard rejects a service key in the build env
         run: |
           if PUBLIC_API_URL="https://example.invalid" \
+             PUBLIC_CLERK_PUBLISHABLE_KEY="pk_test_ci_canary" \
              PUBLIC_BACKEND_API_KEY="leak-canary" \
              node scripts/check-env.mjs; then
             echo "::error::the env guard accepted PUBLIC_BACKEND_API_KEY — the leak guard is broken"
             exit 1
           fi
           echo "guard rejected the key as expected"
+        working-directory: frontend
+
+      # The guard must also ACCEPT a complete environment. Without this, a
+      # guard that rejected everything would satisfy every negative test.
+      - name: Guard - the env guard accepts a complete environment
+        run: |
+          PUBLIC_API_URL="https://example.invalid" \
+          PUBLIC_CLERK_PUBLISHABLE_KEY="pk_test_ci_canary" \
+          node scripts/check-env.mjs
+          echo "guard accepted the clean env as expected"
+        working-directory: frontend
+
+      # ...and it must REJECT a build that would ship without the Clerk key.
+      - name: Guard - the env guard rejects a build without the Clerk key
+        run: |
+          if PUBLIC_API_URL="https://example.invalid" \
+             node scripts/check-env.mjs; then
+            echo "::error::the env guard accepted a build without PUBLIC_CLERK_PUBLISHABLE_KEY"
+            exit 1
+          fi
+          echo "guard rejected the missing Clerk key as expected"
         working-directory: frontend
 
       - name: Test frontend (vitest)

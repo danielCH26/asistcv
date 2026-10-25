@@ -82,7 +82,12 @@ Three things must line up, or sign-up silently fails:
 | Render env | `CLERK_PUBLISHABLE_KEY` (same key), `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SIGNING_SECRET` |
 | Clerk dashboard | The webhook endpoint, pointing at `https://<backend>/api/v1/webhooks/clerk` (note the `/api/v1` prefix) |
 
-**How to tell a broken publishable key apart from a broken backend:** the Clerk Frontend API answers `GET https://<frontend-api>/v1/client` with HTTP 200 but `"client": null` when the key does not resolve to a client on that instance. Clerk JS then has no UI to mount and the page never finishes loading. The backend, meanwhile, keeps serving `/health` normally — a green backend does **not** mean auth works.
+**How to tell a broken publishable key apart from a broken backend.** The decisive signal is whether the browser talks to the Clerk Frontend API at all. Open `/login` with the devtools console open:
+
+- **No request to `*.clerk.accounts.dev` at all**: the publishable key never reached Clerk, so the SDK aborted before any network call and the console shows `Clerk keys are missing from your environment`. The frontend must read the key from `$env/static/public` — `$env/dynamic/public` exports a single `env` object, so `mod.PUBLIC_CLERK_PUBLISHABLE_KEY` is always `undefined` (this was the production failure).
+- **Requests to `/v1/environment` and `/v1/client` that answer HTTP 200**: the instance and the key are fine. If the page still does not render, the failure is in the UI bundle (`npm/@clerk/ui`), not in the key.
+
+> Do not diagnose from a bare `curl` of `/v1/client`. That endpoint answers `"client": null` for a perfectly valid key when the request omits the API version Clerk JS actually sends (`__clerk_api_version=2026-08-20` for `@clerk/clerk-js` 6.x) or the `Origin` of an allowed origin. A probe that does not match what the browser sends reports a false positive.
 
 > **A `pk_test_` key on a `*.clerk.accounts.dev` domain is a development instance.** Clerk deletes inactive development instances, and a dev instance is not a production identity provider. Use a production instance (`pk_live_...`) for the deployed environment.
 
@@ -186,6 +191,71 @@ To make CI gate the deploy: Render → Settings → **Build & Deploy** →
 **Deploy Hook** or enable "Wait for CI" via GitHub Checks (Render → Settings →
 "Prevent deploy if build fails" / GitHub integration settings).
 
+## Deploy — Cloudflare Pages (frontend)
+
+The frontend is a static SPA (`@sveltejs/adapter-static`, `ssr = false`). Cloudflare Pages builds it from `frontend/` and publishes `frontend/build`.
+
+### Build settings
+
+| Setting | Value |
+|---|---|
+| Build command | `npm ci && npm run build` |
+| Build output directory | `build` |
+| Root directory | `frontend` |
+
+(If the project root is the repository root instead, use `cd frontend && npm ci && npm run build` with the output directory `frontend/build`.)
+
+### Environment variables (Settings → Environment variables)
+
+| Variable | Value | Required |
+|---|---|---|
+| `PUBLIC_API_URL` | `https://asistcv-backend.onrender.com` | yes |
+| `PUBLIC_CLERK_PUBLISHABLE_KEY` | the `pk_...` key of the same Clerk instance the backend uses | yes |
+| `PUBLIC_BACKEND_API_KEY` | **must NOT be set** | no |
+
+Both required variables are build-time: `adapter-static` inlines them into the bundle. `scripts/check-env.mjs` (prebuild) fails the build when one is missing or when `PUBLIC_BACKEND_API_KEY` is defined in the build environment, and `scripts/check-build.mjs` (postbuild) fails when that key reaches the published artifact.
+
+> **Set the variables for the Preview environment too, not only Production.** Cloudflare Pages runs a separate build for every pull request, and each environment has its own variable set. A preview build without these two variables fails in the prebuild guard with
+> `Faltan variables de entorno requeridas para build: PUBLIC_API_URL, PUBLIC_CLERK_PUBLISHABLE_KEY`,
+> which shows up as a red **Cloudflare Pages** check on the pull request. The publishable key is public by design, so it is safe in the preview environment.
+
+### Verify the deploy
+
+```bash
+# The published env module must carry the key and nothing else
+curl -s https://asistcv-frontend.pages.dev/_app/env.js
+# → export const env={"PUBLIC_API_URL":"...","PUBLIC_CLERK_PUBLISHABLE_KEY":"pk_..."}
+
+# The published Clerk chunk must carry the key inlined
+curl -s https://asistcv-frontend.pages.dev/_app/immutable/chunks/clerk.*.js | grep -c 'pk_'
+```
+
+A stale build is easy to recognise: the chunk that carries the key changes its hash on every build that includes it (`chunks/clerk.<hash>.js`). **If the hash does not change between deploys, the build ran without the key.**
+
+### Rotating the service key
+
+`BACKEND_API_KEY` authenticates the protected `/v1` surface and the cleanup crons. It lives in three places that must change together:
+
+1. Render → Environment → `BACKEND_API_KEY`
+2. GitHub → Settings → Secrets and variables → Actions → `BACKEND_API_KEY`
+3. The `mcp-adapter` settings → `BACKEND_API_KEY`
+
+Change all three, then redeploy the backend. `PUBLIC_BACKEND_API_KEY` is **not** part of the rotation: it must not exist anywhere.
+
+## Deploy order
+
+Backend and frontend ship **together** — they are two halves of one feature. The frontend change (the publishable key reaching the bundle) and the backend change (the Clerk verifier) depend on each other: shipping the frontend first leaves the API rejecting every session; shipping the backend first leaves the page unable to mount Clerk.
+
+> **Step 0 — clean the Cloudflare Pages environment BEFORE the deploy.** `PUBLIC_BACKEND_API_KEY` is currently defined there, and with the guard in `scripts/check-env.mjs` a build that finds it **fails on purpose**. A failing Pages build keeps the previous build live, so merging without removing that variable changes nothing in production and the login stays on the spinner. Remove it from the **Production** environment (and set the two required variables in **Preview** so pull-request builds go green), then deploy.
+
+1. **Cloudflare Pages**: remove `PUBLIC_BACKEND_API_KEY` from Production; add `PUBLIC_API_URL` and `PUBLIC_CLERK_PUBLISHABLE_KEY` to **Preview** as well; trigger a new build from `main` with a cleared build cache.
+2. **Backend** (Render): set the four Clerk variables, then redeploy.
+3. **Neon**: `alembic upgrade head` (the Dockerfile does NOT run migrations on startup — see "Apply the migrations").
+4. **Clerk dashboard**: register the webhook at `https://<backend>/api/v1/webhooks/clerk` for `user.created`, `user.updated`, `user.deleted`.
+5. **Smoke test**: sign up with an email code → the first `/v1/users/me` creates the row → sign in → run a match.
+
+If the Pages build cannot be triggered before the backend is ready, deploy the backend first: the old frontend build keeps showing its own error, which is a better failure mode than a frontend that mounts Clerk while the backend cannot verify its tokens.
+
 ## Limitations of the free tier
 
 - **Cold starts**: after ~15 min without traffic, the service spins down.
@@ -228,10 +298,7 @@ from the service dashboard.
   with `AUDIT_CLEANUP_TOKEN` using `hmac.compare_digest` and fails closed
   when unset. Copy the value from the service into the secret — do **not**
   generate a new one.
-- **Sign-up page loads forever**: the Clerk publishable key does not resolve
-  to a client on its instance. Check `GET https://<frontend-api>/v1/client`
-  with the key: `"client": null` means the key is wrong, stale, or belongs
-  to another instance. The backend staying healthy does not rule this out.
+- **Sign-up page loads forever**: read the console first. A missing publishable key aborts the Clerk SDK before any request leaves the browser (`Clerk keys are missing from your environment`). A page that keeps the spinner without that message is an initialization that never settled: the initialization is bounded (15 s) and then renders an error with a retry button, so a spinner that never ends means the deployed build predates that bound. The backend staying healthy rules none of this out — `/health` never exercises Clerk.
 - **`DATABASE_URL` errors at runtime**: confirm the Neon string includes
   `?sslmode=require&channel_binding=require` — our SQLAlchemy config strips
   libpq-only params for asyncpg automatically (see `app/db/session.py`).

@@ -1,7 +1,12 @@
 /**
- * Pre-build guard: falla el build si PUBLIC_API_URL no está definida.
+ * Pre-build guard: falla el build si PUBLIC_API_URL o
+ * PUBLIC_CLERK_PUBLISHABLE_KEY no están definidas.
  * Se ejecuta antes de `vite build` para cumplir el scenario match-ui
  * "Build falla sin la env var".
+ *
+ * PUBLIC_CLERK_PUBLISHABLE_KEY es REQUIRED: sin ella el bundle de Clerk
+ * arranca sin publishable key y el login muere con "Clerk keys are missing
+ * from your environment" en runtime (fallo observado en prod, QA 2026-10).
  *
  * Además, falla si `PUBLIC_BACKEND_API_KEY` reaparece en `src/`:
  * la autenticación es por sesión JWT desde el sprint 2 y la API key
@@ -15,13 +20,37 @@
  * key de servicio del backend queda publicada y sirve para llamar a toda la
  * superficie protegida de `/v1`.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const REQUIRED = ['PUBLIC_API_URL'];
+const REQUIRED = ['PUBLIC_API_URL', 'PUBLIC_CLERK_PUBLISHABLE_KEY'];
 const FORBIDDEN_KEY = 'PUBLIC_BACKEND_API_KEY';
 const SRC_DIR = fileURLToPath(new URL('../src', import.meta.url));
+const ROOT_DIR = fileURLToPath(new URL('..', import.meta.url));
+
+/**
+ * Lee una variable desde `process.env` y, si no está, desde los archivos
+ * `.env` / `.env.local` del frontend (mismo criterio de precedencia que
+ * Vite). Cloudflare Pages y CI inyectan las vars en `process.env`; en local
+ * suelen vivir solo en `.env.local`.
+ */
+function readEnv(name) {
+	const fromProcess = process.env[name];
+	if (fromProcess && fromProcess.trim() !== '') return fromProcess.trim();
+
+	for (const file of ['.env', '.env.local']) {
+		const full = join(ROOT_DIR, file);
+		if (!existsSync(full)) continue;
+		for (const line of readFileSync(full, 'utf8').split('\n')) {
+			const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+			if (!match || match[1] !== name) continue;
+			const value = match[2].replace(/^["']|["']$/g, '').trim();
+			if (value !== '') return value;
+		}
+	}
+	return '';
+}
 
 function fail(missing) {
 	console.error(`[AsistCV] Faltan variables de entorno requeridas para build: ${missing.join(', ')}`);
@@ -29,10 +58,7 @@ function fail(missing) {
 	process.exit(1);
 }
 
-const missing = REQUIRED.filter((name) => {
-	const value = process.env[name];
-	return !value || value.trim() === '';
-});
+const missing = REQUIRED.filter((name) => readEnv(name) === '');
 
 if (missing.length > 0) {
 	fail(missing);
@@ -74,5 +100,7 @@ if (process.env[FORBIDDEN_KEY]) {
 // Nota: la verificación del artefacto construido vive en `check-build.mjs`
 // (postbuild). Aquí sólo se validan las ENTRADAS del build; leer un
 // `build/` viejo desde el prebuild bloquearía builds legítimos.
-console.log(`[AsistCV] env guard OK — PUBLIC_API_URL definido, sin ${FORBIDDEN_KEY} en el código ni en el entorno.`);
+console.log(
+	`[AsistCV] env guard OK — ${REQUIRED.join(' y ')} definidas, sin ${FORBIDDEN_KEY} en el código ni en el entorno.`
+);
 process.exit(0);

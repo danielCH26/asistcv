@@ -34,10 +34,23 @@ vi.mock('@clerk/localizations', () => ({
 	esES: {}
 }));
 
-vi.mock('$env/dynamic/public', () => ({
+// The publishable key is read from `$env/static/public`, which inlines the
+// value into the client bundle at build time. `$env/dynamic/public` cannot
+// be used: its browser module exports a single `env` object, so
+// `mod.PUBLIC_CLERK_PUBLISHABLE_KEY` is always undefined.
+vi.mock('$env/static/public', () => ({
 	get PUBLIC_CLERK_PUBLISHABLE_KEY() {
 		return publishableKey.value;
 	}
+}));
+
+// The Clerk UI bundle is loaded from the Frontend API CDN in production.
+// Tests stub it: jsdom does not fetch external scripts, so the real loader
+// would never settle.
+const loadUIBundleMock = vi.fn().mockResolvedValue(undefined);
+vi.mock('$lib/clerk-ui', () => ({
+	loadClerkUIBundle: loadUIBundleMock,
+	clerkUIBundleConstructor: () => ({})
 }));
 
 /** Fresh module instance per test: the singleton cache is module-level. */
@@ -50,6 +63,7 @@ beforeEach(() => {
 	loadMock.mockReset();
 	addListenerMock.mockReset();
 	publishableKey.value = 'pk_test_dummy';
+	loadUIBundleMock.mockReset().mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -82,6 +96,27 @@ describe('initClerk — failure handling', () => {
 
 		await expect(initClerk()).rejects.toMatchObject({ code: 'missing_key' });
 		expect(get(clerkError)).toBe('missing_key');
+	});
+
+	it('rejects with a timeout when the UI bundle never settles', async () => {
+		// A blocked or slow Frontend API CDN must not hang the page: the
+		// bundle load runs inside the initialization timeout.
+		loadUIBundleMock.mockReturnValue(new Promise(() => {}));
+
+		const { initClerk, clerkError } = await freshModule();
+
+		await expect(initClerk({ timeoutMs: 50 })).rejects.toMatchObject({ code: 'timeout' });
+		expect(get(clerkError)).toBe('timeout');
+		expect(loadMock).not.toHaveBeenCalled();
+	});
+
+	it('rejects with load_failed when the UI bundle fails to load', async () => {
+		loadUIBundleMock.mockRejectedValue(new Error('Failed to load @clerk/ui bundle'));
+
+		const { initClerk, clerkError } = await freshModule();
+
+		await expect(initClerk()).rejects.toMatchObject({ code: 'load_failed' });
+		expect(get(clerkError)).toBe('load_failed');
 	});
 
 	it('can retry after a failed initialization', async () => {

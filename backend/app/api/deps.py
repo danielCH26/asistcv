@@ -536,12 +536,21 @@ def get_runner():
 # Keep the old verify_api_key for backward compatibility with specific routes
 async def verify_api_key(
     api_key_header: str | None = Depends(_security),
+    db: AsyncSession = Depends(get_session),
 ) -> CurrentUser:
     """Legacy API key verification for routes that need it.
 
     Prefer get_current_user for new endpoints.
+
+    ``db`` MUST be injected and forwarded: ``get_current_user`` resolves the
+    Clerk principal (and auto-provisions the user) through the database
+    session. Calling it without a real session left the dependency default
+    (a ``Depends`` marker) in place, so any Clerk-authenticated request to
+    the ``/v1/users`` router crashed with
+    ``AttributeError: 'Depends' object has no attribute 'execute'``
+    (QA 2026-10).
     """
-    return await get_current_user(api_key_header)
+    return await get_current_user(api_key_header, db)
 
 
 # Type alias for dependency injection
