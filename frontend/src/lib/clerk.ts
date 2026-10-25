@@ -122,23 +122,9 @@ async function initializeClerk(timeoutMs: number): Promise<Clerk> {
 
 	const clerk = new ClerkClass(publishableKey) as Clerk;
 
-	// Clerk restaura la sesión desde el cookie de forma asíncrona: el
-	// listener —que es quien entrega el usuario real— puede disparar un
-	// tick DESPUÉS de que `load()` resuelva, y `clerk.user` sigue
-	// `undefined` hasta entonces. `requireSession()` espera `clerkReady` y
-	// lee `clerkUser` en el mismo turno, así que publicar el usuario antes
-	// de marcar "ready" es lo que hace la guarda determinista: sin esto, una
-	// carga completa de una página protegida expulsaba a un usuario que sí
-	// tenía sesión.
-	let settleUser: () => void = () => {};
-	const userResolved = new Promise<void>((resolve) => {
-		settleUser = resolve;
-	});
-
 	clerk.addListener(({ user, session }) => {
 		clerkUser.set(user ?? null);
 		clerkSession.set(session ?? null);
-		settleUser();
 	});
 
 	let timer: ReturnType<typeof setTimeout> | undefined;
@@ -179,18 +165,21 @@ async function initializeClerk(timeoutMs: number): Promise<Clerk> {
 		if (timer !== undefined) clearTimeout(timer);
 	}
 
-	// The session user may still be unresolved: Clerk restores it from the
-	// cookie asynchronously, and the listener that delivers it can fire a
-	// tick after `load()` settles. Waiting for it BEFORE signalling "ready"
-	// is what makes the guard deterministic — `requireSession()` reads
-	// `clerkUser` in the same turn it observes `clerkReady`. The instance's
-	// own state is only read afterwards: Clerk populates it before it
-	// notifies, so by then it is the resolved value and not `undefined`.
-	await Promise.race([
-		userResolved,
-		new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))
-	]);
+	// Clerk leaves `session`/`user` as `undefined` until it resolves the
+	// session — which it does asynchronously, restoring it from the cookie,
+	// and it can settle a tick AFTER `load()` resolves. `undefined` means
+	// "we don't know yet"; `null` means "resolved: there is no session".
+	//
+	// `requireSession()` waits for `clerkReady` and reads `clerkUser` in the
+	// same turn, so the resolved session must be published BEFORE "ready":
+	// publishing `undefined` as `null` made a signed-in user be thrown to
+	// the login page on every full page load.
+	const deadline = Date.now() + timeoutMs;
+	while (clerk.session === undefined && Date.now() < deadline) {
+		await new Promise((resolve) => setTimeout(resolve, 25));
+	}
 	clerkUser.set(clerk.user ?? null);
+	clerkSession.set(clerk.session ?? null);
 	clerkReady.set(true);
 	_clerkInstance = clerk;
 	return clerk;
