@@ -90,6 +90,8 @@ Three things must line up, or sign-up silently fails:
 > Do not diagnose from a bare `curl` of `/v1/client`. That endpoint answers `"client": null` for a perfectly valid key when the request omits the API version Clerk JS actually sends (`__clerk_api_version=2026-08-20` for `@clerk/clerk-js` 6.x) or the `Origin` of an allowed origin. A probe that does not match what the browser sends reports a false positive.
 
 > **A `pk_test_` key on a `*.clerk.accounts.dev` domain is a development instance.** Clerk deletes inactive development instances, and a dev instance is not a production identity provider. Use a production instance (`pk_live_...`) for the deployed environment.
+>
+> Development instances also enforce **strict usage limits**, and when one is hit the Frontend API answers `HTTP 500` with the plain body `Rate exceeded.` — not a 4xx and not a structured error. The symptom on the frontend is a session that never resolves: `/login` and `/signup` render the error card ("No pudimos cargar el acceso") with a retry button, and protected pages bounce away after loading. If that appears intermittently, the instance has outgrown development and the fix is the production instance, not the code.
 
 **Do not put `PUBLIC_BACKEND_API_KEY` in the Cloudflare Pages environment.** With `adapter-static`, every `PUBLIC_*` variable is published in `/_app/env.js`, which is served to every visitor — the service key would be readable by anyone. The frontend authenticates exclusively with the Clerk session token; the service key belongs only in Render, the `mcp-adapter` settings and the GitHub Actions secret. The build fails on purpose if it is present (`scripts/check-env.mjs` and `scripts/check-build.mjs`).
 
