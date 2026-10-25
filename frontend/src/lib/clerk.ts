@@ -122,9 +122,23 @@ async function initializeClerk(timeoutMs: number): Promise<Clerk> {
 
 	const clerk = new ClerkClass(publishableKey) as Clerk;
 
+	// Clerk restaura la sesión desde el cookie de forma asíncrona: el
+	// listener —que es quien entrega el usuario real— puede disparar un
+	// tick DESPUÉS de que `load()` resuelva, y `clerk.user` sigue
+	// `undefined` hasta entonces. `requireSession()` espera `clerkReady` y
+	// lee `clerkUser` en el mismo turno, así que publicar el usuario antes
+	// de marcar "ready" es lo que hace la guarda determinista: sin esto, una
+	// carga completa de una página protegida expulsaba a un usuario que sí
+	// tenía sesión.
+	let settleUser: () => void = () => {};
+	const userResolved = new Promise<void>((resolve) => {
+		settleUser = resolve;
+	});
+
 	clerk.addListener(({ user, session }) => {
 		clerkUser.set(user ?? null);
 		clerkSession.set(session ?? null);
+		settleUser();
 	});
 
 	let timer: ReturnType<typeof setTimeout> | undefined;
@@ -165,11 +179,17 @@ async function initializeClerk(timeoutMs: number): Promise<Clerk> {
 		if (timer !== undefined) clearTimeout(timer);
 	}
 
-	// The listener may not have fired yet: the session is already resolved
-	// on the instance. Publishing it BEFORE signalling "ready" makes the
-	// order deterministic for `requireSession()`, which waits for `clerkReady`
-	// and then reads `clerkUser` in the same turn — otherwise a signed-in
-	// user can be thrown to the login page.
+	// The session user may still be unresolved: Clerk restores it from the
+	// cookie asynchronously, and the listener that delivers it can fire a
+	// tick after `load()` settles. Waiting for it BEFORE signalling "ready"
+	// is what makes the guard deterministic — `requireSession()` reads
+	// `clerkUser` in the same turn it observes `clerkReady`. The instance's
+	// own state is only read afterwards: Clerk populates it before it
+	// notifies, so by then it is the resolved value and not `undefined`.
+	await Promise.race([
+		userResolved,
+		new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))
+	]);
 	clerkUser.set(clerk.user ?? null);
 	clerkReady.set(true);
 	_clerkInstance = clerk;
