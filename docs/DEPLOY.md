@@ -246,11 +246,15 @@ Change all three, then redeploy the backend. `PUBLIC_BACKEND_API_KEY` is **not**
 
 Backend and frontend ship **together** — they are two halves of one feature. The frontend change (the publishable key reaching the bundle) and the backend change (the Clerk verifier) depend on each other: shipping the frontend first leaves the API rejecting every session; shipping the backend first leaves the page unable to mount Clerk.
 
-1. **Backend** (Render): set the four Clerk variables, then redeploy.
-2. **Frontend** (Cloudflare Pages): set `PUBLIC_CLERK_PUBLISHABLE_KEY`, then trigger a new build.
+> **Step 0 — clean the Cloudflare Pages environment BEFORE the deploy.** `PUBLIC_BACKEND_API_KEY` is currently defined there, and with the guard in `scripts/check-env.mjs` a build that finds it **fails on purpose**. A failing Pages build keeps the previous build live, so merging without removing that variable changes nothing in production and the login stays on the spinner. Remove it from the **Production** environment (and set the two required variables in **Preview** so pull-request builds go green), then deploy.
+
+1. **Cloudflare Pages**: remove `PUBLIC_BACKEND_API_KEY` from Production; add `PUBLIC_API_URL` and `PUBLIC_CLERK_PUBLISHABLE_KEY` to **Preview** as well; trigger a new build from `main` with a cleared build cache.
+2. **Backend** (Render): set the four Clerk variables, then redeploy.
 3. **Neon**: `alembic upgrade head` (the Dockerfile does NOT run migrations on startup — see "Apply the migrations").
 4. **Clerk dashboard**: register the webhook at `https://<backend>/api/v1/webhooks/clerk` for `user.created`, `user.updated`, `user.deleted`.
 5. **Smoke test**: sign up with an email code → the first `/v1/users/me` creates the row → sign in → run a match.
+
+If the Pages build cannot be triggered before the backend is ready, deploy the backend first: the old frontend build keeps showing its own error, which is a better failure mode than a frontend that mounts Clerk while the backend cannot verify its tokens.
 
 ## Limitations of the free tier
 
