@@ -165,6 +165,12 @@ async function initializeClerk(timeoutMs: number): Promise<Clerk> {
 		if (timer !== undefined) clearTimeout(timer);
 	}
 
+	// The listener may not have fired yet: the session is already resolved
+	// on the instance. Publishing it BEFORE signalling "ready" makes the
+	// order deterministic for `requireSession()`, which waits for `clerkReady`
+	// and then reads `clerkUser` in the same turn — otherwise a signed-in
+	// user can be thrown to the login page.
+	clerkUser.set(clerk.user ?? null);
 	clerkReady.set(true);
 	_clerkInstance = clerk;
 	return clerk;

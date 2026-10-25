@@ -27,7 +27,7 @@ import {
 	type OfferPreferences
 } from './types';
 import { clearPendingAuditToken } from '$stores/session';
-import { getToken } from '$lib/clerk';
+import { clerkUser, getToken } from '$lib/clerk';
 
 /**
  * Wrapper sobre `fetch` que envía `Authorization: Bearer <token>` sourced
@@ -169,10 +169,27 @@ async function request<T>(path: string, init: RequestInit = {}, options: Request
 	}
 
 	if (response.status === 401) {
-		if (wantsAuth && browser && !window.location.pathname.startsWith('/login')) {
+		// Un 401 con una sesión de Clerk viva NO es una sesión expirada: es el
+		// backend el que no puede verificar el token (falta configuración, o el
+		// usuario todavía no fue provisionado). Mandar a /login en ese caso
+		// expulsa a un usuario que sí está logueado, y Clerk lo devuelve
+		// enseguida a la página de inicio: un rebote que parece un loop.
+		const signedIn = get(clerkUser) !== null;
+
+		if (wantsAuth && browser && !signedIn && !window.location.pathname.startsWith('/login')) {
 			await goto('/login?reason=expired');
 		}
-		throw await toApiError(response);
+
+		const error = await toApiError(response);
+		if (signedIn) {
+			throw new ApiError(
+				'No pudimos verificar tu sesión. Revisá la conexión o intentá de nuevo en un momento.',
+				401,
+				error.cause,
+				error.code
+			);
+		}
+		throw error;
 	}
 
 	if (!response.ok) {
