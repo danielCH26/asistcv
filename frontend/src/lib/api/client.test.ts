@@ -75,6 +75,11 @@ beforeEach(() => {
 	localStorage.clear();
 	vi.unstubAllGlobals();
 	fakeToken = 'clerk.jwt.token';
+	clerkUser.set(null);
+	// The navigation mock is shared by every test in this file: without a
+	// clean count, a test asserting "did not navigate" sees the calls of the
+	// previous ones.
+	vi.clearAllMocks();
 	vi.resetModules();
 });
 
@@ -142,6 +147,31 @@ describe('apiClient — 401 handling (no refresh)', () => {
 		await expect(apiClient.listAnalyses()).rejects.toThrow();
 
 		expect(goto).toHaveBeenCalledWith('/login?reason=expired');
+	});
+
+	it('401 with a live Clerk session does NOT redirect to /login', async () => {
+		// The backend answered 401 because it could not verify the token (the
+		// service is not configured for Clerk, or the user is not provisioned
+		// yet). The session is alive: sending the user to /login bounces them
+		// straight back, because Clerk signs them out of the login page.
+		clerkUser.set({ id: 'user_1' });
+		const { goto } = await import('$app/navigation');
+		const fetchMock = vi.fn(async () => jsonRes({ detail: 'Invalid credentials' }, 401));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const { apiClient } = await import('./client');
+		await expect(apiClient.listAnalyses()).rejects.toThrow();
+
+		expect(goto).not.toHaveBeenCalled();
+	});
+
+	it('401 with a live Clerk session does not claim the session expired', async () => {
+		clerkUser.set({ id: 'user_1' });
+		const fetchMock = vi.fn(async () => jsonRes({ detail: 'Invalid credentials' }, 401));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const { apiClient } = await import('./client');
+		await expect(apiClient.listAnalyses()).rejects.toThrow(/no pudimos verificar tu sesión/i);
 	});
 });
 

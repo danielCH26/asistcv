@@ -27,6 +27,8 @@ vi.mock('@clerk/clerk-js', () => ({
 	Clerk: class {
 		addListener = addListenerMock;
 		load = loadMock;
+		// The resolved session user. Clerk exposes it once `load()` settles.
+		user = { id: 'user_1', emailAddresses: [] };
 	}
 }));
 
@@ -117,6 +119,26 @@ describe('initClerk — failure handling', () => {
 
 		await expect(initClerk()).rejects.toMatchObject({ code: 'load_failed' });
 		expect(get(clerkError)).toBe('load_failed');
+	});
+
+	it('publishes the session user before signalling that Clerk is ready', async () => {
+		// `requireSession()` waits for `clerkReady` and then reads
+		// `clerkUser` in the same turn. If the user is published later, that
+		// read sees null and a signed-in user gets thrown to the login page.
+		loadMock.mockResolvedValue(undefined);
+
+		const { initClerk, clerkReady, clerkUser } = await freshModule();
+
+		let userWhenReady: unknown = 'not-ready';
+		const unsub = clerkReady.subscribe((v: boolean) => {
+			if (v) userWhenReady = get(clerkUser);
+		});
+
+		await initClerk();
+
+		expect(userWhenReady).not.toBeNull();
+		expect(userWhenReady).not.toBe('not-ready');
+		unsub();
 	});
 
 	it('can retry after a failed initialization', async () => {
