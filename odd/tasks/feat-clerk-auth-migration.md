@@ -278,3 +278,84 @@ parser viejo lo rompe; el tolerant parser `71047d3` ya lo arregla).
 
 ## Issue aparte (Resend)
 - Resend no envía NINGÚN email: las confirmaciones las resuelve Clerk, pero el resumen de ofertas del cron (#55) sigue roto → issue GitHub dedicado.
+
+## Reconciliación con main y estado final (2026-10-25)
+
+PR #123 (`6b8823a`) ya estaba mergeado en `main` y attackaba el mismo incidente
+con otro enfoque: timeout de 15 s, `ClerkInitError` con códigos, store
+`clerkError`, botón de retry y guardas de build. Sus tests (`clerk-init.test.ts`,
+`clerk-init-error.test.ts`) y el doc de deploy también quedaron en main.
+
+**Lo que main NO arreglaba** (y por eso el spinner seguía en producción):
+
+1. Leía la key de `$env/dynamic/public` → `mod.PUBLIC_CLERK_PUBLISHABLE_KEY`
+   es siempre `undefined` → Clerk aborta antes de tocar la red.
+2. No cargaba el bundle `@clerk/ui` → en Clerk v6 los componentes prebuilt
+   vienen aparte y `mountSignIn()` falla con "Clerk was not loaded with Ui
+   components".
+
+### Cadena causal verificada (browser real, prod + build local)
+
+| | Prod (`asistcv-frontend.pages.dev`) | Build local reconciliado |
+|---|---|---|
+| Chunk servido | `chunks/clerk.D6Gd4bD3.js` (1108 B, código viejo) | `chunks/clerk.CPTx7UI4.js` |
+| Lectura de la key | `$env/dynamic/public` → `undefined` | `$env/static/public` → inlineada |
+| Requests al FAPI | **0** (Clerk aborta antes de la red) | `/v1/environment` + `/v1/client` → 200 |
+| Bundle `@clerk/ui` | nunca se pide | se pide → 200 |
+| Resultado | spinner eterno en `/login` **y** `/signup` | form de Clerk renderizado |
+
+> **Corrección al informe anterior**: el `"client": null` observado contra
+> `/v1/client` es un artefacto del probe. Ese endpoint devuelve `null` para
+> una key **válida** cuando la request omite la versión de API que Clerk JS
+> sí manda (`__clerk_api_version=2026-08-20` para `@clerk/clerk-js` 6.x) o el
+> `Origin` de un origen permitido. La instancia de Clerk **está bien
+> configurada** — el build local monta los componentes con la misma key.
+> Por eso **no hace falta tocar el dashboard de Clerk** para que el login
+> funcione.
+
+### Commits de esta reconciliación
+
+| Commit | Alcance |
+|---|---|
+| `48d43be` | Backend: issuer de Clerk sin barra final + `verify_api_key` reenvía la sesión de DB (3a/3b) |
+| `a6604d7` | Frontend: key desde `$env/static/public`, carga del bundle `@clerk/ui`, store `clerkError`, guard de build |
+| `1d2411c` | Merge de `main`: se conserva el init acotado + retry, y se suma la key estática + bundle UI |
+| `7ba4a84` | Docs: deploy de Cloudflare Pages, orden de deploy, rotación de la key, diagnóstico de Clerk corregido |
+
+Tres correcciones durante el merge:
+
+- La carga del bundle UI se movió a `$lib/clerk-ui` (mockeable) y **dentro**
+  del timeout de inicialización: un CDN que no responde tiene que dar timeout,
+  no la espera eterna que este trabajo existe para eliminar.
+- El auto-merge dejó **dos bloques `clerk`** en cada locale → la clave
+  duplicada anulaba `errorTitle`/`errorBody`/`retry` de main. Los locales
+  quedaron como en `main`.
+- `login-page.test.ts` se eliminó: `clerk-init-error.test.ts` de main ya fija
+  el camino de fallo del login y el retry; el archivo viejo afirmaba un
+  contrato que ya no existe (`initClerk` resolviendo `null`).
+
+### Verificación
+
+- Frontend: **138 tests** verdes (14 archivos), `svelte-check` 0 errores.
+- Backend: **744 passed, 1 skipped**.
+- Build: prebuild y postbuild guards OK; key inlineada en `chunks/clerk.*.js`;
+  `build/_app/env.js` sin `PUBLIC_BACKEND_API_KEY`.
+- Browser (Orca, build de producción local): `/signup` y `/login` renderizan
+  el form de Clerk, `spinner=false`, 2 inputs de Clerk.
+
+### Lo que falta para producción (acciones del usuario)
+
+1. **Cloudflare Pages**: redeploy con `PUBLIC_CLERK_PUBLISHABLE_KEY` — la
+   variable **ya está** seteada (visible en `/_app/env.js` de prod); lo que
+   faltaba era el código que la consumiera. Sacar `PUBLIC_BACKEND_API_KEY`
+   del entorno de build (el guard va a fallar el build hasta que lo hagas).
+2. **Render**: `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`,
+   `CLERK_WEBHOOK_SIGNING_SECRET`, `CLERK_AUTHORIZED_PARTIES`.
+3. **Clerk dashboard**: webhook en `https://<backend>/api/v1/webhooks/clerk`.
+4. **Rotación**: `BACKEND_API_KEY` sigue expuesta en `/_app/env.js` de prod
+   (mismo valor que usa Render) → rotar en Render + GitHub Actions +
+   mcp-adapter.
+5. **Higiene** (no bloqueante): la key de prod es `pk_test_` (instancia de
+   desarrollo "Eptus"), el factor password sigue activo y la instancia no se
+   llama AsistCV.
+
