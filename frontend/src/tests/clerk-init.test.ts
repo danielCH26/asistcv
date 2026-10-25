@@ -29,22 +29,25 @@ type ClerkListener = (state: { user: unknown; session: unknown }) => void;
 const clerkListeners: ClerkListener[] = [];
 
 /**
- * The instance's own view of the session user. Clerk keeps it `undefined`
- * until the session is resolved from the cookie, and populates it BEFORE
+ * The instance's own view of the session state. Clerk keeps both `undefined`
+ * until the session is resolved from the cookie, and populates them BEFORE
  * notifying its listeners.
  */
 let clerkUserState: unknown = undefined;
+let clerkSessionState: unknown = undefined;
 
 /**
  * Clerk restores the session from the cookie asynchronously: the listener
  * that delivers the session user fires a tick AFTER `load()` settles, and
- * `clerk.user` stays `undefined` until then. The mock reproduces that.
+ * `clerk.session` / `clerk.user` stay `undefined` until then. The mock
+ * reproduces that.
  */
 function defaultLoad(): Promise<void> {
 	return new Promise<void>((resolve) => {
 		setTimeout(() => {
 			clerkUserState = { id: 'user_1', emailAddresses: [] };
-			for (const cb of clerkListeners) cb({ user: clerkUserState, session: null });
+			clerkSessionState = null;
+			for (const cb of clerkListeners) cb({ user: clerkUserState, session: clerkSessionState });
 			resolve();
 		}, 0);
 	});
@@ -60,6 +63,9 @@ vi.mock('@clerk/clerk-js', () => ({
 		load = loadMock;
 		get user() {
 			return clerkUserState;
+		}
+		get session() {
+			return clerkSessionState;
 		}
 	}
 }));
@@ -99,6 +105,7 @@ beforeEach(() => {
 	addListenerMock.mockClear();
 	clerkListeners.length = 0;
 	clerkUserState = undefined;
+	clerkSessionState = undefined;
 	publishableKey.value = 'pk_test_dummy';
 	loadUIBundleMock.mockReset().mockResolvedValue(undefined);
 });
@@ -159,9 +166,10 @@ describe('initClerk — failure handling', () => {
 	it('publishes the session user before signalling that Clerk is ready', async () => {
 		// `requireSession()` waits for `clerkReady` and then reads
 		// `clerkUser` in the same turn. Clerk restores the session from the
-		// cookie asynchronously, so the listener that delivers the user can
-		// fire after `load()` settles: without waiting for it, that read sees
-		// null and a signed-in user gets thrown to the login page.
+		// cookie asynchronously, so `clerk.session`/`clerk.user` stay
+		// `undefined` a while after `load()` settles: without waiting for that
+		// resolution, that read sees null and a signed-in user gets thrown to
+		// the login page.
 		const { initClerk, clerkReady, clerkUser } = await freshModule();
 
 		let userWhenReady: unknown = 'not-ready';
@@ -174,6 +182,26 @@ describe('initClerk — failure handling', () => {
 		expect(userWhenReady).not.toBeNull();
 		expect(userWhenReady).not.toBe('not-ready');
 		unsub();
+	});
+
+	it('publishes ready with a null user when Clerk resolves that there is no session', async () => {
+		// The signed-out flow must not wait for the full timeout: a session
+		// that resolves to "none" has to signal ready right away so the guard
+		// can redirect to /login.
+		loadMock.mockImplementation(async () => {
+			setTimeout(() => {
+				clerkUserState = null;
+				clerkSessionState = null;
+				for (const cb of clerkListeners) cb({ user: null, session: null });
+			}, 0);
+		});
+
+		const { initClerk, clerkReady, clerkUser } = await freshModule();
+
+		await initClerk();
+
+		expect(get(clerkReady)).toBe(true);
+		expect(get(clerkUser)).toBeNull();
 	});
 
 	it('can retry after a failed initialization', async () => {
