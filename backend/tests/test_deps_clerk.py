@@ -66,7 +66,9 @@ def _sign_token(private_key, payload: dict, **overrides) -> str:
     payload = dict(payload)
     payload.setdefault("iat", int(time.time()))
     payload.setdefault("exp", int(time.time()) + 3600)
-    payload.setdefault("iss", "https://frontend.clerk.dev/")
+    # Real Clerk session tokens carry the issuer WITHOUT a trailing slash
+    # (e.g. "https://immense-lamb-7783.clerk.accounts.dev"). QA 2026-10.
+    payload.setdefault("iss", "https://frontend.clerk.dev")
     payload.setdefault("sub", "user_test_deps")
     payload.setdefault("sess_id", "sess_deps_xyz")
     payload.update(overrides)
@@ -579,3 +581,54 @@ async def test_legacy_jwt_returns_401_when_clerk_enabled(
 
     # Falls through to API key path → no match → 401.
     assert exc_info.value.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Test: verify_api_key forwards a real DB session
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_verify_api_key_forwards_db_session(
+    clerk_test_env,
+    rsa_keys_deps,
+    clerk_mock_jwks,
+    clean_db,
+):
+    """verify_api_key must forward a real session to get_current_user.
+
+    Regression (QA 2026-10): ``verify_api_key`` called ``get_current_user``
+    without the ``db`` argument, so the dependency default (a ``Depends``
+    marker) leaked into the Clerk resolution path. Every Clerk-authenticated
+    request to the ``/v1/users`` router crashed with
+    ``AttributeError: 'Depends' object has no attribute 'execute'`` (HTTP 500).
+    """
+    from app.api.deps import verify_api_key
+
+    private, _ = rsa_keys_deps
+
+    async with clean_db.session_factory() as session:
+        user = User(
+            email="legacy@example.com",
+            password_hash="hash",
+            role="job_seeker",
+            full_name="Legacy Route User",
+            clerk_id="user_legacy_route",
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+        user_id = user.id
+
+    token = _sign_token(private, {"sub": "user_legacy_route", "sess_id": "sess_legacy"})
+
+    async with clean_db.session_factory() as session:
+        from app.services import clerk_auth
+        clerk_auth._jwks_cache.clear()
+
+        with patch("app.services.clerk_auth._fetch_jwks", new_callable=AsyncMock) as mf:
+            mf.return_value = clerk_mock_jwks
+
+            result = await verify_api_key(f"Bearer {token}", session)
+
+    assert result.auth_method == "clerk"
+    assert result.id == user_id

@@ -82,7 +82,9 @@ def sign_token(private_key, payload: dict, kid: str = "test-key-1", **overrides)
     payload = dict(payload)
     payload.setdefault("iat", int(time.time()))
     payload.setdefault("exp", int(time.time()) + 3600)
-    payload.setdefault("iss", "https://frontend.clerk.dev/")
+    # Real Clerk session tokens carry the issuer WITHOUT a trailing slash
+    # (e.g. "https://immense-lamb-7783.clerk.accounts.dev"). QA 2026-10.
+    payload.setdefault("iss", "https://frontend.clerk.dev")
     payload.setdefault("sub", "user_test_123")
     payload.setdefault("sess_id", "sess_test_abc")
     payload.update(overrides)
@@ -181,6 +183,49 @@ def test_parse_publishable_key_invalid_base64_raises():
     """Key with un-decodable base64 raises ClerkTokenInvalidError."""
     with pytest.raises(ClerkTokenInvalidError):
         _parse_publishable_key("pk_test_!!!not-base64!!!_$")
+
+
+@pytest.mark.asyncio
+async def test_expected_issuer_has_no_trailing_slash(clerk_env, rsa_keys, fake_jwks):
+    """The expected issuer must NOT carry a trailing slash.
+
+    Regression (QA 2026-10): the issuer was built as ``https://{fsa}/`` while
+    real Clerk session tokens carry ``https://{fsa}`` (no trailing slash).
+    Every Clerk-authenticated request then failed with
+    "Token issuer mismatch" -> 401 Invalid credentials in production.
+    """
+    private, _ = rsa_keys
+    token = sign_token(private, {"sub": "user_test_abc"})
+
+    with patch("app.services.clerk_auth._fetch_jwks", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = fake_jwks
+        _jwks_cache.clear()
+        claims = await verify_clerk_session_token(token)
+
+    assert claims.issuer == f"https://{clerk_env['fsa']}"
+    assert not claims.issuer.endswith("/")
+
+
+@pytest.mark.asyncio
+async def test_token_with_trailing_slash_issuer_is_rejected(
+    clerk_env, rsa_keys, fake_jwks
+):
+    """A token whose iss has a trailing slash must not be accepted.
+
+    Clerk never emits that form; accepting it would silently widen the
+    issuer allow-list beyond the real Frontend API domain.
+    """
+    private, _ = rsa_keys
+    token = sign_token(private, {"sub": "user_test_abc"},
+                       iss=f"https://{clerk_env['fsa']}/")
+
+    with patch("app.services.clerk_auth._fetch_jwks", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = fake_jwks
+        _jwks_cache.clear()
+        with pytest.raises(ClerkTokenInvalidError) as exc_info:
+            await verify_clerk_session_token(token)
+
+    assert "issuer" in str(exc_info.value).lower()
 
 
 def test_parse_publishable_key_legacy_domain_format():
@@ -313,7 +358,7 @@ async def test_verify_valid_token_returns_claims(clerk_env, rsa_keys, fake_jwks)
     assert isinstance(claims, ClerkClaims)
     assert claims.clerk_user_id == "user_test_abc"
     assert claims.session_id == "sess_xyz"
-    assert claims.issuer == "https://frontend.clerk.dev/"
+    assert claims.issuer == "https://frontend.clerk.dev"
     assert claims.expires_at > int(time.time())
 
 
@@ -450,7 +495,7 @@ async def test_verify_missing_sub_claim_raises(clerk_env, rsa_keys, fake_jwks):
     token_payload = {
         "iat": int(time.time()),
         "exp": int(time.time()) + 3600,
-        "iss": "https://frontend.clerk.dev/",
+        "iss": "https://frontend.clerk.dev",
         # NOTE: no "sub" key
     }
     token = jwt.encode(token_payload, private, algorithm="RS256", headers={"kid": "test-key-1"})
