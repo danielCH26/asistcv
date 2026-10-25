@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { _ } from 'svelte-i18n';
 	import { page } from '$app/stores';
-	import { clerkError, clerkReady, initClerk, mountSignUp } from '$lib/clerk';
+	import { clerkError, clerkReady, initClerk, mountSignUp, resetClerkError } from '$lib/clerk';
 	import { startOnboarding } from '$stores/session';
 
 	let container: HTMLDivElement;
@@ -12,15 +12,31 @@
 	$: reason = $page.url.searchParams.get('reason') ?? null;
 
 	onMount(async () => {
-		await initClerk();
-		// Start onboarding wizard immediately so it is ready when the
-		// post-signup page (the Clerk redirect target) mounts.
-		startOnboarding();
+		try {
+			await initClerk();
+			// Start onboarding wizard immediately so it is ready when the
+			// post-signup page (the Clerk redirect target) mounts.
+			startOnboarding();
+		} catch {
+			// initClerk already published the failure through clerkError.
+			// The page renders an actionable error instead of a spinner that
+			// never resolves.
+			loading = false;
+		}
 	});
 
-	// The Clerk failure (if any) is reported through $clerkError — stop the
-	// spinner so the user sees the cause instead of an eternal "Cargando".
-	$: if ($clerkError) loading = false;
+	// Retry a failed Clerk initialization: clear the error and let the
+	// reactive block mount the component again once Clerk is ready.
+	async function retry() {
+		resetClerkError();
+		loading = true;
+		mounted = false;
+		try {
+			await initClerk();
+		} catch {
+			loading = false;
+		}
+	}
 
 	// Reactive mount: $clerkReady may flip after initClerk resolves. Guard
 	// against double-mounting on subsequent reactive runs. After Clerk
@@ -46,13 +62,12 @@
 	{/if}
 
 	{#if $clerkError}
-		<p class="signup__error" role="alert">
-			{$_('clerk.initError')}
-			<span class="signup__error-detail">{$clerkError}</span>
-		</p>
-	{/if}
-
-	{#if loading}
+		<div class="signup__error" role="alert">
+			<h2>{$_('clerk.errorTitle')}</h2>
+			<p>{$_('clerk.errorBody')}</p>
+			<button type="button" on:click={retry}>{$_('clerk.retry')}</button>
+		</div>
+	{:else if loading}
 		<div class="signup__loading" aria-live="polite" aria-busy="true">
 			<div class="signup__spinner" aria-hidden="true"></div>
 			<p>{$_('signup.loading')}</p>
@@ -87,25 +102,6 @@
 		font-size: var(--text-sm);
 	}
 
-	.signup__error {
-		padding: var(--space-3) var(--space-4);
-		border: 1px solid var(--color-danger, #b91c1c);
-		border-radius: var(--radius-card);
-		background: var(--color-danger-soft, #fef2f2);
-		color: var(--color-danger, #b91c1c);
-		margin: 0;
-		font-size: var(--text-sm);
-	}
-
-	.signup__error-detail {
-		display: block;
-		margin-top: var(--space-2);
-		font-family: var(--font-mono, monospace);
-		font-size: var(--text-xs);
-		opacity: 0.85;
-		word-break: break-word;
-	}
-
 	.signup__loading {
 		display: flex;
 		flex-direction: column;
@@ -127,6 +123,40 @@
 		to {
 			transform: rotate(360deg);
 		}
+	}
+
+	.signup__error {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-3);
+		padding: var(--space-6);
+		border: 1px solid var(--color-danger);
+		border-radius: var(--radius-card);
+		background: var(--color-danger-muted);
+		color: var(--color-danger);
+		text-align: center;
+	}
+
+	.signup__error h2 {
+		margin: 0;
+		font-size: var(--text-lg);
+	}
+
+	.signup__error p {
+		margin: 0;
+		font-size: var(--text-sm);
+	}
+
+	.signup__error button {
+		margin-top: var(--space-2);
+		padding: var(--space-2) var(--space-4);
+		border: 1px solid var(--color-danger);
+		border-radius: var(--radius-control);
+		background: transparent;
+		color: var(--color-danger);
+		font-weight: 600;
+		cursor: pointer;
 	}
 
 	.signup__clerk {

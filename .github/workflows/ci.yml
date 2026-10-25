@@ -144,7 +144,7 @@ jobs:
   frontend-i18n-parity:
     name: Frontend i18n parity + API key guard
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -168,10 +168,39 @@ jobs:
             exit 1
           fi
 
+      # The guard itself has to be proven, otherwise it can rot into a
+      # no-op. The leak that reached production came from the BUILD
+      # ENVIRONMENT, not from the source: with adapter-static every
+      # PUBLIC_* var is published in /_app/env.js. A negative test proves
+      # the guard still rejects that case.
+      - name: Guard - the env guard rejects a service key in the build env
+        run: |
+          if PUBLIC_API_URL="https://example.invalid" \
+             PUBLIC_BACKEND_API_KEY="leak-canary" \
+             node scripts/check-env.mjs; then
+            echo "::error::the env guard accepted PUBLIC_BACKEND_API_KEY — the leak guard is broken"
+            exit 1
+          fi
+          echo "guard rejected the key as expected"
+        working-directory: frontend
+
       - name: Test frontend (vitest)
         run: npm run test
         working-directory: frontend
 
       - name: Typecheck frontend (svelte-check)
         run: npm run check
+        working-directory: frontend
+
+      # Builds the real artifact and asserts the published one carries no
+      # service key. This is the shape Cloudflare Pages publishes.
+      - name: Build frontend + assert the published artifact has no service key
+        run: |
+          PUBLIC_API_URL="https://example.invalid" \
+          PUBLIC_CLERK_PUBLISHABLE_KEY="pk_test_ci_canary" \
+          npm run build
+          if grep -R "leak-canary" build/; then
+            echo "::error::a service key reached the published build"
+            exit 1
+          fi
         working-directory: frontend

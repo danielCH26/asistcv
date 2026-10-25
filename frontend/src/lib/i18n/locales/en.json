@@ -112,6 +112,11 @@
     "loginLink": "Log in",
     "loading": "Setting up your account…"
   },
+  "clerk": {
+    "errorTitle": "We couldn't load sign-in",
+    "errorBody": "The authentication service is unavailable right now. Check your connection or try again in a few seconds.",
+    "retry": "Try again"
+  },
   "login": {
     "title": "Log in",
     "heading": "Log in",
@@ -343,8 +348,5 @@
       "statusCompleted": "Completed",
       "statusFailed": "Failed"
     }
-  },
-  "clerk": {
-    "initError": "We could not load secure access. Check your connection or try again in a moment."
   }
 }
