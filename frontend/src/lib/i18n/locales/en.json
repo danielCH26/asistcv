@@ -343,5 +343,8 @@
       "statusCompleted": "Completed",
       "statusFailed": "Failed"
     }
+  },
+  "clerk": {
+    "initError": "We could not load secure access. Check your connection or try again in a moment."
   }
 }

@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { _ } from 'svelte-i18n';
 	import { page } from '$app/stores';
-	import { clerkReady, initClerk, mountSignIn } from '$lib/clerk';
+	import { clerkError, clerkReady, initClerk, mountSignIn } from '$lib/clerk';
 
 	let container: HTMLDivElement;
 	let loading = true;
@@ -13,6 +13,10 @@
 	onMount(async () => {
 		await initClerk();
 	});
+
+	// The Clerk failure (if any) is reported through $clerkError — stop the
+	// spinner so the user sees the cause instead of an eternal "Cargando".
+	$: if ($clerkError) loading = false;
 
 	// Reactive mount: $clerkReady may flip after initClerk resolves. Guard
 	// against double-mounting on subsequent reactive runs.
@@ -34,6 +38,13 @@
 		<p class="login__notice" role="alert">{$_('session.required')}</p>
 	{:else if reason === 'expired'}
 		<p class="login__notice" role="alert">{$_('session.expired')}</p>
+	{/if}
+
+	{#if $clerkError}
+		<p class="login__error" role="alert">
+			{$_('clerk.initError')}
+			<span class="login__error-detail">{$clerkError}</span>
+		</p>
 	{/if}
 
 	{#if loading}
@@ -69,6 +80,25 @@
 		color: var(--color-ink);
 		margin: 0;
 		font-size: var(--text-sm);
+	}
+
+	.login__error {
+		padding: var(--space-3) var(--space-4);
+		border: 1px solid var(--color-danger, #b91c1c);
+		border-radius: var(--radius-card);
+		background: var(--color-danger-soft, #fef2f2);
+		color: var(--color-danger, #b91c1c);
+		margin: 0;
+		font-size: var(--text-sm);
+	}
+
+	.login__error-detail {
+		display: block;
+		margin-top: var(--space-2);
+		font-family: var(--font-mono, monospace);
+		font-size: var(--text-xs);
+		opacity: 0.85;
+		word-break: break-word;
 	}
 
 	.login__loading {

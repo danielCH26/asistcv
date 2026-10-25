@@ -14,16 +14,69 @@
 
 import { browser } from '$app/environment';
 import { writable } from 'svelte/store';
+import { PUBLIC_CLERK_PUBLISHABLE_KEY } from '$env/static/public';
 import type { Clerk } from '@clerk/clerk-js';
 import type { UserResource } from '@clerk/shared/types/user';
 import type { SignedInSessionResource } from '@clerk/shared/types/session';
 
+/**
+ * Clerk v6 (Core 3) split the SDK in two: `@clerk/clerk-js` ships the
+ * headless client, and the prebuilt components (`<SignIn/>`, `<SignUp/>`)
+ * live in a separate `@clerk/ui` bundle that the SDK does NOT download on
+ * its own. Without it, `clerk.load()` leaves the component renderer
+ * unattached and `mountSignIn()` throws
+ * "Clerk was not loaded with Ui components".
+ *
+ * The bundle is loaded as a standalone UMD script from the Clerk Frontend
+ * API CDN (per the official JS quickstart), which sets
+ * `window.__internal_ClerkUICtor` — the constructor `clerk.load()` expects
+ * in `ui.ClerkUI`.
+ */
+async function loadClerkUIBundle(publishableKey: string): Promise<void> {
+	// Derive the Frontend API domain from the publishable key:
+	// `pk_test_<base64(frontendApi$)>` → `frontendApi`.
+	const encoded = publishableKey.split('_')[2];
+	if (!encoded) {
+		throw new Error('Malformed Clerk publishable key: missing frontend API segment.');
+	}
+	let frontendApi: string;
+	try {
+		frontendApi = atob(encoded).slice(0, -1);
+	} catch {
+		throw new Error('Malformed Clerk publishable key: not base64-decodable.');
+	}
+
+	const scriptUrl = `https://${frontendApi}/npm/@clerk/ui@1/dist/ui.browser.js`;
+
+	await new Promise<void>((resolve, reject) => {
+		const script = document.createElement('script');
+		script.src = scriptUrl;
+		script.async = true;
+		script.crossOrigin = 'anonymous';
+		script.onload = () => resolve();
+		script.onerror = () => reject(new Error(`Failed to load @clerk/ui bundle from ${scriptUrl}`));
+		document.head.appendChild(script);
+	});
+}
+
 // Module-level singleton — survives SvelteKit re-imports within a single page.
-let _clerkPromise: Promise<Clerk> | null = null;
+// The promise resolves to `null` when initialisation failed (the reason is
+// published through `clerkError`).
+let _clerkPromise: Promise<Clerk | null> | null = null;
 let _clerkInstance: Clerk | null = null;
 
 /** Svelte store: null until Clerk finishes loading. */
 export const clerkReady = writable(false);
+
+/**
+ * Svelte store: error message when Clerk failed to initialise.
+ *
+ * `initClerk()` never rejects: a failure (missing publishable key, blocked
+ * `@clerk/ui` bundle, unreachable Clerk Frontend API) is reported here
+ * instead. Without this, the login/signup pages stayed on their loading
+ * spinner forever with no explanation — QA 2026-10.
+ */
+export const clerkError = writable<string | null>(null);
 
 /** Svelte store: Clerk UserResource when signed in, null otherwise. */
 export const clerkUser = writable<UserResource | null>(null);
@@ -36,7 +89,7 @@ export const clerkSession = writable<SignedInSessionResource | null>(null);
  * Safe to call from `onMount` / dynamic event handlers; never from
  * module-level (top-level) code.
  */
-export async function initClerk(): Promise<Clerk> {
+export async function initClerk(): Promise<Clerk | null> {
 	if (!browser) throw new Error('Clerk may only be initialised in the browser.');
 	if (_clerkInstance) return _clerkInstance;
 
@@ -46,13 +99,24 @@ export async function initClerk(): Promise<Clerk> {
 			const { Clerk: ClerkClass } = await import('@clerk/clerk-js');
 			const { esES } = await import('@clerk/localizations');
 
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			// Use $env/dynamic/public so the key is available at runtime.
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const env = await import('$env/dynamic/public') as any;
-		const PUBLIC_CLERK_PUBLISHABLE_KEY = env.PUBLIC_CLERK_PUBLISHABLE_KEY;
+			// Build-time literal. `$env/static/public` inlines the value into
+			// the client bundle at build time (same pattern as
+			// `$lib/api/base.ts` uses for PUBLIC_API_URL).
+			//
+			// Do NOT use `$env/dynamic/public`: its browser module exports a
+			// single `env` object, so `mod.PUBLIC_CLERK_PUBLISHABLE_KEY` is
+			// always `undefined` — that was the root cause of the "Clerk keys
+			// are missing from your environment" failure in prod (QA 2026-10).
+			const publishableKey = (PUBLIC_CLERK_PUBLISHABLE_KEY ?? '').trim();
+			if (!publishableKey) {
+				throw new Error('PUBLIC_CLERK_PUBLISHABLE_KEY is not set at build time.');
+			}
 
-			const clerk = new ClerkClass(PUBLIC_CLERK_PUBLISHABLE_KEY) as Clerk;
+			// The UI bundle must be present BEFORE `clerk.load()` — the SDK
+			// resolves `ui.ClerkUI` at load time and never fetches it itself.
+			await loadClerkUIBundle(publishableKey);
+
+			const clerk = new ClerkClass(publishableKey) as Clerk;
 
 			clerk.addListener(({ user, session }) => {
 				clerkUser.set(user ?? null);
@@ -68,12 +132,25 @@ export async function initClerk(): Promise<Clerk> {
 						colorPrimary: '#0f766e',
 					},
 				},
+				// Clerk v6: the prebuilt components come from the @clerk/ui
+				// bundle loaded above (sets window.__internal_ClerkUICtor).
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				ui: { ClerkUI: (window as any).__internal_ClerkUICtor },
 			});
 
 			clerkReady.set(true);
+			clerkError.set(null);
 			_clerkInstance = clerk;
 			return clerk;
-		})();
+		})().catch((err: unknown) => {
+			// Report the failure instead of rejecting silently: the login and
+			// signup pages await this call, and an unhandled rejection left
+			// them spinning on the loading state with no feedback at all.
+			clerkError.set(err instanceof Error ? err.message : String(err));
+			// Allow a later attempt to retry the initialisation.
+			_clerkPromise = null;
+			return null;
+		});
 	}
 
 	return _clerkPromise;

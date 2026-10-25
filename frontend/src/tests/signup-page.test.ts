@@ -42,6 +42,14 @@ function emitClerkReady(v: boolean) {
 	clerkReadySubscribers.forEach((fn) => fn(v));
 }
 
+// clerkError mirrors the real store: null = OK, string = initialisation failed.
+let clerkErrorValue: string | null = null;
+const clerkErrorSubscribers = new Set<(v: string | null) => void>();
+function emitClerkError(v: string | null) {
+	clerkErrorValue = v;
+	clerkErrorSubscribers.forEach((fn) => fn(v));
+}
+
 vi.mock('$lib/clerk', () => ({
 	initClerk: mockInitClerk.mockImplementation(async () => {
 		// Simulate async load — mark ready after a tick.
@@ -55,6 +63,15 @@ vi.mock('$lib/clerk', () => ({
 			fn(clerkReadyValue);
 			return () => {
 				clerkReadySubscribers.delete(fn);
+			};
+		},
+	},
+	clerkError: {
+		subscribe(fn: (v: string | null) => void) {
+			clerkErrorSubscribers.add(fn);
+			fn(clerkErrorValue);
+			return () => {
+				clerkErrorSubscribers.delete(fn);
 			};
 		},
 	},
@@ -76,6 +93,8 @@ beforeEach(() => {
 	// Reset Clerk ready state for each test.
 	clerkReadyValue = false;
 	clerkReadySubscribers.clear();
+	clerkErrorValue = null;
+	clerkErrorSubscribers.clear();
 	mockInitClerk.mockClear();
 	mockMountSignUp.mockClear();
 	mockInitClerk.mockImplementation(async () => {
@@ -124,5 +143,34 @@ describe('signup page — Clerk mount', () => {
 			expect(mockInitClerk).toHaveBeenCalled();
 		});
 		expect(startOnboarding).toHaveBeenCalled();
+	});
+});
+
+describe('signup page — Clerk initialisation failure', () => {
+	it('shows the error and stops the loading spinner instead of hanging', async () => {
+		// initClerk() never rejects: it publishes the failure through
+		// clerkError. The page must react to it (QA 2026-10: the spinner used
+		// to spin forever with no explanation).
+		mockInitClerk.mockImplementation(async () => {
+			await Promise.resolve();
+			emitClerkError('PUBLIC_CLERK_PUBLISHABLE_KEY is not set at build time.');
+			return null;
+		});
+
+		const { container } = render(
+			await import('../routes/signup/+page.svelte').then((m) => m.default)
+		);
+
+		await waitFor(() => {
+			expect(screen.getByRole('alert')).toBeTruthy();
+		});
+
+		const alert = screen.getByRole('alert');
+		expect(alert.textContent).toContain('PUBLIC_CLERK_PUBLISHABLE_KEY is not set at build time.');
+
+		// The loading spinner must be gone (this is what used to spin forever).
+		expect(container.querySelector('.signup__loading')).toBeNull();
+		// And the Clerk component must NOT have been mounted.
+		expect(mockMountSignUp).not.toHaveBeenCalled();
 	});
 });

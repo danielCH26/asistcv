@@ -343,5 +343,8 @@
       "statusCompleted": "Completada",
       "statusFailed": "Fallida"
     }
+  },
+  "clerk": {
+    "initError": "No pudimos cargar el acceso seguro. Revisá tu conexión o intentá de nuevo en un momento."
   }
 }
