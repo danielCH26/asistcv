@@ -24,6 +24,7 @@ from app.api.v1 import (
     adaptations,
     analyses,
     audit,
+    auth,
     cvs,
     health,
     job_offers,
@@ -144,6 +145,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Routers — /health y / exentos.
     app.include_router(health.router)
+
+    # Passwordless auth: email-code request/verify + refresh/logout.
+    app.include_router(
+        auth.router,
+        prefix=settings.api_prefix,
+    )
 
     # Users endpoints require auth in both modes
     app.include_router(

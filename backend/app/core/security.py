@@ -7,6 +7,7 @@ Implements:
 - Refresh token rotation support
 """
 import hashlib
+import hmac
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -98,3 +99,17 @@ def create_token_pair(user_id: int, role: str) -> tuple[str, str]:
     refresh_token = create_refresh_token()
 
     return access_token, refresh_token
+
+def hash_email_code(code: str) -> str:
+    """HMAC-SHA256 of an email login code, peppered with the JWT secret.
+
+    A bare SHA256 of a 6-digit code would be brute-forceable offline
+    from a database leak (10^6 candidates); the server-side pepper
+    makes that infeasible without also leaking ``jwt_secret``.
+    """
+    settings = get_settings()
+    return hmac.new(
+        settings.jwt_secret.encode(),
+        code.strip().encode(),
+        hashlib.sha256,
+    ).hexdigest()

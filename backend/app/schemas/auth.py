@@ -1,14 +1,9 @@
 """
-Pydantic schemas for user profile endpoints.
-
-Note: Authentication schemas (SignUpRequest, LoginRequest, RefreshRequest,
-TokenResponse, ChangePasswordRequest, VerifyEmailRequest, VerifyEmailConfirm)
-have been removed as part of the Clerk auth migration (S2). Authentication is
-now handled by Clerk; these schemas are no longer needed.
+Pydantic schemas for authentication and user profile endpoints.
 """
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 class UserResponse(BaseModel):
@@ -30,3 +25,26 @@ class UpdateUserRequest(BaseModel):
     full_name: str | None = Field(None, min_length=1, max_length=255)
     locale: str | None = Field(None, pattern="^(es|en)$")
     avatar_url: str | None = None
+
+
+class EmailCodeRequest(BaseModel):
+    """Request body for asking a login code (passwordless)."""
+    email: EmailStr
+
+
+class EmailCodeVerifyRequest(BaseModel):
+    """Request body for verifying a login code."""
+    email: EmailStr
+    code: str = Field(..., min_length=4, max_length=12)
+
+
+class RefreshRequest(BaseModel):
+    """Request body for token refresh / logout."""
+    refresh_token: str
+
+
+class TokenResponse(BaseModel):
+    """Response with access and refresh tokens."""
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"

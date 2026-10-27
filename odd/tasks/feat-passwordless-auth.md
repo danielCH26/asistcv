@@ -18,8 +18,8 @@ Reemplazar Clerk por auth propia passwordless (email + código de 6 dígitos) pa
 
 ## Tareas
 
-- [ ] **S1a — Backend base**: recuperar `security.py` + `deps.py` two-path (con `bind_rls_context` y compat `billing.py:207`); migración 021 `auth_email_codes`; config (`brevo_api_key`, `email_code_ttl_seconds`, `email_code_max_attempts`); tests.
-- [ ] **S1b — Endpoints OTP**: servicio de códigos (create/verify + límites) + router `auth.py` v2 (`POST /auth/email-code/request`, `POST /auth/email-code/verify`, `/auth/refresh`, `/auth/logout`, `GET /auth/me`) + proveedor `brevo` en `email_service.py` + tests RED→GREEN.
+- [x] **S1a — Backend base**: recuperar `security.py` + `deps.py` two-path (con `bind_rls_context` y compat `billing.py:207`); migración 021 `auth_email_codes`; config (`brevo_api_key`, `email_code_ttl_seconds`, `email_code_max_attempts`); tests.
+- [x] **S1b — Endpoints OTP**: servicio de códigos (create/verify + límites) + router `auth.py` v2 (`POST /auth/email-code/request`, `POST /auth/email-code/verify`, `/auth/refresh`, `/auth/logout`, `GET /auth/me`) + proveedor `brevo` en `email_service.py` + tests RED→GREEN.
 - [ ] **S2 — Frontend**: `client.ts`/`session.ts` nativos (de `1857a9e`), páginas login/signup passwordless (email → código), guards, logout, `check-env.mjs` sin Clerk, tests vitest.
 - [ ] **S3 — QA local**: E2E con navegador (pedir código → ver código en log/consola → entrar → `/v1/auth/me` → logout) + `svelte-check` + suites backend/frontend.
 - [ ] **S4 — Deploy + E2E prod**: commit/merge (decisión usuario), Render (nuevas env vars EMAIL_*, CORS con pages.dev; CLERK_* inertes), Cloudflare rebuild, E2E en producción.
@@ -31,4 +31,6 @@ Reemplazar Clerk por auth propia passwordless (email + código de 6 dígitos) pa
 
 ## Commits
 
-- (pendiente — cada tarea cierra con work-unit commit en `feat/passwordless-auth`)
+- f978485 feat(auth): restore native JWT auth base and add email-code data layer (S1a; 39 tests passed)
+- f978485 feat(auth): restore native JWT auth base and add email-code data layer (S1a; 39 tests passed)
+- (S1b: commit propio — endpoints email-code, proveedor Brevo+console, 11+4 tests; suite completa 786+ verde)
