@@ -271,6 +271,19 @@ class Settings(BaseSettings):
         default=86400,  # 24h
         validation_alias="EMAIL_VERIFICATION_TTL_SECONDS",
     )
+    brevo_api_key: str | None = Field(default=None, validation_alias="BREVO_API_KEY")
+    email_code_ttl_seconds: int = Field(
+        default=600,  # 10 minutes
+        validation_alias="EMAIL_CODE_TTL_SECONDS",
+    )
+    email_code_max_attempts: int = Field(
+        default=5,
+        validation_alias="EMAIL_CODE_MAX_ATTEMPTS",
+    )
+    email_code_length: int = Field(
+        default=6,
+        validation_alias="EMAIL_CODE_LENGTH",
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",
