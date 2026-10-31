@@ -209,9 +209,16 @@ async def request_email_code(
         )
 
     code = _generate_code(settings.email_code_length)
+    # created_at is stamped by the APP clock, not by the DB's NOW(): the
+    # cooldown/hourly-cap queries below compare created_at against the app
+    # clock, and mixing clock domains breaks the throttles whenever the
+    # two clocks drift apart (observed: Docker Desktop WSL2 skew after a
+    # cold boot left codes with created_at hours in the future, so
+    # CODE_COOLDOWN never expired). expires_at already uses this clock.
     code_row = AuthEmailCode(
         email=email,
         code_hash=hash_email_code(code),
+        created_at=now,
         expires_at=now + timedelta(seconds=settings.email_code_ttl_seconds),
     )
 

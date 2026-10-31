@@ -10,13 +10,13 @@
 <section class="signup">
 	<h1>{$_('signup.heading')}</h1>
 
-	<p class="signup__hint">{$_('signup.passwordlessHint')}</p>
+	<p class="signup__hint">{$_('auth.passwordlessHint')}</p>
 
 	<EmailCodeForm />
 
 	<p class="signup__login">
-		{$_('signup.haveAccount')}
-		<a href="/login">{$_('signup.loginLink')}</a>
+		{$_('auth.haveAccount')}
+		<a href="/login">{$_('auth.loginLink')}</a>
 	</p>
 </section>
 
