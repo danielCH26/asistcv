@@ -26,15 +26,24 @@ import {
 	type JobOffer,
 	type OfferPreferences
 } from './types';
-import { clearPendingAuditToken } from '$stores/session';
-import { clerkUser, getToken } from '$lib/clerk';
+import {
+	refreshIfNeeded,
+	refreshTokens,
+	session,
+	sessionEvent,
+	clearPendingAuditToken
+} from '$stores/session';
 
 /**
- * Wrapper sobre `fetch` que envía `Authorization: Bearer <token>` sourced
- * from Clerk's `clerk.session.getToken()` (auto-refreshed short-lived JWT).
+ * Wrapper sobre `fetch` que envía `Authorization: Bearer <access_token>`
+ * cuando existe sesión JWT. Ante 401 intenta un refresh silencioso y
+ * reintenta una única vez; si el refresh también falla, limpia la sesión
+ * y redirige a `/login?reason=expired`.
  *
- * No more refresh-token rotation — Clerk handles token lifecycle.
- * A 401 now simply throws the parsed ApiError; session guards handle redirection.
+ * No hay API key de build-time: la autenticación es exclusivamente por
+ * sesión JWT (spec match-ui — "Sesión de usuario vía JWT").
+ * `PUBLIC_API_URL` es la única env var requerida (guard en
+ * `scripts/check-env.mjs`).
  */
 
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -76,8 +85,10 @@ function humanizeStatus(
 	_body: string,
 	detailMessage?: string
 ): string {
+	// If the backend sent a structured {code, message} detail, prefer the message.
 	if (detailMessage) return detailMessage;
 
+	// Structured code mapping — these are safe to surface as human messages.
 	const CODE_MESSAGES: Record<string, string> = {
 		// Auth
 		TOKEN_REUSED: 'Tu sesión fue invalidada por seguridad. Iniciá sesión nuevamente.',
@@ -112,6 +123,7 @@ function humanizeStatus(
 		return CODE_MESSAGES[code] ?? 'Recurso no encontrado.';
 	}
 	if (status === 422) {
+		// 422 from the backend is usually a validation error — surface the code.
 		return CODE_MESSAGES[code] ?? 'Datos inválidos.';
 	}
 	if (status === 429) {
@@ -120,28 +132,29 @@ function humanizeStatus(
 	if (status >= 500) {
 		return 'Error del servidor. Reintentá en unos minutos.';
 	}
+	// Fallback: show the code if we have one, otherwise generic.
 	if (code) return CODE_MESSAGES[code] ?? `Error: ${code}`;
 	return `Error HTTP ${status}`;
 }
 
-async function request<T>(path: string, init: RequestInit = {}, options: RequestOptions = {}): Promise<T> {
+async function request<T>(path: string, init: RequestInit = {}, options: RequestOptions = {}, isRetry = false): Promise<T> {
 	const wantsAuth = options.auth !== false;
 
+	if (wantsAuth) {
+		await refreshIfNeeded();
+	}
+
+	const s = get(session);
 	const headers: Record<string, string> = {
 		Accept: 'application/json',
-		...(init.headers as Record<string, string> | undefined),
+		...(init.headers as Record<string, string> | undefined)
 	};
 	const isFormData = init.body instanceof FormData;
 	if (!isFormData && init.body !== undefined && headers['Content-Type'] === undefined) {
 		headers['Content-Type'] = 'application/json';
 	}
-
-	if (wantsAuth) {
-		const token = await getToken();
-		if (token) {
-			headers.Authorization = `Bearer ${token}`;
-		}
-		// No token → unauthenticated request; guard will handle 401 downstream.
+	if (wantsAuth && s) {
+		headers.Authorization = `Bearer ${s.accessToken}`;
 	}
 
 	const controller = new AbortController();
@@ -152,7 +165,7 @@ async function request<T>(path: string, init: RequestInit = {}, options: Request
 		response = await fetch(`${API_BASE}${path}`, {
 			...init,
 			headers,
-			signal: controller.signal,
+			signal: controller.signal
 		});
 	} catch (err) {
 		if (err instanceof DOMException && err.name === 'AbortError') {
@@ -169,27 +182,22 @@ async function request<T>(path: string, init: RequestInit = {}, options: Request
 	}
 
 	if (response.status === 401) {
-		// Un 401 con una sesión de Clerk viva NO es una sesión expirada: es el
-		// backend el que no puede verificar el token (falta configuración, o el
-		// usuario todavía no fue provisionado). Mandar a /login en ese caso
-		// expulsa a un usuario que sí está logueado, y Clerk lo devuelve
-		// enseguida a la página de inicio: un rebote que parece un loop.
-		const signedIn = get(clerkUser) !== null;
-
-		if (wantsAuth && browser && !signedIn && !window.location.pathname.startsWith('/login')) {
-			await goto('/login?reason=expired');
+		if (wantsAuth && s && !isRetry) {
+			const refreshed = await refreshTokens();
+			if (refreshed) {
+				return request<T>(path, init, options, true);
+			}
 		}
-
-		const error = await toApiError(response);
-		if (signedIn) {
-			throw new ApiError(
-				'No pudimos verificar tu sesión. Revisá la conexión o intentá de nuevo en un momento.',
-				401,
-				error.cause,
-				error.code
-			);
+		if (wantsAuth) {
+			const err = await toApiError(response);
+			sessionEvent.set(err.code === 'TOKEN_REUSED' ? 'token_reused' : 'expired');
+			session.clear();
+			if (browser && !window.location.pathname.startsWith('/login')) {
+				await goto('/login?reason=expired');
+			}
+			throw err;
 		}
-		throw error;
+		throw await toApiError(response);
 	}
 
 	if (!response.ok) {
@@ -218,7 +226,7 @@ export const apiClient = {
 	match(payload: MatchRequest): Promise<MatchAnalysis> {
 		return request<MatchAnalysis>('/v1/match', {
 			method: 'POST',
-			body: JSON.stringify(payload),
+			body: JSON.stringify(payload)
 		});
 	},
 
@@ -246,7 +254,7 @@ export const apiClient = {
 	createCvStructured(structured: CVStructuredData): Promise<CVUploadResult> {
 		return request<CVUploadResult>('/v1/cvs/structured', {
 			method: 'POST',
-			body: JSON.stringify({ structured }),
+			body: JSON.stringify({ structured })
 		});
 	},
 
@@ -261,7 +269,7 @@ export const apiClient = {
 	updateCv(id: number, structured: CVStructuredData): Promise<CVDetail> {
 		return request<CVDetail>(`/v1/cvs/${id}`, {
 			method: 'PATCH',
-			body: JSON.stringify({ structured }),
+			body: JSON.stringify({ structured })
 		});
 	},
 
@@ -274,7 +282,7 @@ export const apiClient = {
 	createAdaptation(req: AdaptationRequest): Promise<{ adaptation_id: number; status: string }> {
 		return request<{ adaptation_id: number; status: string }>('/v1/adaptations', {
 			method: 'POST',
-			body: JSON.stringify(req),
+			body: JSON.stringify(req)
 		});
 	},
 
@@ -300,7 +308,7 @@ export const apiClient = {
 		}
 		return request<AuditAnonymousResult>('/v1/audit/anonymous', {
 			method: 'POST',
-			body: form,
+			body: form
 		});
 	},
 
@@ -312,7 +320,11 @@ export const apiClient = {
 		);
 	},
 
-	/** Reclama un audit anónimo para la sesión actual (Clerk JWT). */
+	/**
+	 * Reclama un audit anónimo para la sesión actual. El backend toma el
+	 * usuario del JWT, así que el body va vacío y `request` adjunta el
+	 * bearer (con refresh silencioso si el access token venció).
+	 */
 	linkAudit(token: string): Promise<{ success: boolean; message: string; analysis_id?: number | null }> {
 		return request<{ success: boolean; message: string; analysis_id?: number | null }>(
 			`/v1/audit/${encodeURIComponent(token)}/claim`,
@@ -339,7 +351,7 @@ export const apiClient = {
 	updateCandidate(id: number, data: { full_name?: string; email?: string; phone?: string; notes?: string }): Promise<Candidate> {
 		return request<Candidate>(`/v1/recruiter/candidates/${id}`, {
 			method: 'PATCH',
-			body: JSON.stringify(data),
+			body: JSON.stringify(data)
 		});
 	},
 
@@ -350,7 +362,7 @@ export const apiClient = {
 	matchCandidate(id: number, jdText: string): Promise<CandidateMatchResult> {
 		return request<CandidateMatchResult>(`/v1/recruiter/candidates/${id}/match`, {
 			method: 'POST',
-			body: JSON.stringify({ jd_text: jdText }),
+			body: JSON.stringify({ jd_text: jdText })
 		});
 	},
 
@@ -361,7 +373,7 @@ export const apiClient = {
 	giveConsent(tosVersion: string): Promise<ConsentState> {
 		return request<ConsentState>('/v1/recruiter/consent', {
 			method: 'POST',
-			body: JSON.stringify({ accept_tos: true, good_faith_declaration: true, tos_version: tosVersion }),
+			body: JSON.stringify({ accept_tos: true, good_faith_declaration: true, tos_version: tosVersion })
 		});
 	},
 
@@ -384,10 +396,8 @@ export const apiClient = {
 			'/v1/billing/checkout',
 			{
 				method: 'POST',
-				headers: {
-					'Idempotency-Key': `checkout-${planId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-				},
-				body: JSON.stringify({ plan_id: planId, payment_method: paymentMethod }),
+				headers: { 'Idempotency-Key': `checkout-${planId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` },
+				body: JSON.stringify({ plan_id: planId, payment_method: paymentMethod })
 			}
 		);
 	},
@@ -411,7 +421,7 @@ export const apiClient = {
 	}): Promise<{ id: number; name: string }> {
 		return request<{ id: number; name: string }>('/v1/profiles', {
 			method: 'POST',
-			body: JSON.stringify(payload),
+			body: JSON.stringify(payload)
 		});
 	},
 
@@ -439,7 +449,7 @@ export const apiClient = {
 	updateOfferPreferences(prefs: OfferPreferences): Promise<void> {
 		return request<void>('/v1/me/offer-preferences', {
 			method: 'PUT',
-			body: JSON.stringify(prefs),
+			body: JSON.stringify(prefs)
 		});
-	},
+	}
 };

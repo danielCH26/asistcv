@@ -1,302 +1,177 @@
-/**
- * Session store tests — Clerk-first implementation.
- *
- * Pattern from client.test.ts: vi.mock at module level (no vi.hoisted, no
- * vi.resetModules), stores as module-level vars. Each test uses store.set()
- * to fire subscribers. State is reset in beforeEach via store.set().
- */
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { get } from 'svelte/store';
 
-// ─── Module-level mocks ───────────────────────────────────────────────────────
-
+// $app/navigation mockeado: fuera de una app SvelteKit viva, `goto` falla.
 vi.mock('$app/navigation', () => ({
-	goto: vi.fn().mockResolvedValue(undefined),
+	goto: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$app/environment', () => ({
-	browser: true,
-}));
-
-vi.mock('$env/static/public', () => ({
-	PUBLIC_API_URL: 'http://localhost:8000',
-	PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_fake',
-}));
-
-// ─── Clerk mock (module-level, mirrors client.test.ts pattern) ───────────────
-
-// clerkReady: fires the current value synchronously on subscribe — same
-// semantics as a real Svelte writable (session.ts's requireSession relies
-// on this: get(clerkReady) short-circuits, and late subscribers catch up).
-function makeReadyStore() {
-	let value = false;
-	const subs = new Set<(v: boolean) => void>();
-	return {
-		subscribe(fn: (v: boolean) => void) {
-			subs.add(fn);
-			fn(value); // fire immediately, like a real Svelte store
-			return () => subs.delete(fn);
-		},
-		set(v: boolean) {
-			value = v;
-			subs.forEach((fn) => fn(v));
-		},
-	};
+// Tokens JWT de prueba: header.payload con exp a 15 minutos.
+function fakeJwt(expiresInSeconds: number): string {
+	const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).replace(/=+$/, '');
+	const payload = btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + expiresInSeconds, sub: '1' })).replace(
+		/=+$/,
+		''
+	);
+	return `${header}.${payload}.sig`;
 }
 
-// clerkUser / clerkSession: fires synchronously on subscribe (for session derived).
-function makeUserStore() {
-	let value: unknown = null;
-	const subs = new Set<(v: unknown) => void>();
-	return {
-		subscribe(fn: (v: unknown) => void) {
-			subs.add(fn);
-			fn(value); // fire immediately so session.ts sees initial value
-			return () => subs.delete(fn);
-		},
-		set(v: unknown) {
-			value = v;
-			subs.forEach((fn) => fn(v));
-		},
-	};
-}
-
-// Module-level stores — shared across all tests.
-const clerkReady = makeReadyStore();
-const clerkUser = makeUserStore();
-const clerkSession = makeUserStore();
-
-vi.mock('$lib/clerk', () => ({
-	clerkReady,
-	clerkUser,
-	clerkSession,
-	getToken: async () => 'jwt',
-	clerkSignOut: async () => {},
-	mountSignIn: vi.fn(),
-	mountSignUp: vi.fn(),
-	initClerk: vi.fn(),
-}));
-
-// ─── Test data ────────────────────────────────────────────────────────────────
-
-const BACKEND_USER = { id: 7, email: 'a@b.com', role: 'job_seeker', full_name: 'Ana', locale: 'es' };
-const RECRUITER_USER = { id: 8, email: 'r@c.com', role: 'recruiter', full_name: 'Rita', locale: 'es' };
-
-function makeClerkUser(id: string, email?: string) {
-	return {
-		id,
-		primaryEmailAddressId: 'e1',
-		emailAddresses: email ? [{ id: 'e1', emailAddress: email }] : [],
-		publicMetadata: {}
-	} as unknown;
-}
-
-// ─── Tests ────────────────────────────────────────────────────────────────────
-
-beforeEach(() => {
-	localStorage.clear();
-	vi.unstubAllGlobals();
-	// Reset clerk state via set() — avoids resetting modules, which would
-	// interfere with the module-level vi.mock($lib/clerk) that session.ts needs.
-	clerkReady.set(false);
-	clerkUser.set(null);
-	clerkSession.set(null);
-});
+const USER = { id: 7, email: 'a@b.com', role: 'job_seeker', full_name: 'Ana', locale: 'es' };
 
 function jsonRes(body: unknown, status = 200): Response {
 	return new Response(JSON.stringify(body), {
 		status,
-		headers: { 'Content-Type': 'application/json' },
+		headers: { 'Content-Type': 'application/json' }
 	});
 }
 
-describe('session derived: null until clerkUser + backendUser', () => {
-	it('session null when clerkUser is null (backend user never fetched)', async () => {
-		vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 500 })));
-		const { session } = await import('$stores/session');
-		expect(get(session)).toBeNull();
+function stubFetch(routes: Array<[string, Response]>): ReturnType<typeof vi.fn> {
+	const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+		const url = String(input);
+		const match = routes.find(([path]) => url.includes(path));
+		if (!match) throw new Error(`fetch inesperado: ${url}`);
+		return match[1];
 	});
+	vi.stubGlobal('fetch', fetchMock);
+	return fetchMock;
+}
 
-	it('session non-null once clerkUser set and backend user fetched', async () => {
-		vi.stubGlobal(
-			'fetch',
-			vi.fn(async () => jsonRes(BACKEND_USER, 200))
-		);
-		const { session } = await import('$stores/session');
-
-		// clerkUser.subscribe fires immediately with null (set above in beforeEach).
-		// Then set to non-null → session.ts sees the change and fetches backend user.
-		clerkUser.set(makeClerkUser('u1'));
-		await new Promise((r) => setTimeout(r, 50));
-
-		const s = get(session);
-		expect(s).not.toBeNull();
-		expect(s!.user.id).toBe(7);
-	});
+beforeEach(() => {
+	localStorage.clear();
+	vi.unstubAllGlobals();
 });
 
-describe('isAuthenticated / isRecruiter / currentRole', () => {
-	it('isAuthenticated true, isRecruiter false, currentRole job_seeker', async () => {
-		vi.stubGlobal(
-			'fetch',
-			vi.fn(async () => jsonRes(BACKEND_USER, 200))
-		);
-		const { isAuthenticated, isRecruiter, currentRole } = await import('$stores/session');
-		clerkUser.set(makeClerkUser('u1'));
-		await new Promise((r) => setTimeout(r, 50));
+async function freshSession() {
+	// Módulos frescos por test: el store cachea estado a nivel módulo.
+	vi.resetModules();
+	return import('./session');
+}
 
-		expect(get(isAuthenticated)).toBe(true);
-		expect(get(isRecruiter)).toBe(false);
-		expect(get(currentRole)).toBe('job_seeker');
+describe('session store', () => {
+	it('verifyEmailCode persiste access+refresh y usuario en localStorage', async () => {
+		const access = fakeJwt(900);
+		const refresh = 'refresh-token-1';
+		const fetchMock = stubFetch([
+			['/v1/auth/email-code/verify', jsonRes({ access_token: access, refresh_token: refresh, token_type: 'bearer' })],
+			['/v1/users/me', jsonRes(USER)]
+		]);
+
+		const sessionModule = await freshSession();
+		const user = await sessionModule.verifyEmailCode('a@b.com', '123456');
+
+		expect(user.id).toBe(7);
+		const persisted = JSON.parse(localStorage.getItem('asistcv.session') ?? '{}');
+		expect(persisted.accessToken).toBe(access);
+		expect(persisted.refreshToken).toBe(refresh);
+		expect(persisted.user.email).toBe('a@b.com');
+		expect(fetchMock).toHaveBeenCalledTimes(2);
 	});
 
-	it('isRecruiter true for recruiter role', async () => {
-		vi.stubGlobal(
-			'fetch',
-			vi.fn(async () => jsonRes(RECRUITER_USER, 200))
-		);
-		const { isRecruiter } = await import('$stores/session');
-		clerkUser.set(makeClerkUser('u2'));
-		await new Promise((r) => setTimeout(r, 50));
+	it('requestEmailCode pide el código sin alterar la sesión', async () => {
+		const fetchMock = stubFetch([
+			['/v1/auth/email-code/request', jsonRes({ detail: 'CODE_SENT' }, 202)]
+		]);
 
-		expect(get(isRecruiter)).toBe(true);
-	});
-});
+		const sessionModule = await freshSession();
+		await sessionModule.requestEmailCode('a@b.com');
 
-describe('isAuthenticated follows the Clerk session, not the backend profile', () => {
-	it('is true as soon as Clerk has a session, even when the backend rejects the profile', async () => {
-		// The backend answers 401: the profile is not provisioned yet, or the
-		// service has no Clerk configuration. The user IS signed in — the
-		// navigation must not pretend otherwise.
-		vi.stubGlobal('fetch', vi.fn(async () => jsonRes({ detail: 'Invalid credentials' }, 401)));
-		const { isAuthenticated, session } = await import('$stores/session');
-		clerkUser.set(makeClerkUser('u3'));
-		await new Promise((r) => setTimeout(r, 50));
-
-		expect(get(isAuthenticated)).toBe(true);
-		// The backend profile is a separate fact and is still missing.
-		expect(get(session)).toBeNull();
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(localStorage.getItem('asistcv.session')).toBeNull();
 	});
 
-	it('is false when there is no Clerk session', async () => {
-		vi.stubGlobal('fetch', vi.fn(async () => jsonRes(BACKEND_USER, 200)));
-		const { isAuthenticated } = await import('$stores/session');
-		await new Promise((r) => setTimeout(r, 50));
-		expect(get(isAuthenticated)).toBe(false);
-	});
-
-	it('sessionEmail falls back to the Clerk email while the backend profile is missing', async () => {
-		vi.stubGlobal('fetch', vi.fn(async () => jsonRes({ detail: 'Invalid credentials' }, 401)));
-		const { sessionEmail } = await import('$stores/session');
-		clerkUser.set(makeClerkUser('u4', 'ana@example.com'));
-		await new Promise((r) => setTimeout(r, 50));
-
-		expect(get(sessionEmail)).toBe('ana@example.com');
-	});
-
-	it('sessionEmail prefers the backend record when it is loaded', async () => {
-		vi.stubGlobal('fetch', vi.fn(async () => jsonRes(BACKEND_USER, 200)));
-		const { sessionEmail } = await import('$stores/session');
-		clerkUser.set(makeClerkUser('u5', 'ana@example.com'));
-		await new Promise((r) => setTimeout(r, 50));
-
-		expect(get(sessionEmail)).toBe('a@b.com');
-	});
-});
-
-describe('requireSession', () => {
-	// NOTE: testing clerkReady=true path requires synchronous get(clerkReady),
-	// which conflicts with session.ts's TDZ pattern in the subscription callback.
-	// The core behavior (redirect on timeout) is covered below.
-
-	it('redirects to /login?reason=required when clerkReady stays false (5 s timeout)', async () => {
+	it('logout limpia la sesión y llama al endpoint con el refresh token', async () => {
 		const { goto } = await import('$app/navigation');
-		const { requireSession } = await import('$stores/session');
+		const access = fakeJwt(900);
+		const fetchMock = stubFetch([
+			['/v1/auth/email-code/verify', jsonRes({ access_token: access, refresh_token: 'r1', token_type: 'bearer' })],
+			['/v1/users/me', jsonRes(USER)],
+			['/v1/auth/logout', new Response(null, { status: 204 })]
+		]);
 
-		// clerkReady stays false → requireSession waits 5 s then redirects.
-		vi.useFakeTimers();
-		requireSession();
-		await vi.advanceTimersByTimeAsync(5_100);
-		vi.useRealTimers();
+		const sessionModule = await freshSession();
+		await sessionModule.verifyEmailCode('a@b.com', '123456');
+		await sessionModule.logout();
 
-		expect(goto).toHaveBeenCalledWith('/login?reason=required');
-	});
-});
-
-describe('requireRole', () => {
-	it('allows job_seeker role', async () => {
-		clerkReady.set(true);
-		clerkUser.set(makeClerkUser('u1'));
-		vi.stubGlobal(
-			'fetch',
-			vi.fn(async () => jsonRes(BACKEND_USER, 200))
-		);
-		await new Promise((r) => setTimeout(r, 0));
-		const { requireRole } = await import('$stores/session');
-		const result = await requireRole('job_seeker');
-		expect(result).toBe(true);
-	});
-
-	it('blocks wrong role (expects recruiter, gets job_seeker)', async () => {
-		const { goto } = await import('$app/navigation');
-		clerkReady.set(true);
-		clerkUser.set(makeClerkUser('u1'));
-		vi.stubGlobal(
-			'fetch',
-			vi.fn(async () => jsonRes(BACKEND_USER, 200))
-		);
-		await new Promise((r) => setTimeout(r, 0));
-		const { requireRole } = await import('$stores/session');
-		const result = await requireRole('recruiter');
-		expect(result).toBe(false);
+		expect(localStorage.getItem('asistcv.session')).toBeNull();
+		const logoutCall = fetchMock.mock.calls.find(([input]) => String(input).includes('/v1/auth/logout'));
+		expect(logoutCall).toBeDefined();
+		expect((logoutCall?.[1] as RequestInit).body).toContain('r1');
 		expect(goto).toHaveBeenCalledWith('/');
 	});
-});
 
-describe('logout', () => {
-	it('calls clerkSignOut, clears session, navigates to /', async () => {
-		const { goto } = await import('$app/navigation');
-		clerkReady.set(true);
-		clerkUser.set(makeClerkUser('u1'));
-		vi.stubGlobal(
-			'fetch',
-			vi.fn(async () => jsonRes(BACKEND_USER, 200))
-		);
-		await new Promise((r) => setTimeout(r, 0));
-		const { session, logout } = await import('$stores/session');
-		await logout();
-		expect(goto).toHaveBeenCalledWith('/');
-		expect(get(session)).toBeNull();
+	it('refreshIfNeeded renueva cuando el access expira en <60s', async () => {
+		const access = fakeJwt(30);
+		const newAccess = fakeJwt(900);
+		const fetchMock = stubFetch([
+			['/v1/auth/email-code/verify', jsonRes({ access_token: access, refresh_token: 'r-old', token_type: 'bearer' })],
+			['/v1/users/me', jsonRes(USER)],
+			['/v1/auth/refresh', jsonRes({ access_token: newAccess, refresh_token: 'r-new', token_type: 'bearer' })]
+		]);
+
+		const sessionModule = await freshSession();
+		await sessionModule.verifyEmailCode('a@b.com', '123456');
+
+		const ok = await sessionModule.refreshIfNeeded();
+		expect(ok).toBe(true);
+
+		const persisted = JSON.parse(localStorage.getItem('asistcv.session') ?? '{}');
+		expect(persisted.accessToken).toBe(newAccess);
+		expect(persisted.refreshToken).toBe('r-new');
+
+		const refreshCalls = fetchMock.mock.calls.filter(([input]) => String(input).includes('/v1/auth/refresh'));
+		expect(refreshCalls).toHaveLength(1);
 	});
-});
 
-describe('audit token claim', () => {
-	it('pending audit token triggers linkAudit call (best-effort)', async () => {
-		const linkAuditMock = vi.fn().mockResolvedValue({ success: true, message: 'ok', analysis_id: 42 });
+	it('refreshIfNeeded no renueva cuando falta mucho para expirar', async () => {
+		const access = fakeJwt(900);
+		const fetchMock = stubFetch([
+			['/v1/auth/email-code/verify', jsonRes({ access_token: access, refresh_token: 'r1', token_type: 'bearer' })],
+			['/v1/users/me', jsonRes(USER)]
+		]);
 
-		vi.stubGlobal(
-			'fetch',
-			vi.fn(async () => jsonRes(BACKEND_USER, 200))
-		);
+		const sessionModule = await freshSession();
+		await sessionModule.verifyEmailCode('a@b.com', '123456');
 
-		localStorage.setItem('asistcv.audit_token', 'audit-token-abc');
-
-		const { apiClient } = await import('$api/client');
-		apiClient.linkAudit = linkAuditMock;
-		await linkAuditMock('audit-token-abc');
-		expect(linkAuditMock).toHaveBeenCalledWith('audit-token-abc');
+		const ok = await sessionModule.refreshIfNeeded();
+		expect(ok).toBe(true);
+		const refreshCalls = fetchMock.mock.calls.filter(([input]) => String(input).includes('/v1/auth/refresh'));
+		expect(refreshCalls).toHaveLength(0);
 	});
-});
 
-describe('onboarding helpers', () => {
-	it('startOnboarding / isOnboarding / completeOnboarding work', async () => {
-		const { startOnboarding, isOnboarding, completeOnboarding } = await import('$stores/session');
+	it('refresh con 401 limpia la sesión (TOKEN_REUSED → evento)', async () => {
+		const access = fakeJwt(30);
+		stubFetch([
+			['/v1/auth/email-code/verify', jsonRes({ access_token: access, refresh_token: 'r1', token_type: 'bearer' })],
+			['/v1/users/me', jsonRes(USER)],
+			['/v1/auth/refresh', jsonRes({ detail: 'TOKEN_REUSED' }, 401)]
+		]);
 
-		expect(isOnboarding()).toBe(false);
-		startOnboarding();
-		expect(isOnboarding()).toBe(true);
-		completeOnboarding();
-		expect(isOnboarding()).toBe(false);
+		const sessionModule = await freshSession();
+		await sessionModule.verifyEmailCode('a@b.com', '123456');
+
+		const ok = await sessionModule.refreshIfNeeded();
+		expect(ok).toBe(false);
+		expect(localStorage.getItem('asistcv.session')).toBeNull();
+	});
+
+	it('verifyEmailCode reclama el audit pendiente y onboarding se marca/limpia', async () => {
+		const access = fakeJwt(900);
+		localStorage.setItem('asistcv.audit_token', 'audit-token-1');
+		stubFetch([
+			['/v1/auth/email-code/verify', jsonRes({ access_token: access, refresh_token: 'r1', token_type: 'bearer' })],
+			['/v1/users/me', jsonRes(USER)],
+			['/v1/audit/', jsonRes({ success: true, message: 'ok', analysis_id: 42 })]
+		]);
+
+		const sessionModule = await freshSession();
+		await sessionModule.verifyEmailCode('a@b.com', '123456');
+		expect(JSON.parse(localStorage.getItem('asistcv.session') ?? '{}').user.id).toBe(7);
+		// El claim best-effort consumió el token pendiente.
+		expect(localStorage.getItem('asistcv.audit_token')).toBeNull();
+
+		// El wizard lo dispara la página tras el registro (design §8.4).
+		sessionModule.startOnboarding();
+		expect(sessionModule.isOnboarding()).toBe(true);
+		sessionModule.completeOnboarding();
+		expect(sessionModule.isOnboarding()).toBe(false);
 	});
 });

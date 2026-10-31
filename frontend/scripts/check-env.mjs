@@ -1,12 +1,10 @@
 /**
- * Pre-build guard: falla el build si PUBLIC_API_URL o
- * PUBLIC_CLERK_PUBLISHABLE_KEY no están definidas.
+ * Pre-build guard: falla el build si PUBLIC_API_URL no está definida.
  * Se ejecuta antes de `vite build` para cumplir el scenario match-ui
  * "Build falla sin la env var".
  *
- * PUBLIC_CLERK_PUBLISHABLE_KEY es REQUIRED: sin ella el bundle de Clerk
- * arranca sin publishable key y el login muere con "Clerk keys are missing
- * from your environment" en runtime (fallo observado en prod, QA 2026-10).
+ * feat/passwordless-auth: la autenticación es nativa (email + código),
+ * ya no se requiere ninguna clave de Clerk en el build.
  *
  * Además, falla si `PUBLIC_BACKEND_API_KEY` reaparece en `src/`:
  * la autenticación es por sesión JWT desde el sprint 2 y la API key
@@ -24,7 +22,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const REQUIRED = ['PUBLIC_API_URL', 'PUBLIC_CLERK_PUBLISHABLE_KEY'];
+const REQUIRED = ['PUBLIC_API_URL'];
 const FORBIDDEN_KEY = 'PUBLIC_BACKEND_API_KEY';
 const SRC_DIR = fileURLToPath(new URL('../src', import.meta.url));
 const ROOT_DIR = fileURLToPath(new URL('..', import.meta.url));
