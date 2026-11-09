@@ -21,12 +21,23 @@
     "required": "Necesitás una cuenta para acceder a esta sección.",
     "tokenReused": "Tu sesión fue invalidada por seguridad. Iniciá sesión nuevamente."
   },
+  "verifyEmail": {
+    "title": "Verificación de email",
+    "checking": "Verificando tu email…",
+    "success": "Tu email quedó verificado. Ya podés comprar un plan.",
+    "missingToken": "Este link no trae el token de verificación.",
+    "invalid": "Este link no es válido. Pedí un nuevo email de verificación.",
+    "expired": "Este link expiró. Pedí un nuevo email de verificación.",
+    "used": "Este link ya se usó.",
+    "cta": "Ir a mi perfil"
+  },
   "home": {
     "heading": "Pegá una descripción del puesto",
     "intro": "Pegá el texto de la descripción del puesto (mínimo 50 caracteres) y obtené una coincidencia honesta contra tu perfil.",
     "profileLabel": "Perfil activo",
     "profileMissing": "Todavía no tenés un perfil propio.",
     "profileMissingCta": "Configurá tu perfil",
+    "cvRequired": "Necesitás un CV cargado para compararlo con esta vacante.",
     "adaptCta": "Adaptá tu CV con esta búsqueda"
   },
   "form": {

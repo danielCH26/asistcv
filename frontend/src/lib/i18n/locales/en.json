@@ -21,12 +21,23 @@
     "required": "You need an account to access this section.",
     "tokenReused": "Your session was invalidated for security reasons. Please log in again."
   },
+  "verifyEmail": {
+    "title": "Email verification",
+    "checking": "Verifying your email…",
+    "success": "Your email is verified. You can now buy a plan.",
+    "missingToken": "This link is missing the verification token.",
+    "invalid": "This link is not valid. Request a new verification email.",
+    "expired": "This link expired. Request a new verification email.",
+    "used": "This link was already used.",
+    "cta": "Go to my profile"
+  },
   "home": {
     "heading": "Paste a Job Description",
     "intro": "Paste the job description text (minimum 50 characters) and get an honest match against your profile.",
     "profileLabel": "Active profile",
     "profileMissing": "You don't have a profile of your own yet.",
     "profileMissingCta": "Set up your profile",
+    "cvRequired": "You need a CV uploaded to compare it against this job.",
     "adaptCta": "Adapt your CV with this job"
   },
   "form": {
