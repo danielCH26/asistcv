@@ -1,6 +1,7 @@
 """Entry point del adapter MCP."""
 
 import asyncio
+import logging
 import signal
 import sys
 
@@ -14,10 +15,19 @@ from .server import create_server
 # del protocolo MCP — loguear ahí corrompe los mensajes JSON-RPC. Los logs
 # van a stderr como JSON (issue #59: web_search_call con query, provider,
 # latency_ms, num_results, cache_hit).
+#
+# El nivel se resuelve con el mapa de `logging` porque
+# `make_filtering_bound_logger` espera un int, no un atributo de structlog.
+# La versión anterior usaba `getattr(structlog, level, structlog.INFO)`, y el
+# valor por defecto de `getattr` se evalúa SIEMPRE: structlog no expone
+# constantes de nivel a nivel de módulo, así que el import reventaba con
+# AttributeError y el servidor MCP no arrancaba (issue #132).
+_LOG_LEVEL = logging.getLevelNamesMapping().get(
+    get_settings().log_level.upper(), logging.INFO
+)
+
 structlog.configure(
-    wrapper_class=structlog.make_filtering_bound_logger(
-        getattr(structlog, get_settings().log_level.upper(), structlog.INFO)
-    ),
+    wrapper_class=structlog.make_filtering_bound_logger(_LOG_LEVEL),
     logger_factory=structlog.WriteLoggerFactory(file=sys.stderr),
     processors=[
         structlog.processors.add_log_level,
