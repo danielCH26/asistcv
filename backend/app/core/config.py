@@ -144,14 +144,16 @@ class Settings(BaseSettings):
         default="price_recruiter_agency", validation_alias="STRIPE_PRICE_RECRUITER_AGENCY"
     )
 
-    # Billing provider switch (slice 1 — feat/pasarela-pagos-56)
-    # Valid values: "mock" (default, dev/local), "stripe", "lemon_squeezy", "mercadopago"
-    # Slice 1 ships mock + stripe. Lemon Squeezy (slice 2) and Mercado Pago (slice 3)
-    # are stubs that raise NotImplementedError until their slices land.
+    # Billing provider switch (feat/pasarela-pagos-56)
+    # Valid values: "mock" (default, dev/local), "stripe", "lemon_squeezy", "mercadopago", "wompi"
+    # All providers can be configured simultaneously. The active provider is used as fallback
+    # when the user doesn't specify one. The system tries providers in order until one works.
+    # Note: If Wompi or Mercado Pago are configured, they take priority over Lemon Squeezy
+    # for Colombian users (COP currency).
     billing_provider_active: str = Field(
-        default="mock",
+        default="wompi",
         validation_alias="BILLING_PROVIDER_ACTIVE",
-        description="Active billing provider: mock | stripe | lemon_squeezy | mercadopago",
+        description="Preferred billing provider (fallback): mock | stripe | lemon_squeezy | mercadopago | wompi",
     )
 
     # Lemon Squeezy — stub fields, validated and functional in slice 2
@@ -197,6 +199,33 @@ class Settings(BaseSettings):
     )
     mercadopago_webhook_secret: str | None = Field(
         default=None, validation_alias="MERCADOPAGO_WEBHOOK_SECRET"
+    )
+    mercadopago_test_mode: bool = Field(
+        default=True,
+        validation_alias="MERCADOPAGO_TEST_MODE",
+        description="Use Mercado Pago sandbox (default true; flip false for production)",
+    )
+
+    # Wompi — Bancolombia payment gateway for Colombia (COP)
+    wompi_private_key: str | None = Field(
+        default=None, validation_alias="WOMPI_PRIVATE_KEY"
+    )
+    wompi_public_key: str | None = Field(
+        default=None, validation_alias="WOMPI_PUBLIC_KEY"
+    )
+    wompi_webhook_secret: str | None = Field(
+        default=None, validation_alias="WOMPI_WEBHOOK_SECRET"
+    )
+    wompi_integrity_key: str | None = Field(
+        default=None, validation_alias="WOMPI_INTEGRITY_KEY"
+    )
+    wompi_acceptance_token: str | None = Field(
+        default=None, validation_alias="WOMPI_ACCEPTANCE_TOKEN"
+    )
+    wompi_test_mode: bool = Field(
+        default=True,
+        validation_alias="WOMPI_TEST_MODE",
+        description="Use Wompi sandbox (default true; flip false for production)",
     )
 
     # Offer search configuration (issue #55)

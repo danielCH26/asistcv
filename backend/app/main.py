@@ -256,6 +256,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         include_in_schema=False,
     )
 
+    # Wompi webhook endpoint (no auth - uses the X-Event-Checksum signature).
+    # Mismo prefijo que los otros proveedores de pago: la URL que se configura
+    # en el panel de Wompi es https://<host>/api/v1/webhooks/wompi. Sin este
+    # include_router el pago se cobra pero la suscripcion nunca se activa.
+    from app.api.v1.webhooks import wompi as wompi_webhook
+
+    app.include_router(
+        wompi_webhook.router,
+        prefix="/api/v1",
+        include_in_schema=False,
+    )
+
     # Internal cleanup endpoint for the adaptation sweeper cron. No
     # router-level auth; per-endpoint BACKEND_API_KEY check inside the
     # handler. Mounted at /internal (no /v1 prefix) to match the

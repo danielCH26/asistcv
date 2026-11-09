@@ -26,7 +26,7 @@ from app.core.config import get_settings
 
 # === Shared types ===
 
-_PROVIDER_IDS = frozenset({"mock", "stripe", "lemon_squeezy", "mercadopago"})
+_PROVIDER_IDS = frozenset({"mock", "stripe", "lemon_squeezy", "mercadopago", "wompi"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -227,6 +227,11 @@ def _build_provider(provider_id: str) -> BillingProvider:
         from app.services.providers.mercadopago import MercadoPagoProvider
 
         return MercadoPagoProvider()
+
+    if provider_id == "wompi":
+        from app.services.providers.wompi import WompiProvider
+
+        return WompiProvider()
 
     raise ValueError(f"Unknown billing provider: {provider_id!r}")
 

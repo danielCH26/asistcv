@@ -357,7 +357,7 @@ async def _handle_subscription_upsert(event) -> None:
             if pm is None:
                 pm = PaymentMethod(
                     user_id=event.user_id,
-                    provider="lemon_squeezy",
+                    provider=event.provider_id,
                     provider_subscription_id=sub_id,
                 )
                 session.add(pm)
