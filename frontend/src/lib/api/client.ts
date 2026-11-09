@@ -332,6 +332,20 @@ export const apiClient = {
 		);
 	},
 
+	// === Verificación de email (público) ===
+
+	/**
+	 * Confirma el email con el token que viene en el link. El endpoint es
+	 * público — el token ES la credencial — así que no se manda el bearer.
+	 */
+	confirmEmailVerification(token: string): Promise<{ detail: string }> {
+		return request<{ detail: string }>(
+			'/v1/auth/verify-email/confirm',
+			{ method: 'POST', body: JSON.stringify({ token }) },
+			{ auth: false }
+		);
+	},
+
 	// === Recruiter ===
 
 	listCandidates(page = 1, pageSize = 20): Promise<CandidateListResponse> {

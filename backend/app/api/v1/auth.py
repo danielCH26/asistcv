@@ -422,7 +422,12 @@ async def request_verify_email(
     settings = get_settings()
     now = datetime.now(UTC)
     expires_at = now + timedelta(seconds=settings.email_verification_ttl_seconds)
-    token_hash = hash_token(_secrets_module.token_urlsafe(32))
+    # El link lleva el token CRUDO, no su hash: el endpoint de confirmacion
+    # hashea lo que recibe y lo compara contra el hash guardado, asi que mandar
+    # el hash en el link lo hasheaba de nuevo (sha256(sha256(token))) y el
+    # confirm respondia siempre INVALID_TOKEN.
+    raw_token = _secrets_module.token_urlsafe(32)
+    token_hash = hash_token(raw_token)
 
     async with get_session_context() as session:
         await bind_rls_context(session, current_user.id, current_user.role)
@@ -438,7 +443,7 @@ async def request_verify_email(
 
     # Build the link outside the session: settings + id stay in scope.
     verify_url = (
-        f"{settings.frontend_url}/verify-email?token={token_hash}"
+        f"{settings.frontend_url}/verify-email?token={raw_token}"
     )
     html_body = _verification_email_html(verify_url, settings.email_verification_ttl_seconds)
     text_body = (
