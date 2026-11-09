@@ -8,9 +8,14 @@
 	import { profileStore } from '$stores/profile';
 	import { apiClient } from '$api/client';
 	import { isAuthenticated } from '$stores/session';
-	import type { SubscriptionInfo } from '$api/types';
+	import { ApiError, type SubscriptionInfo } from '$api/types';
 
 	let subscription: SubscriptionInfo | null = null;
+	// 'unknown' | 'none' | 'some'. Si el usuario tiene un CV, el perfil se arma
+	// solo a partir de ese CV en el primer match: no hay que anunciarle que
+	// "no tiene perfil" cuando en realidad ya tiene el CV con el que crearlo.
+	let cvState: 'unknown' | 'none' | 'some' = 'unknown';
+	let setupError = '';
 
 	onMount(async () => {
 		if (!get(isAuthenticated)) return;
@@ -18,6 +23,11 @@
 			subscription = await apiClient.subscription();
 		} catch {
 			subscription = null;
+		}
+		try {
+			cvState = (await apiClient.listCvs()).length > 0 ? 'some' : 'none';
+		} catch {
+			cvState = 'none';
 		}
 	});
 
@@ -32,17 +42,69 @@
 		return $_('billing.usage', { values: { used: matches, limit } });
 	}
 
+	/**
+	 * Garantiza un Profile propio para el contexto del match; lo crea desde el
+	 * CV del usuario si falta (issue #132).
+	 *
+	 * Antes esto vivía en /profile (`ensureProfile`) y se perdió al mover el
+	 * match a la home (#109): `profileStore` se quedaba en null y el submit
+	 * salía con un `return` silencioso, así que "Analizar" no hacía nada para
+	 * ningún usuario nuevo — ni request, ni error, ni spinner.
+	 *
+	 * La API ya expone POST /v1/profiles con ownership real (`owner_user_id`),
+	 * así que el perfil se arma desde el CV que el usuario ya cargó.
+	 */
+	async function ensureProfile(): Promise<number> {
+		const current = get(profileStore);
+		if (current !== null) {
+			try {
+				await apiClient.getProfile(current);
+				return current;
+			} catch {
+				// 404 = no existe o pertenece a otro usuario. En ambos casos el id
+				// cacheado es inservible: olvidarlo evita volver a apuntar al
+				// perfil de alguien más (issue #85).
+				profileStore.forget();
+			}
+		}
+
+		const cvs = await apiClient.listCvs();
+		const first = cvs[0];
+		if (!first) {
+			throw new ApiError($_('home.cvRequired'), 409, 'no_cv', 'NO_CV');
+		}
+
+		const detail = await apiClient.getCv(first.id);
+		const structured = detail.structured ?? {};
+		const created = await apiClient.createProfile({
+			name:
+				typeof structured.full_name === 'string' && structured.full_name
+					? structured.full_name
+					: 'CV',
+			headline: null,
+			experience: { items: structured.experience ?? [] },
+			skills: { items: structured.skills ?? [] },
+			preferences: { location: structured.location ?? null }
+		});
+		profileStore.set(created.id);
+		return created.id;
+	}
+
 	async function handleSubmit(event: CustomEvent<{ jdText: string }>) {
-		// Sin un perfil propio no hay contra qué medir el match: el backend
-		// responde 404 para un perfil ajeno, y esta pantalla no crea perfiles
-		// — eso vive en /profile, que tiene el CV con el que armarlo.
-		const profileId = get(profileStore);
-		if (profileId === null) return;
-		await analysisStore.submit(event.detail.jdText, profileId);
+		setupError = '';
+		try {
+			const profileId = await ensureProfile();
+			await analysisStore.submit(event.detail.jdText, profileId);
+		} catch (err) {
+			// El store de análisis se ocupa de sus propios errores; aquí llega
+			// el fallo de preparar el perfil (p. ej. que no haya CV todavía).
+			setupError = err instanceof ApiError ? err.message : $_('error.title');
+		}
 	}
 
 	function retry() {
 		analysisStore.reset();
+		setupError = '';
 	}
 </script>
 
@@ -58,7 +120,7 @@
 			<p class="home__profile">
 				{$_('home.profileLabel')}: <strong>#{$profileStore}</strong>
 			</p>
-		{:else}
+		{:else if !$isAuthenticated || cvState === 'none'}
 			<p class="home__profile" data-testid="home-no-profile">
 				{$_('home.profileMissing')}
 				<a href="/profile">{$_('home.profileMissingCta')}</a>
@@ -88,6 +150,14 @@
 		</section>
 	{/if}
 
+	{#if setupError}
+		<section class="home__error" role="alert" data-testid="home-setup-error">
+			<h2>{$_('error.title')}</h2>
+			<p>{setupError}</p>
+			<a class="home__setup-cta" href="/profile">{$_('home.profileMissingCta')}</a>
+		</section>
+	{/if}
+
 	{#if $analysisStore.status === 'done' && $analysisStore.result}
 		<MatchResult analysis={$analysisStore.result} />
 		<a class="home__adapt-cta" href="/adapt">{$_('home.adaptCta')}</a>
@@ -113,8 +183,10 @@
 	}
 
 	/* Match → adapt is the product's natural next step: the CTA rides the
-	   result with the primary control treatment (control, so clay). */
-	.home__adapt-cta {
+	   result with the primary control treatment (control, so clay). El CTA de
+	   setup comparte tratamiento porque es el mismo tipo de acción. */
+	.home__adapt-cta,
+	.home__setup-cta {
 		align-self: flex-start;
 		padding: var(--space-2) var(--space-4);
 		border: var(--border-width) solid transparent;
@@ -128,12 +200,14 @@
 		transition: box-shadow var(--duration-fast) var(--ease-standard);
 	}
 
-	.home__adapt-cta:hover {
+	.home__adapt-cta:hover,
+	.home__setup-cta:hover {
 		text-decoration: none;
 		box-shadow: var(--clay-lifted);
 	}
 
-	.home__adapt-cta:focus-visible {
+	.home__adapt-cta:focus-visible,
+	.home__setup-cta:focus-visible {
 		box-shadow: var(--clay-focus-ring), var(--clay-raised);
 		outline: none;
 	}

@@ -27,6 +27,7 @@
     "profileLabel": "Perfil activo",
     "profileMissing": "Todavía no tenés un perfil propio.",
     "profileMissingCta": "Configurá tu perfil",
+    "cvRequired": "Necesitás un CV cargado para compararlo con esta vacante.",
     "adaptCta": "Adaptá tu CV con esta búsqueda"
   },
   "form": {

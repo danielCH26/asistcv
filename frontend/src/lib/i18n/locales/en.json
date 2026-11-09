@@ -27,6 +27,7 @@
     "profileLabel": "Active profile",
     "profileMissing": "You don't have a profile of your own yet.",
     "profileMissingCta": "Set up your profile",
+    "cvRequired": "You need a CV uploaded to compare it against this job.",
     "adaptCta": "Adapt your CV with this job"
   },
   "form": {
