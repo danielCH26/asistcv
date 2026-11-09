@@ -232,11 +232,21 @@ def test_factory_stripe_without_key_raises_provider_not_configured():
 
 
 def test_factory_default_uses_billing_provider_active_setting(monkeypatch):
-    """When provider_id is None, factory uses Settings.billing_provider_active (default mock)."""
+    """When provider_id is None, factory uses Settings.billing_provider_active.
+
+    Lo que se verifica es que la factory RESPETE el setting, no el valor
+    concreto del default: ese default es una decisión de producto (hoy
+    "wompi" para Colombia) y si el test lo hardcodeara, cambiarlo rompería
+    la suite sin que nada esté mal.
+    """
+    from app.core.config import get_settings
+
     _PROVIDER_CACHE.clear()
 
-    # Ensure BILLING_PROVIDER_ACTIVE is not set in the environment so the default kicks in
+    # Ensure BILLING_PROVIDER_ACTIVE is not set in the environment so the
+    # Settings value is the one that decides.
     monkeypatch.delenv("BILLING_PROVIDER_ACTIVE", raising=False)
+    monkeypatch.setattr(get_settings(), "billing_provider_active", "mock")
 
     provider = get_billing_provider(None)
     assert provider.provider_id == "mock"

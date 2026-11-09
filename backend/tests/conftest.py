@@ -301,6 +301,28 @@ os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 # keys.
 os.environ.setdefault("JWT_SECRET", "test-only-jwt-secret-not-a-production-key")
 
+# La suite NO debe heredar el `backend/.env` del desarrollador.
+#
+# pydantic-settings carga ese archivo en cada `Settings()`, así que sus
+# variables se colaban en la corrida entera: `BACKEND_API_KEY` (el README lo
+# pide para que el adapter MCP pueda llamar al backend) dejaba la app en
+# modo PROTEGIDO y todos los tests que esperan modo abierto fallaban con 401;
+# `EMBEDDING_PROVIDER=mock` (la config de dev documentada) cambiaba el
+# marcador de embedding y rompía los tests de re-embed.
+#
+# En CI no hay `.env`, así que la suite corría en modo abierto. Acá se
+# reproduce ese comportamiento ignorando el archivo: la config de la suite
+# viene SOLO del entorno. Va antes del import de `app.main` (que construye el
+# singleton de Settings) por el mismo contrato de orden que DATABASE_URL.
+from app.core.config import Settings as _Settings  # noqa: E402
+
+# Ruta que no existe: pydantic-settings ignora en silencio los env_file
+# faltantes.
+_Settings.model_config["env_file"] = os.path.join(  # type: ignore[index]
+    os.environ.get("TEMP", os.environ.get("TMP", ".")),
+    "asistcv-tests-ignoran-el-env-local",
+)
+
 from app.main import app  # noqa: E402
 
 # Estado global: el setup de la DB de test corre una sola vez por sesión,
@@ -604,6 +626,42 @@ def settings():
     """Get application settings."""
     from app.core.config import get_settings
     return get_settings()
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _isolate_suite_from_local_env():
+    """La suite no debe heredar el ``.env`` del desarrollador.
+
+    ``backend/.env`` trae ``BACKEND_API_KEY`` (el README lo pide para que el
+    adapter MCP pueda llamar al backend) y ``EMBEDDING_PROVIDER=mock`` (la
+    config de dev documentada). Como pydantic-settings carga el ``.env`` en
+    ``Settings``, esas variables se colaban en la corrida entera:
+
+    * con ``BACKEND_API_KEY`` la app quedaba en modo PROTEGIDO y todos los
+      tests que esperan modo abierto (``GET /v1/profiles/{id}`` sin
+      credenciales → 200) fallaban con 401;
+    * con ``EMBEDDING_PROVIDER=mock`` el marcador de embedding del perfil
+      cambia y los tests de re-embed no coinciden.
+
+    En CI no hay ``.env``, así que la suite corría en modo abierto. Acá se
+    reproduce ese comportamiento pase lo que pase en la máquina: se vacían las
+    variables que decide el modo. Los tests que necesitan modo protegido o un
+    proveedor concreto lo activan explícitamente con monkeypatch.
+
+    Va en ``os.environ`` (y no sobre el singleton) porque varios tests
+    llaman a ``get_settings.cache_clear()``: al releer la config, la variable
+    de entorno tiene que seguir diciendo lo mismo.
+    """
+    previous = {name: os.environ.get(name) for name in ("BACKEND_API_KEY",)}
+    os.environ["BACKEND_API_KEY"] = ""
+    try:
+        yield
+    finally:
+        for name, value in previous.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
 
 
 # === Production-faithful RLS lane (issue #50, second half)

@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 import app.api.v1.match as match_module
+from app.core.config import get_settings
 from app.db.models import Analysis, JobDescription, Profile
 from app.llm.schemas import Embedding, MatchAnalysis
 
@@ -31,9 +32,11 @@ JD_TEXT = (
     "PostgreSQL y despliegues en AWS. Trabajo remoto, equipo pequeño."
 )
 
-# Marker the active provider resolves to (EMBEDDING_PROVIDER default is
-# gemini) — match.py compares stored markers against it to skip re-embed.
-EMBEDDING_MODEL = "gemini-embedding-001"
+# Marker the active provider resolves to — match.py compares stored markers
+# against it to skip re-embed. Se deriva de la config en vez de hardcodear
+# "gemini-embedding-001": con EMBEDDING_PROVIDER=mock (la config de dev que
+# documenta el README) el marcador es otro y el test fallaba sin motivo.
+EMBEDDING_MODEL = get_settings().resolved_embedding_model
 
 
 def _make_provider() -> MagicMock:
