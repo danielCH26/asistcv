@@ -134,7 +134,15 @@ class WompiClient:
         # Try to extract error message from response
         try:
             error_data = exc.response.json()
-            error_msg = error_data.get("error", {}).get("message", str(exc))
+            error_obj = error_data.get("error", {})
+            # Wompi usa {error: {type, reason}} en la API actual y
+            # {error: {message}} en la clásica: se leen las dos.
+            error_msg = (
+                error_obj.get("message")
+                or error_obj.get("reason")
+                or error_obj.get("type")
+                or str(exc)
+            )
         except Exception:
             error_msg = str(exc)
         raise WompiError(
@@ -151,19 +159,25 @@ class WompiClient:
     # --- Public API -----------------------------------------------------------
 
     async def get_acceptance_tokens(self) -> dict:
-        """Fetch current acceptance tokens from Wompi.
+        """Fetch the presigned acceptance tokens from Wompi.
 
-        GET /v1/acceptance_tokens
+        El endpoint cambio. `GET /v1/acceptance_tokens` ya NO existe (404) y
+        `GET /v1/merchants/{public_key}` quedo deshabilitado el 2026-10-31
+        (Wompi lo anuncia en su propia doc). El camino vigente es
+        `GET /v1/merchants/info` con la clave PUBLICA en el header
+        `x-merchant-public-key`.
 
-        Returns:
-            Dict with acceptance_token, personal_data_auth_token, etc.
+        Devuelve los DOS tokens que Wompi exige para crear una transaccion:
+        `acceptance_token` (terminos) y `accept_personal_auth` (tratamiento de
+        datos personales). Mandar solo el primero hace que Wompi rechace la
+        transaccion.
         """
         client = await self._get_client()
 
         try:
             response = await client.get(
-                "/v1/acceptance_tokens",
-                headers=self._auth_headers(),
+                "/v1/merchants/info",
+                headers={"x-merchant-public-key": self._public_key},
             )
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
@@ -173,8 +187,17 @@ class WompiClient:
         except httpx.ConnectError as e:
             raise WompiConnectionError(str(e)) from None
 
-        data = response.json()
-        return data.get("data", {})
+        data = response.json().get("data", {})
+        return {
+            "acceptance_token": data.get("presigned_acceptance", {}).get("acceptance_token", ""),
+            "accept_personal_auth": data.get("presigned_personal_data_auth", {}).get(
+                "acceptance_token", ""
+            ),
+            "acceptance_permalink": data.get("presigned_acceptance", {}).get("permalink"),
+            "personal_data_auth_permalink": data.get("presigned_personal_data_auth", {}).get(
+                "permalink"
+            ),
+        }
 
     async def create_transaction(
         self,
@@ -186,6 +209,7 @@ class WompiClient:
         currency: str = "COP",
         reference: str | None = None,
         acceptance_token: str | None = None,
+        accept_personal_auth: str | None = None,
         payment_method_type: str = "CARD",
         redirect_url: str | None = None,
         signature: str | None = None,
@@ -204,7 +228,9 @@ class WompiClient:
             amount_in_cents: Amount in COP cents
             currency: Currency (COP)
             reference: Unique reference for idempotency
-            acceptance_token: Acceptance token for legal compliance
+            acceptance_token: Acceptance token (terminos) — required by Wompi
+            accept_personal_auth: Acceptance token de datos personales —
+                tambien lo exige Wompi para crear la transaccion
             payment_method_type: CARD | PSE | NEQUI | BANCOLOMBIA_TRANSFER
             redirect_url: URL to redirect after payment
             signature: Signature from Wompi Widget (for card payments)
@@ -214,11 +240,13 @@ class WompiClient:
         """
         client = await self._get_client()
 
-        # Use provided acceptance token or fetch one
+        # Use provided acceptance tokens or fetch them.
         token = acceptance_token or self._acceptance_token
-        if not token:
+        personal_auth = accept_personal_auth
+        if not token or not personal_auth:
             tokens_data = await self.get_acceptance_tokens()
-            token = tokens_data.get("acceptance_token", "")
+            token = token or tokens_data.get("acceptance_token", "")
+            personal_auth = personal_auth or tokens_data.get("accept_personal_auth", "")
 
         # Build reference
         ref = reference or f"{user_id}_{plan_id}"
@@ -233,6 +261,7 @@ class WompiClient:
             },
             "reference": ref,
             "acceptance_token": token,
+            "accept_personal_auth": personal_auth,
         }
 
         # Add redirect URL for redirect payment methods
