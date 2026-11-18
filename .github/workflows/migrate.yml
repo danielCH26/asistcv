@@ -1,0 +1,49 @@
+name: Migrate database
+
+# Aplica las migraciones de Alembic contra la base de producción (Neon).
+#
+# Antes esto era un paso manual: Render despliega el código pero nunca
+# corría `alembic upgrade head`, así que la base podía quedar por detrás
+# del código (por ejemplo, el CHECK de `payment_methods.provider` que
+# rechazaba los eventos de Wompi con un 500 en el webhook).
+#
+# Necesita el secreto `DATABASE_URL` en Settings → Secrets → Actions.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: migrate-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    name: Apply migrations (production)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.12 + UV
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: cd backend && uv sync --all-extras
+
+      - name: Apply migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: cd backend && uv run alembic upgrade head
+
+      - name: Show the applied revision
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: cd backend && uv run alembic current
