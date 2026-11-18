@@ -195,7 +195,16 @@ explicitly: Environment → `PORT` = `7860`.
 
 ## 3. Apply the migrations (Neon)
 
-The Dockerfile does **not** run migrations on startup — `alembic upgrade head` is a separate, manual step against Neon:
+Migrations run **automatically in CI**: the `Migrate database` workflow
+(`.github/workflows/migrate.yml`) applies `alembic upgrade head` on every push
+to `main`. It needs one secret:
+
+| Where | What |
+|---|---|
+| GitHub → Settings → Secrets and variables → Actions | `DATABASE_URL` — the same pooled connection string Neon gives you (Neon → the project → **Connection string** → *Pooled connection*), with the password substituted |
+
+Until that secret exists the workflow fails with an explicit message, and the
+migrations have to be applied by hand:
 
 ```bash
 cd backend

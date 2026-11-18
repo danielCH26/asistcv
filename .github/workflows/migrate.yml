@@ -38,6 +38,15 @@ jobs:
       - name: Install dependencies
         run: cd backend && uv sync --all-extras
 
+      - name: Check the secret
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::falta el secreto DATABASE_URL — agregalo en Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+
       - name: Apply migrations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
