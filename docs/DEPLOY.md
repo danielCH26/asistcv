@@ -97,9 +97,60 @@ Three things must line up, or sign-up silently fails:
 
 > Do not diagnose from a bare `curl` of `/v1/client`. That endpoint answers `"client": null` for a perfectly valid key when the request omits the API version Clerk JS actually sends (`__clerk_api_version=2026-08-20` for `@clerk/clerk-js` 6.x) or the `Origin` of an allowed origin. A probe that does not match what the browser sends reports a false positive.
 
-> **A `pk_test_` key on a `*.clerk.accounts.dev` domain is a development instance.** Clerk deletes inactive development instances, and a dev instance is not a production identity provider. Use a production instance (`pk_live_...`) for the deployed environment.
->
-> Development instances also enforce **strict usage limits**, and when one is hit the Frontend API answers `HTTP 500` with the plain body `Rate exceeded.` — not a 4xx and not a structured error. The symptom on the frontend is a session that never resolves: `/login` and `/signup` render the error card ("No pudimos cargar el acceso") with a retry button, and protected pages bounce away after loading. If that appears intermittently, the instance has outgrown development and the fix is the production instance, not the code.
+> A `pk_test_` key on a `*.clerk.accounts.dev` domain is a development instance. Clerk deletes inactive development instances, and a dev instance is not a production identity provider. Use a production instance (`pk_live_...`) for the deployed environment.
+
+#### El proxy de Clerk (el bloqueante actual en producción)
+
+**Síntoma:** `/login` y `/signup` muestran el cartel "No pudimos cargar el acceso", y ninguna sesión sirve aunque se corrija el login.
+
+**Causa real (verificada el 2026-11-18):** la publishable key de producción
+`pk_live_Y2xlcmsuYXNpc3Rjdi1mcm9udGVuZC5wYWdlcy5kZXYk` **codifica el
+dominio `clerk.asistcv-frontend.pages.dev`**, que es un proxy. Ese host no
+tiene ningún deployment, así que Cloudflare Pages contesta:
+
+```
+HTTP 404 — "Deployment Not Found. Nothing is here yet."
+```
+
+Lo que eso rompe, en los dos extremos:
+
+| Extremo | Lo que pide | Resultado |
+|---|---|---|
+| Frontend | `GET /v1/environment` (lo llama `clerk.load()`) | 404 → `clerk.load()` falla → el cartel de error |
+| Backend | `GET /.well-known/jwks.json` (para verificar el token) | 404 → **todos** los tokens de sesión se rechazan |
+
+Un subdominio de un proyecto de Pages **no puede** reenviar `/v1/*` a Clerk:
+eso lo hace un Worker. Hay dos caminos:
+
+1. **Desplegar el proxy** — un Cloudflare Worker con una ruta para
+   `clerk.asistcv-frontend.pages.dev` que reenvíe `/v1/*` y
+   `/.well-known/jwks.json` al Frontend API de la instancia. Es el
+   setup que documenta Clerk para dominios propios.
+2. **Dejar de proxear** (menos piezas, recomendado) — en el panel de Clerk,
+   copiar la publishable key del **dominio nativo** de la instancia
+   (`pk_live_...` que codifique `*.clerk.accounts.dev` o
+   `clerk.<instancia>.clerk.com`) y ponerla en los dos lados:
+   `PUBLIC_CLERK_PUBLISHABLE_KEY` en Cloudflare Pages y
+   `CLERK_PUBLISHABLE_KEY` en Render. El SDK habla directo con Clerk y el
+   backend deriva el JWKS del dominio correcto. La instancia debe permitir
+   el origen `https://asistcv-frontend.pages.dev`.
+
+**Cómo verificar en un comando** (no cambia nada):
+
+```bash
+cd backend
+CLERK_PUBLISHABLE_KEY="pk_live_..." FRONTEND_URL="https://asistcv-frontend.pages.dev" \
+  uv run python scripts/diagnose_clerk.py
+```
+
+Imprime los dos endpoints y un veredicto. Si el proxy (o la clave) están
+bien, los dos dan 200 y el script sale con 0.
+
+> Lo que **no** es la causa: el `HTTP 500 "Rate exceeded."` de las
+> instancias de desarrollo. Ese síntoma aparece cuando la instancia de
+> desarrollo se queda sin cuota, y en su momento era lo que se sospechaba
+> aquí — pero la sonda contra el dominio real muestra un 404 de
+> "Deployment Not Found", no un 500 de cuota. Son fallos distintos.
 
 **Do not put `PUBLIC_BACKEND_API_KEY` in the Cloudflare Pages environment.** With `adapter-static`, every `PUBLIC_*` variable is published in `/_app/env.js`, which is served to every visitor — the service key would be readable by anyone. The frontend authenticates exclusively with the Clerk session token; the service key belongs only in Render, the `mcp-adapter` settings and the GitHub Actions secret. The build fails on purpose if it is present (`scripts/check-env.mjs` and `scripts/check-build.mjs`).
 
