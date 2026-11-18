@@ -14,15 +14,16 @@ from __future__ import annotations
 #: Nombre de la marca.
 NAME = "eptus"
 
-#: La "e" geométrica: anillo + barra, con la boca abierta abajo a la derecha.
-#: viewBox 0 0 32 32, trazo 4.5. El arco arranca en el extremo DERECHO de la
-#: barra (3 o'clock) y recorre casi todo el anillo hasta 45 grados.
+#: La marca de eptus: "la pieza que encaja". Un marco (cuadrado con la
+#: esquina superior derecha abierta en cuarto de circulo) y la pieza —un
+#: circulo mas chico que el hueco— todavia por colocar. viewBox 0 0 32 32.
+#: Dos tonos: el marco en la tinta, la pieza en el color de marca.
 MARK_SVG = (
     '<svg width="26" height="26" viewBox="0 0 32 32" fill="none" '
-    'stroke="{color}" stroke-width="4.5" stroke-linecap="round" '
+    'stroke="{ink}" stroke-width="3.6" '
     'style="vertical-align:-5px;margin-right:8px">'
-    '<path d="M25.5 16 A9.5 9.5 0 1 0 22.72 22.72"/>'
-    '<path d="M6.5 16 H25.5"/>'
+    '<path d="M21.5 3.5 H3.5 V28.5 H28.5 V10.5 A7 7 0 0 0 21.5 3.5 Z"/>'
+    '<circle cx="21.5" cy="10.5" r="5.2" fill="{color}" stroke="none"/>'
     "</svg>"
 )
 
@@ -36,6 +37,6 @@ INK_MUTED = "#4c4c63"
 def brand_lockup(color: str = ACTION) -> str:
     """Marca + nombre, para la cabecera de los correos."""
     return (
-        f'{MARK_SVG.format(color=color)}'
+        f'{MARK_SVG.format(color=color, ink=INK)}'
         f'<strong style="font-size:19px;letter-spacing:-.02em;color:{INK}">{NAME}</strong>'
     )

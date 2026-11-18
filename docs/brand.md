@@ -15,39 +15,47 @@ La marca vive en tres lugares y **cambian juntos, en el mismo commit**:
 
 ## La marca
 
-Una **"e" geométrica**: un anillo con una barra horizontal, con la boca
-abierta abajo a la derecha. Es una letra geométrica —no un símbolo abstracto—
-porque "eptus" se nombra en todas las pantallas: la marca tiene que leerse
-como la primera letra de la palabra, incluso a 16 px.
+**"La pieza que encaja"**: un marco —cuadrado con la esquina superior
+derecha abierta en un cuarto de círculo— y la pieza, un círculo **más chico
+que el hueco**, todavía por colocar. Es la metáfora del producto: tu perfil
+por encajar en la vacante.
 
-Geometría (viewBox `0 0 32 32`, trazo `4.5`, extremos redondeados):
+Geometría (viewBox `0 0 32 32`):
 
-- el arco **arranca en el extremo derecho de la barra** (3 o'clock, `25.5 16`)
-  y recorre casi todo el anillo hasta 45°: `M25.5 16 A9.5 9.5 0 1 0 22.72 22.72`;
-- la barra cierra la horizontal: `M6.5 16 H25.5`.
+- el marco: `M21.5 3.5 H3.5 V28.5 H28.5 V10.5 A7 7 0 0 0 21.5 3.5 Z`
+  — el arco final (`sweep 0`) abre la esquina de forma **cóncava**;
+- la pieza: `<circle cx="21.5" cy="10.5" r="5.2" />` — radio **menor** que
+  el 7 del hueco, y esa diferencia es la que dice "todavía no encajó".
 
-El `sweep-flag` es `0` (antihorario) y `large-arc-flag` es `1` (>180°): con
-los flags al revés la forma sale como una "G", que es el error más fácil de
-cometer. Para iterar sobre la geometría, `qa-reports/logo-geometry2.html`
-deja ver las variantes lado a lado.
+**Por qué no una letra.** La primera versión de la marca fue una "e"
+geométrica monoline. Funcionaba, pero se leía como **tipografía**: una "e"
+de fuente, sin idea propia, indistinguible de un millar de logos de SaaS. La
+pieza que encaja es un símbolo con concepto: por eso tiene silueta propia y
+se reconoce sin el nombre al lado.
 
-**Por qué esta forma y no otra:** el header actual usaba un monograma de
-texto ("CV") dentro de un tile. Un "CV" no es una marca —es una sigla— y
-además ataba el producto a la búsqueda de currículos. Una "e" geométrica
-funciona como favicon, como isotipo y como lockup, y el mismo glifo escala de
-16 px a 48 px sin variantes.
+**Dos tonos, con significado:**
+
+| Parte | Color | Por qué |
+|---|---|---|
+| el marco | la tinta del tema (`currentColor`) | es la estructura: el marco donde encaja la pieza |
+| la pieza | el color de marca (`--color-action`) | es lo único de la marca propiamente dicho |
+
+En el header, el marco va en `--color-ink-strong` y la pieza en
+`--color-action` (índigo en light, índigo claro en dark). El favicon es la
+excepción: es una versión **simplificada** (solo la pieza sobre el tile
+índigo) porque a 16 px el marco y la pieza se embarrian.
 
 ### Reglas de uso
 
-- **El color lo pone `--color-action`**, no el de la marca. En light es el
-  índigo `#4f46e5`; en dark, el índigo claro `#a5b4fc`. La marca no tiene
-  un color propio: tiene el color del tema.
-- **El favicon es el excepción**: tile índigo `#4f46e5` con la marca en
-  blanco, para que se lea sobre cualquier color de pestaña.
+- **El color de la pieza lo pone `--color-action`**, no el de la marca. En
+  light es el índigo `#4f46e5`; en dark, el índigo claro `#a5b4fc`.
 - **Zona de respeto**: el alto de la marca (26 px en el header). Nada
   adentro de esa caja.
-- **Nunca** estirar, rotar ni cambiar el grosor del trazo.
+- **Nunca** estirar, rotar ni cambiar el grosor del trazo, ni hacer la pieza
+  del tamaño del hueco (eso sería la pieza ya encajada: otra marca).
 - La marca es decorativa (`aria-hidden`): el nombre va siempre en texto.
+- Para iterar sobre la geometría, `qa-reports/logo-ideas.html` y
+  `qa-reports/logo-refine.html` dejan ver las variantes lado a lado.
 
 ## La paleta
 

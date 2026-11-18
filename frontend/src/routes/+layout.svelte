@@ -120,9 +120,9 @@
 		justify-content: center;
 		width: var(--space-6);
 		height: var(--space-6);
-		/* La marca lleva el hue de marca: en light es el índigo del action,
-		   en dark el índigo claro. El token ya invierte solo. */
-		color: var(--color-action);
+		/* El marco de la marca usa la tinta (estructura); la pieza lleva el
+		   color de marca, y el token ya se invierte solo en dark. */
+		color: var(--color-ink-strong);
 	}
 
 	.app-shell__title {

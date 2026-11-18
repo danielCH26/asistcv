@@ -1,17 +1,9 @@
 <!--
-  eptus — marca ("e" geométrica: anillo + barra, con la boca abierta abajo a
-  la derecha). Trazo currentColor para que herede el color del texto y
-  funcione igual en light y dark.
-
-  La geometria (viewBox 0 0 32 32, trazo 4.5):
-    - el arco arranca en el extremo DERECHO de la barra (3 o'clock, 25.5 16)
-      y recorre casi todo el anillo (sweep 0 = antihorario, large-arc 1)
-      hasta 45 grados, que es donde queda la boca abierta;
-    - la barra (6.5 16 -> 25.5 16) cierra la horizontal y une los dos
-      extremos del anillo, con los extremos redondeados al mismo radio
-      exterior que el anillo.
+  eptus — la marca sola (para OG, redes y plantillas).
+  Marco: tinta del tema. Pieza: color de marca. Misma geometria que
+  frontend/src/lib/components/Logo.svelte.
 -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round">
-	<path d="M25.5 16 A9.5 9.5 0 1 0 22.72 22.72" />
-	<path d="M6.5 16 H25.5" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" stroke-width="3.6">
+	<path d="M21.5 3.5 H3.5 V28.5 H28.5 V10.5 A7 7 0 0 0 21.5 3.5 Z" stroke="#1c1c2b" />
+	<circle cx="21.5" cy="10.5" r="5.2" fill="#4f46e5" stroke="none" />
 </svg>
