@@ -62,9 +62,17 @@ secrets "environment variables"; they are injected at runtime, not committed):
 | `LEMON_SQUEEZY_VARIANT_RECRUITER_BUSINESS` | LS variant ID for recruiter_business. Configure in slice 2. |
 | `LEMON_SQUEEZY_VARIANT_RECRUITER_AGENCY` | LS variant ID for recruiter_agency. Configure in slice 2. |
 | `LEMON_SQUEEZY_TEST_MODE` | Use LS test-mode checkouts. Defaults to `true`; flip to `false` only when using live API keys. |
-| `MERCADOPAGO_ACCESS_TOKEN` | Mercado Pago access token. Configure in slice 3 of issue #56. |
-| `MERCADOPAGO_PUBLIC_KEY` | Mercado Pago public key. Configure in slice 3. |
-| `MERCADOPAGO_WEBHOOK_SECRET` | Mercado Pago webhook secret. Configure in slice 3. |
+| `MERCADOPAGO_ACCESS_TOKEN` | **Required for Mercado Pago.** Access token (`APP_USR-...`) from the Mercado Pago dashboard. Without it the checkout with esta pasarela devuelve 503. |
+| `MERCADOPAGO_PUBLIC_KEY` | Mercado Pago public key (la que ve el navegador). |
+| `MERCADOPAGO_WEBHOOK_SECRET` | **Required for the Mercado Pago webhook.** Signing secret de la notificación. |
+| `MERCADOPAGO_NOTIFICATION_URL` | **Required for Mercado Pago.** URL pública del backend donde MP notifica los pagos: `https://<backend>/api/v1/webhooks/mercadopago`. Sin esto el checkout se crea pero la suscripción nunca se activa (el usuario paga y no le llega nada). |
+| `MERCADOPAGO_TEST_MODE` | `true` para el sandbox; `false` solo con claves de producción. |
+| `WOMPI_PRIVATE_KEY` | **Required for Wompi.** Private key (`prv_...`) del aplicativo en panel.wompi.co. |
+| `WOMPI_PUBLIC_KEY` | **Required for Wompi.** Public key (`pub_...`) del mismo aplicativo. |
+| `WOMPI_WEBHOOK_SECRET` | **Required for the Wompi webhook.** Secret de eventos del panel (se usa para el checksum `X-Event-Checksum`). |
+| `WOMPI_INTEGRITY_KEY` | Integrity key del aplicativo: firma la transacción contra el checkout de Wompi. |
+| `WOMPI_ACCEPTANCE_TOKEN` | Token de aceptación (términos). El vigente se pide a `GET /v1/merchants/info` con la public key en el header `x-merchant-public-key`. |
+| `WOMPI_TEST_MODE` | `true` para `sandbox.wompi.co`; `false` para `production.wompi.co`. |
 | `CLERK_PUBLISHABLE_KEY` | **Required for Clerk auth.** The publishable key of the Clerk instance (`pk_live_...` in production). The backend derives the Frontend API domain from it to fetch the JWKS and validate session tokens. Must be the **same** key the frontend uses — otherwise the backend cannot resolve the signing keys. See "Clerk authentication" below. |
 | `CLERK_SECRET_KEY` | **Required for Clerk auth.** Clerk Backend API key (`sk_live_...`). Enables auto-provisioning: when a Clerk token arrives for an unknown user, the backend fetches the profile from `api.clerk.com` and creates the local row. |
 | `CLERK_WEBHOOK_SIGNING_SECRET` | **Required for the Clerk webhook.** Svix signing secret (`whsec_...`) from the Clerk dashboard endpoint's "Signing Secret". The webhook verifies the HMAC-SHA256 signature manually — no extra dependency. |
@@ -105,6 +113,45 @@ Click **Save Changes** — Render redeploys automatically after env changes.
 > | `LEMON_SQUEEZY_STORE_ID` | Barra de URL del dashboard cuando estás en cualquier sección de tu tienda: `app.lemonsqueezy.com/settings/stores/<AQUÍ VA EL ID>` — también visible en **Settings → Stores**. |
 > | `LEMON_SQUEEZY_WEBHOOK_SECRET` | **Settings → Webhooks** → signing secret (o crear un webhook nuevo para copiar el secret). |
 > | `LEMON_SQUEEZY_VARIANT_*` | **Products → [tu producto] → Variants** → hacer clic en la variante → copiar el ID numérico de la URL (ej. `/variants/12345`). |
+
+### Billing — Wompi y Mercado Pago (Colombia)
+
+Las dos pasarelas colombianas cobran en COP y ambas son **operativas**: el
+checkout crea una hosted session y el webhook activa la suscripción. Sin el
+webhook montado, el usuario paga y su plan no cambia — el peor fallo posible
+en el camino de cobro.
+
+| | Wompi | Mercado Pago |
+|---|---|---|
+| Backend | `backend/app/services/wompi_client.py` | `backend/app/services/mercadopago_client.py` |
+| Provider | `backend/app/services/providers/wompi.py` | `backend/app/services/providers/mercadopago.py` |
+| Webhook | `POST /api/v1/webhooks/wompi` | `POST /api/v1/webhooks/mercadopago` |
+| Firma | `X-Event-Checksum` (SHA-256) | `x-signature: ts=…,v1=…` (HMAC-SHA256) |
+| Montos | centavos (`amount_in_cents`) | pesos (`unit_price`) |
+| Precios COP | `backend/app/services/providers/cop_prices.py` | el mismo archivo |
+
+Los precios en COP viven en **una sola tabla** (`cop_prices.py`) porque
+Mercado Pago pide pesos y Wompi centavos; si cada provider llevara la suya,
+el mismo plan se cobraría a precios distintos según el botón que el usuario
+pulse.
+
+**Dónde se configura el webhook en cada panel**
+
+- Wompi → panel.wompi.co → **Aplicativos → tu app → Notifica vía Webhook** →
+  `https://<backend>/api/v1/webhooks/wompi`
+- Mercado Pago → **Tus integraciones → Notificaciones → Mercado Pago → URL de
+  notificación** → `https://<backend>/api/v1/webhooks/mercadopago`
+
+**Elige una sola como activa** con `BILLING_PROVIDER_ACTIVE=wompi` o
+`=mercadopago`. Con las dos configuradas, el checkout usa la que esté activa
+y el frontend puede ofrecer la otra como alternativa si el país no aplica.
+
+> **Wompi: dos tokens, no uno.** `GET /v1/acceptance_tokens` ya no existe
+> (404) y `GET /v1/merchants/{public_key}` quedó deshabilitado el 2026-10-31.
+> El camino vigente es `GET /v1/merchants/info` con la public key en el header
+> `x-merchant-public-key`, y devuelve **dos** tokens: `acceptance_token`
+> (términos) y `accept_personal_auth` (datos personales). Mandar solo el
+> primero hace que Wompi rechace la transacción.
 
 ### Retention sweepers
 
