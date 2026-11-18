@@ -89,17 +89,19 @@ class MercadoPagoClient:
         test_mode: bool = True,
         timeout: float = _DEFAULT_TIMEOUT,
         transport: httpx.AsyncBaseTransport | None = None,
+        base_url: str = _MP_API_URL,
     ) -> None:
         self._access_token = access_token
         self._test_mode = test_mode
         self._timeout = timeout
         self._transport = transport
+        self._base_url = base_url
         self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
             self._client = httpx.AsyncClient(
-                base_url=_MP_API_URL,
+                base_url=self._base_url,
                 timeout=self._timeout,
                 transport=self._transport,
             )

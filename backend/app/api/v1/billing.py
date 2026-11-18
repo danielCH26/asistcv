@@ -42,6 +42,7 @@ from app.services.billing_provider import (
     ProviderNotConfiguredError,
     get_billing_provider,
 )
+from app.services.providers.cop_prices import cop_price
 from app.services.rls_context import bind_rls_context, set_rls_service
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -106,6 +107,12 @@ class PlanResponse(BaseModel):
     interval: str
     features: list[str]
     limits: dict[str, Any]
+    # Precio en pesos colombianos, para las pasarelas que cobran en COP
+    # (Wompi, Mercado Pago). El catálogo oficial está en USD cents porque las
+    # pasarelas globales cobran en dólares; esta tabla es la traducción a COP
+    # y la misma que usan los providers (app/services/providers/cop_prices.py).
+    # 0 = plan gratuito.
+    price_cop: int = 0
 
 
 # === Public Endpoints ===
@@ -116,6 +123,7 @@ PLANS_CATALOG = [
         "name": "Free",
         "tier": "free",
         "price_cents": 0,
+        "price_cop": 0,
         "currency": "usd",
         "interval": "month",
         "features": ["3 matches/month", "Basic CV analysis"],
@@ -126,6 +134,7 @@ PLANS_CATALOG = [
         "name": "Job Seeker Monthly",
         "tier": "job_seeker_monthly",
         "price_cents": 900,
+        "price_cop": cop_price("job_seeker_monthly"),
         "currency": "usd",
         "interval": "month",
         "features": ["50 matches/month", "Priority analysis", "Email support"],
@@ -136,6 +145,7 @@ PLANS_CATALOG = [
         "name": "Recruiter Starter",
         "tier": "recruiter_starter",
         "price_cents": 2900,
+        "price_cop": cop_price("recruiter_starter"),
         "currency": "usd",
         "interval": "month",
         "features": ["50 candidate matches", "Unlimited analyses", "Email support"],
@@ -146,6 +156,7 @@ PLANS_CATALOG = [
         "name": "Recruiter Business",
         "tier": "recruiter_business",
         "price_cents": 9900,
+        "price_cop": cop_price("recruiter_business"),
         "currency": "usd",
         "interval": "month",
         "features": ["200 candidate matches", "Unlimited analyses", "Priority support"],
@@ -156,6 +167,7 @@ PLANS_CATALOG = [
         "name": "Recruiter Agency",
         "tier": "recruiter_agency",
         "price_cents": 29900,
+        "price_cop": cop_price("recruiter_agency"),
         "currency": "usd",
         "interval": "month",
         "features": ["Unlimited matches", "Unlimited analyses", "Dedicated support"],

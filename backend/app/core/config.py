@@ -208,6 +208,11 @@ class Settings(BaseSettings):
             "Sin esto el checkout se crea pero la suscripcion nunca se activa."
         ),
     )
+    mercadopago_api_url: str = Field(
+        default="https://api.mercadopago.com",
+        validation_alias="MERCADOPAGO_API_URL",
+        description="Base de la API de Mercado Pago (solo para pruebas contra un stub local).",
+    )
     mercadopago_test_mode: bool = Field(
         default=True,
         validation_alias="MERCADOPAGO_TEST_MODE",

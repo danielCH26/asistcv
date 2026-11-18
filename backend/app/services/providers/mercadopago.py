@@ -111,6 +111,7 @@ class MercadoPagoProvider(BillingProvider):
             self._client = MercadoPagoClient(
                 access_token=self._settings.mercadopago_access_token or "",
                 test_mode=self._settings.mercadopago_test_mode,
+                base_url=self._settings.mercadopago_api_url,
             )
         return self._client
 
