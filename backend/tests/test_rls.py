@@ -10,6 +10,9 @@ prove the FastAPI wiring (404, never 403 — no existence leak).
 Bypass mechanism under test: GUC '0' = service (MCP adapter, cron
 cleanup, Stripe webhook). GUC 'anonymous' = free-audit funnel for
 unlinked audit_uploads rows.
+
+Auth via get_current_user dependency override for TestEndpointIsolation (legacy JWT removed --
+Clerk migration S2). The direct-DB RLS tests above use raw SQL with ``conn_as`` and are unaffected.
 """
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
@@ -22,7 +25,6 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.api.deps import CurrentUser, optional_auth
-from app.core.security import create_access_token
 from app.db.models import (
     Analysis,
     AuditUpload,
@@ -89,8 +91,18 @@ async def _count(conn: AsyncConnection, table: str) -> int:
 
 
 def _jwt_header(user_id: int, role: str) -> dict[str, str]:
-    token = create_access_token({"sub": str(user_id), "role": role})
-    return {"Authorization": f"Bearer {token}"}
+    """Auth via get_current_user dependency override (legacy JWT removed -- Clerk migration S2).
+
+    Sets both get_current_user and optional_auth overrides.
+    Only TestEndpointIsolation uses this over HTTP; direct-DB RLS tests use conn_as().
+    """
+    from app.api.deps import CurrentUser
+    from tests.conftest import set_auth_principal, set_optional_auth_principal
+
+    principal = CurrentUser(id=user_id, name=f"user_{user_id}", role=role, auth_method="clerk")
+    set_auth_principal(principal)
+    set_optional_auth_principal(principal)
+    return {}
 
 
 @pytest.fixture

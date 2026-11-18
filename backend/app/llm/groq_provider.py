@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import time
+from datetime import UTC, datetime
 from typing import Any, cast
 
 import groq
@@ -20,6 +21,52 @@ logger = logging.getLogger(__name__)
 # Default token budget for adaptation calls (a full CV rewrite needs more
 # headroom than the 800-token match/audit flow).
 ADAPTATION_DEFAULT_MAX_TOKENS = 4000
+
+# ---------------------------------------------------------------------------
+# Reference-date grounding.
+#
+# A hosted LLM has no reliable sense of "today": it answers relative to its
+# training cutoff, so a CV whose latest role ends after that cutoff reads as
+# "a future date" and the model reasons about recency/overlap/years of
+# experience against a stale now. We hand it the server's current UTC date.
+#
+# Two design notes:
+# - Server clock, not web search. Today is not a fact to look up; the backend
+#   already knows it. A Tavily round-trip on every match/audit/adaptation
+#   would add latency, a key dependency and a new failure mode to return
+#   something ``datetime.now`` already had.
+# - Appended to the system prompt at call time, not baked into the module
+#   constants: the constants stay immutable (their tests keep asserting the
+#   exact JSON contract), and the date cannot go stale in a cached template.
+# ---------------------------------------------------------------------------
+REFERENCE_DATE_HEADER = "## Fecha de referencia"
+
+
+def reference_date_block(now: datetime | None = None) -> str:
+    """Render the reference-date instruction block for ``now`` (default: UTC today).
+
+    Kept separate and injectable so tests pin the rendering without mocking
+    the clock — same convention as ``offer_search_worker(now=...)``.
+    """
+    current = now or datetime.now(UTC)
+    today = current.date().isoformat()
+    return (
+        f"{REFERENCE_DATE_HEADER}\n"
+        f"La fecha actual (UTC) es {today}.\n"
+        "- Todo juicio temporal (antigüedad, solapamientos, años de experiencia, "
+        "vigencia de un puesto) se hace contra esta fecha, no contra la fecha "
+        "de corte de tu entrenamiento.\n"
+        "- Una fecha de fin posterior a hoy es una fecha futura: no la trates "
+        "como si ya hubiera ocurrido ni asumas que el CV está mal escrito solo "
+        "por eso.\n"
+        "- Si una fecha es imposible o incoherente, señálala como dato a "
+        "verificar, sin inventar una fecha corregida."
+    )
+
+
+def with_reference_date(system_prompt: str, now: datetime | None = None) -> str:
+    """Return ``system_prompt`` with the reference-date block appended."""
+    return f"{system_prompt}\n\n{reference_date_block(now)}"
 
 # System prompt for match analysis
 SYSTEM_PROMPT = """Eres un evaluador profesional de简历 vs descripciones de trabajo (JD).
@@ -171,7 +218,7 @@ class GroqProvider:
             profile_context=json.dumps(profile_context, indent=2),
         )
 
-        result = await self._complete_json(SYSTEM_PROMPT, user_prompt)
+        result = await self._complete_json(with_reference_date(SYSTEM_PROMPT), user_prompt)
         return MatchAnalysis(**result)
 
     async def generate_cv_audit(self, cv_text: str) -> CVAudit:
@@ -186,7 +233,9 @@ class GroqProvider:
         """
         user_prompt = CV_AUDIT_USER_PROMPT_TEMPLATE.format(cv_text=cv_text)
 
-        result = await self._complete_json(CV_AUDIT_SYSTEM_PROMPT, user_prompt)
+        result = await self._complete_json(
+            with_reference_date(CV_AUDIT_SYSTEM_PROMPT), user_prompt
+        )
         return CVAudit(**result)
 
     async def generate_adaptation(
@@ -221,7 +270,7 @@ class GroqProvider:
         )
 
         result = await self._complete_json(
-            CV_ADAPTATION_SYSTEM_PROMPT,
+            with_reference_date(CV_ADAPTATION_SYSTEM_PROMPT),
             user_prompt,
             max_tokens=max_tokens,
         )

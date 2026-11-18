@@ -564,9 +564,11 @@ async def test_create_profile_computes_initial_embedding(
     Since issue #85 the endpoint requires a real JWT principal and stamps
     `owner_user_id`; an unowned profile would be invisible to every user,
     so the test creates an authenticated owner and asserts the stamp.
+
+    Auth via get_current_user dependency override (legacy JWT removed -- Clerk migration S2).
     """
-    from app.core.security import create_access_token
     from app.db.models import User
+    from tests.conftest import set_auth_principal, set_optional_auth_principal
 
     async with clean_db.session_factory() as session:
         owner = User(
@@ -579,7 +581,10 @@ async def test_create_profile_computes_initial_embedding(
         await session.commit()
         await session.refresh(owner)
 
-    token = create_access_token({"sub": str(owner.id), "role": owner.role})
+    from app.api.deps import CurrentUser
+    principal = CurrentUser(id=owner.id, name=owner.full_name, role=owner.role, auth_method="clerk")
+    set_auth_principal(principal)
+    set_optional_auth_principal(principal)
 
     provider = _make_provider()
     monkeypatch.setattr(
@@ -595,7 +600,7 @@ async def test_create_profile_computes_initial_embedding(
             "skills": {"programming": ["Python", "Go"]},
             "preferences": {"locations": ["Remote"]},
         },
-        headers={"Authorization": f"Bearer {token}"},
+        headers={},
     )
 
     assert response.status_code == 201, response.text

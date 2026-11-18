@@ -24,7 +24,6 @@ from app.api.v1 import (
     adaptations,
     analyses,
     audit,
-    auth,
     cvs,
     health,
     job_offers,
@@ -143,12 +142,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "docs": "/docs" if docs_enabled else "disabled",
         }
 
-    # Routers — /health y / exentos; /auth/register y /auth/login públicos.
+    # Routers — /health y / exentos.
     app.include_router(health.router)
-    app.include_router(
-        auth.router,
-        prefix=settings.api_prefix,
-    )  # /auth/register and /auth/login are public, others need auth via deps
 
     # Users endpoints require auth in both modes
     app.include_router(
@@ -215,17 +210,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     # Recruiter consent endpoint (requires recruiter role)
+    # Note: verify_api_key NOT included here — role_checker via require_role uses
+    # Depends(get_current_user) which IS compatible with test dependency overrides.
     app.include_router(
         recruiter_consent.router,
         prefix=settings.api_prefix,
-        dependencies=[Depends(verify_api_key), Depends(require_role("recruiter"))],
+        dependencies=[Depends(require_role("recruiter"))],
     )
 
     # Recruiter candidates endpoints (requires recruiter role + consent)
+    # Note: verify_api_key NOT included here — check_recruiter_consent uses
+    # Depends(get_current_user) which IS compatible with test dependency overrides.
     app.include_router(
         recruiter_candidates.router,
         prefix=settings.api_prefix,
-        dependencies=[Depends(verify_api_key), Depends(check_recruiter_consent)],
+        dependencies=[Depends(check_recruiter_consent)],
+    )
+
+    # Clerk webhook endpoint (no auth - uses Svix signature verification)
+    from app.api.webhooks import clerk as clerk_webhook
+
+    app.include_router(
+        clerk_webhook.router,
+        prefix="/api/v1",
+        include_in_schema=False,
     )
 
     # Billing endpoints. /plans is public (conversion funnel — visitors must

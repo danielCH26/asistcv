@@ -40,8 +40,7 @@ Audiencia primaria: el propio autor durante su búsqueda real. Secundarias: devs
 | Detalle de una adaptación | `GET /v1/adaptations/{adaptation_id}` | — |
 | Aprobar / descartar adaptación | `POST /v1/adaptations/{adaptation_id}/approve` (o `/discard`) | — |
 | Audit anónimo (capture + claim) | `POST /v1/audit/{token}/capture-email`, `POST /v1/audit/{token}/claim` | — |
-| Auth | `POST /v1/auth/register`, `POST /v1/auth/login`, `POST /v1/auth/refresh`, `POST /v1/auth/logout` | — |
-| Email verify | `POST /v1/verify-email/request`, `GET /v1/verify-email/confirm` | — |
+| Auth | Clerk-managed sessions (passwordless email codes); backend verifies Clerk RS256 session JWTs; `POST /v1/webhooks/clerk` syncs users on login | — |
 | Profile | `GET /v1/profiles/{profile_id}`, `PUT /v1/profiles/{profile_id}` | — |
 | Billing | `POST /v1/billing/checkout`, `POST /v1/billing/portal`, `POST /v1/webhooks/stripe`, `GET /v1/billing/plans` | — |
 | Recruiter (consented) | `POST /v1/recruiter/candidates`, `POST /v1/recruiter/candidates/{id}/match` | — |

@@ -120,7 +120,13 @@
     "consentRejected": "Required data is missing or consent was not accepted.",
     "genericError": "Could not create the account. Please try again.",
     "haveAccount": "Already have an account?",
-    "loginLink": "Log in"
+    "loginLink": "Log in",
+    "loading": "Setting up your account…"
+  },
+  "clerk": {
+    "errorTitle": "We couldn't load sign-in",
+    "errorBody": "The authentication service is unavailable right now. Check your connection or try again in a few seconds.",
+    "retry": "Try again"
   },
   "login": {
     "title": "Log in",
@@ -132,7 +138,8 @@
     "invalidCredentials": "Incorrect email or password.",
     "rateLimited": "Too many attempts. Wait a few minutes and try again.",
     "noAccount": "No account yet?",
-    "signupLink": "Create one"
+    "signupLink": "Create one",
+    "loading": "Loading secure sign-in…"
   },
   "profile": {
     "title": "My profile",

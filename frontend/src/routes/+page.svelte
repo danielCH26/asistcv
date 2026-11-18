@@ -7,7 +7,7 @@
 	import { analysisStore } from '$stores/analysis';
 	import { profileStore } from '$stores/profile';
 	import { apiClient } from '$api/client';
-	import { isAuthenticated, refreshIfNeeded } from '$stores/session';
+	import { isAuthenticated } from '$stores/session';
 	import { ApiError, type SubscriptionInfo } from '$api/types';
 
 	let subscription: SubscriptionInfo | null = null;
@@ -19,7 +19,6 @@
 
 	onMount(async () => {
 		if (!get(isAuthenticated)) return;
-		await refreshIfNeeded();
 		try {
 			subscription = await apiClient.subscription();
 		} catch {

@@ -49,7 +49,6 @@ from sqlmodel import select
 
 import app.api.v1.match as match_module
 from app.api.deps import CurrentUser, get_current_user, optional_auth
-from app.core.security import create_access_token
 from app.db.models import Subscription, UsageCounter, User
 from app.llm.schemas import Embedding, MatchAnalysis
 from app.main import app
@@ -126,14 +125,16 @@ async def _matches_used(clean_db, user_id: int) -> int | None:
 
 
 def _auth_header(user: User) -> dict[str, str]:
-    """Real JWT header — satisfies the router-level verify_api_key guard.
+    """Auth via get_current_user dependency override (legacy JWT removed -- Clerk migration S2).
 
-    The router-level dependency calls get_current_user() directly (bypassing
-    the override cache), so billing requests must carry a valid JWT even when
-    the endpoint-level dependency is overridden.
+    Billing endpoints use get_current_user_required; optional_auth override is not needed.
     """
-    token = create_access_token({"sub": str(user.id), "role": user.role})
-    return {"Authorization": f"Bearer {token}"}
+    from app.api.deps import CurrentUser
+    from tests.conftest import clear_auth_principal, set_auth_principal
+
+    clear_auth_principal()
+    set_auth_principal(CurrentUser(id=user.id, name=user.full_name, role=user.role, auth_method="clerk"))
+    return {}
 
 
 def _make_provider() -> MagicMock:

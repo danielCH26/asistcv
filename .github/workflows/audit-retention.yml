@@ -7,31 +7,105 @@ on:
   workflow_dispatch:
     # Allow manual trigger
 
+# The sweep only POSTs to the deployed backend over HTTPS. No checkout, no
+# GitHub API, so it needs no token scopes at all.
 permissions: {}
 
 jobs:
   cleanup:
     runs-on: ubuntu-latest
+    # Bounded: 3 attempts x 90s of curl + 45s of backoff sleeps.
+    timeout-minutes: 10
     steps:
       - name: Call cleanup endpoint
         env:
           BACKEND_URL: ${{ vars.BACKEND_URL || 'https://asistcv-backend.onrender.com' }}
           AUDIT_CLEANUP_TOKEN: ${{ secrets.AUDIT_CLEANUP_TOKEN }}
         run: |
-          response=$(curl -s -w "\n%{http_code}" -X POST "$BACKEND_URL/internal/audit/cleanup" \
-            -H "Content-Type: application/json" \
-            -d "{\"token\": \"$AUDIT_CLEANUP_TOKEN\"}")
-          
-          body=$(echo "$response" | sed '$d')
-          status_code=$(echo "$response" | tail -n1)
-          
-          echo "Response status: $status_code"
-          echo "Response body: $body"
-          
-          if [ "$status_code" -eq 200 ]; then
-            echo "Cleanup completed successfully"
-            echo "$body" | jq -r '.deleted_count' | xargs -I {} echo "Deleted {} expired audits"
-          else
-            echo "Cleanup failed with status $status_code"
+          # No `set -e`: this script inspects the HTTP status itself, so a
+          # non-2xx response has to stay readable instead of aborting the
+          # step before the status code is printed.
+          set -uo pipefail
+
+          endpoint="$BACKEND_URL/internal/audit/cleanup"
+
+          # This endpoint authenticates with a token in the body, not with the
+          # X-Backend-API-Key header the other sweepers use. An unset
+          # repository secret can only ever produce a 401, so catch it here
+          # and name the actual cause.
+          if [ -z "${AUDIT_CLEANUP_TOKEN:-}" ]; then
+            echo "::error title=Missing secret::AUDIT_CLEANUP_TOKEN is not set in this repository, so the cleanup was not attempted. Add it under Settings -> Secrets and variables -> Actions with the byte-identical value of AUDIT_CLEANUP_TOKEN on the Render service (see docs/DEPLOY.md -> Retention sweepers)."
             exit 1
           fi
+
+          status_code="000"
+          body=""
+          for attempt in 1 2 3; do
+            if [ "$attempt" -gt 1 ]; then
+              echo "Waiting $((15 * attempt))s before retry (attempt ${attempt}/3)..."
+              sleep $((15 * attempt))
+            fi
+
+            # No -f: a non-2xx response must not abort the script, it must be
+            # readable. The token stays in the body, so it never reaches the
+            # access log through the URL or a Referer.
+            response=$(curl -s --max-time 90 -w "\n%{http_code}" -X POST "$endpoint" \
+              -H "Content-Type: application/json" \
+              -d "{\"token\": \"$AUDIT_CLEANUP_TOKEN\"}")
+            curl_code=$?
+            status_code=$(printf '%s\n' "$response" | tail -n1)
+            body=$(printf '%s\n' "$response" | sed '$d')
+
+            if [ "$curl_code" -ne 0 ]; then
+              echo "Attempt ${attempt}/3: curl transport failure (exit ${curl_code})"
+              status_code="000"
+              continue
+            fi
+
+            echo "Attempt ${attempt}/3: HTTP ${status_code}"
+
+            case "$status_code" in
+              200)
+                break
+                ;;
+              # Render's free tier sleeps after ~15 min without traffic, so a
+              # daily cron can land on a booting container. Deleting rows that
+              # are already past the retention window is idempotent, so
+              # replaying the call is safe.
+              502 | 503 | 504)
+                echo "Service unavailable; the container may still be booting."
+                ;;
+              *)
+                echo "Non-transient failure; not retrying."
+                break
+                ;;
+            esac
+          done
+
+          echo "Response status: ${status_code}"
+          echo "Response body: ${body:-<empty>}"
+
+          if [ "$status_code" != "200" ]; then
+            echo "::error title=Cleanup failed::HTTP ${status_code} from ${endpoint}"
+            case "$status_code" in
+              401 | 403)
+                echo "The service rejected the token. The repository secret AUDIT_CLEANUP_TOKEN and the AUDIT_CLEANUP_TOKEN env var on the Render service must be byte-identical; rotate both together."
+                ;;
+              404)
+                echo "The route is not on the service: the backend may not be deployed yet, or the path changed."
+                ;;
+              405)
+                echo "The route exists but rejected POST: check the method the service mounts on this path."
+                ;;
+              502 | 503 | 504)
+                echo "Still unavailable after 3 attempts: a Render free-tier cold start that never woke, or the service is down."
+                ;;
+              000)
+                echo "No HTTP response after 3 attempts: DNS, TLS or network failure from the runner."
+                ;;
+            esac
+            exit 1
+          fi
+
+          deleted=$(printf '%s' "$body" | python3 -c 'import sys, json; print(json.load(sys.stdin).get("deleted_count", 0))')
+          echo "Cleanup completed successfully — deleted ${deleted} expired audit row(s)"

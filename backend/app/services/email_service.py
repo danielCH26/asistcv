@@ -11,8 +11,8 @@ provider into the request handler:
 
 * Missing ``RESEND_API_KEY`` (dev / local) → log ``email_service_disabled``
   and return ``False``. The rest of the request must still succeed —
-  verify-email still returns 202 because the token row is persisted, and
-  the user can pick the link up from the logs.
+  email sending is best-effort for offer notifications; a missing key
+  does not block the request.
 * Transport / provider error → log ``email_send_failed`` with status +
   latency, return ``False``. The caller decides whether to retry; right
   now nothing does (one shot per request).

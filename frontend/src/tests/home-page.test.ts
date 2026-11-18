@@ -16,12 +16,12 @@ vi.mock('$api/client', () => ({
 	}
 }));
 
+// `isAuthenticated` es un derived store en la versión Clerk; un writable con
+// `true` cumple el mismo contrato para esta página.
 vi.mock('$stores/session', async () => {
 	const { writable } = await import('svelte/store');
 	return {
-		isAuthenticated: writable(true),
-		refreshIfNeeded: vi.fn().mockResolvedValue(undefined),
-		session: writable(null)
+		isAuthenticated: writable(true)
 	};
 });
 

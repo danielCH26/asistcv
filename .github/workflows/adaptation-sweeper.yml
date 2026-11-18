@@ -8,31 +8,104 @@ on:
   # Allow manual trigger for incident debugging.
   workflow_dispatch:
 
+# The sweep only POSTs to the deployed backend over HTTPS. No checkout, no
+# GitHub API, so it needs no token scopes at all.
 permissions: {}
 
 jobs:
   sweep:
     runs-on: ubuntu-latest
+    # Bounded: 3 attempts x 90s of curl + 45s of backoff sleeps.
+    timeout-minutes: 10
     steps:
       - name: POST cleanup
         env:
           BACKEND_URL: ${{ vars.RENDER_BACKEND_URL || 'https://asistcv-backend.onrender.com' }}
           BACKEND_API_KEY: ${{ secrets.BACKEND_API_KEY }}
         run: |
-          response=$(curl -fsS -w "\n%{http_code}" -X POST "$BACKEND_URL/internal/adaptations/cleanup" \
-            -H "X-Backend-API-Key: $BACKEND_API_KEY" \
-            -H "Content-Type: application/json")
+          # No `set -e`: this script inspects the HTTP status itself, and
+          # `curl -f` used to abort with a bare exit 22 before any status
+          # code could be printed, which made every failure undiagnosable.
+          set -uo pipefail
 
-          body=$(echo "$response" | sed '$d')
-          status_code=$(echo "$response" | tail -n1)
+          endpoint="$BACKEND_URL/internal/adaptations/cleanup"
 
-          echo "Response status: $status_code"
-          echo "Response body: $body"
-
-          if [ "$status_code" -eq 200 ]; then
-            deleted=$(echo "$body" | python -c 'import sys, json; print(json.load(sys.stdin).get("deleted", 0))')
-            echo "Sweep completed successfully — deleted $deleted adaptation row(s)"
-          else
-            echo "Sweep failed with status $status_code"
+          # The endpoint fails closed (401) when the key is unset on either
+          # side, so an empty repository secret is the most likely failure.
+          # Say so, instead of surfacing it as a mysterious 401.
+          if [ -z "${BACKEND_API_KEY:-}" ]; then
+            echo "::error title=Missing secret::BACKEND_API_KEY is not set in this repository, so the sweep was not attempted. Add it under Settings -> Secrets and variables -> Actions with the byte-identical value of BACKEND_API_KEY on the Render service (see docs/DEPLOY.md -> Retention sweepers)."
             exit 1
           fi
+
+          status_code="000"
+          body=""
+          for attempt in 1 2 3; do
+            if [ "$attempt" -gt 1 ]; then
+              echo "Waiting $((15 * attempt))s before retry (attempt ${attempt}/3)..."
+              sleep $((15 * attempt))
+            fi
+
+            # No -f: a non-2xx response must not abort the script, it must be
+            # readable. The key travels in a header, never in the URL, so it
+            # cannot leak through the access log or a Referer.
+            response=$(curl -s --max-time 90 -w "\n%{http_code}" -X POST "$endpoint" \
+              -H "X-Backend-API-Key: $BACKEND_API_KEY" \
+              -H "Content-Type: application/json")
+            curl_code=$?
+            status_code=$(printf '%s\n' "$response" | tail -n1)
+            body=$(printf '%s\n' "$response" | sed '$d')
+
+            if [ "$curl_code" -ne 0 ]; then
+              echo "Attempt ${attempt}/3: curl transport failure (exit ${curl_code})"
+              status_code="000"
+              continue
+            fi
+
+            echo "Attempt ${attempt}/3: HTTP ${status_code}"
+
+            case "$status_code" in
+              200)
+                break
+                ;;
+              # Render's free tier sleeps after ~15 min without traffic, so a
+              # scheduled sweep is exactly the request that meets a cold
+              # start. The cleanup is idempotent (it only deletes rows past
+              # the retention thresholds), so replaying it is safe.
+              502 | 503 | 504)
+                echo "Service unavailable; the container may still be booting."
+                ;;
+              *)
+                echo "Non-transient failure; not retrying."
+                break
+                ;;
+            esac
+          done
+
+          echo "Response status: ${status_code}"
+          echo "Response body: ${body:-<empty>}"
+
+          if [ "$status_code" != "200" ]; then
+            echo "::error title=Sweep failed::HTTP ${status_code} from ${endpoint}"
+            case "$status_code" in
+              401 | 403)
+                echo "The service rejected the key. The repository secret BACKEND_API_KEY and the BACKEND_API_KEY env var on the Render service must be byte-identical; rotate both together (mcp-adapter authenticates with the same value)."
+                ;;
+              404)
+                echo "The route is not on the service: the backend may not be deployed yet, or the path changed."
+                ;;
+              405)
+                echo "The route exists but rejected POST: check the method the service mounts on this path."
+                ;;
+              502 | 503 | 504)
+                echo "Still unavailable after 3 attempts: a Render free-tier cold start that never woke, or the service is down."
+                ;;
+              000)
+                echo "No HTTP response after 3 attempts: DNS, TLS or network failure from the runner."
+                ;;
+            esac
+            exit 1
+          fi
+
+          deleted=$(printf '%s' "$body" | python3 -c 'import sys, json; print(json.load(sys.stdin).get("deleted", 0))')
+          echo "Sweep completed successfully — deleted ${deleted} adaptation row(s)"

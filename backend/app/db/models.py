@@ -175,7 +175,18 @@ class User(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     email: str = Field(max_length=255, unique=True, index=True, description="User email (CITEXT)")
-    password_hash: str = Field(description="Bcrypt hashed password")
+    password_hash: str | None = Field(
+        default=None,
+        description=(
+            "Bcrypt hashed password. Nullable for Clerk-provisioned users "
+            "who use passwordless email-code authentication."
+        ),
+    )
+    clerk_id: str | None = Field(
+        default=None,
+        sa_column=Column(String(64), nullable=True, unique=True, index=True),
+        description="Clerk user id (user_xxx) — populated on Clerk session provisioning.",
+    )
     role: str = Field(max_length=20, description="User role: job_seeker or recruiter")
     full_name: str = Field(max_length=255, description="User's full name")
     locale: str = Field(default="es", max_length=10, description="Preferred locale")
