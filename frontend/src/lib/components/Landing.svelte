@@ -30,8 +30,18 @@
 
 	const SHOWN = ['free', 'job_seeker_monthly', 'recruiter_starter'] as const;
 
+	/** Un plan sin precio en COP no se muestra: la portada no puede prometer
+	 *  una cifra que el backend no respalda. Si el catálogo todavía no trae
+	 *  `price_cop` (backend viejo), la sección entera desaparece en vez de
+	 *  pintar un "COPNaN". */
+	type PlanWithCopPrice = Plan & { price_cop: number };
+
+	function hasCopPrice(plan: Plan | undefined): plan is PlanWithCopPrice {
+		return plan !== undefined && typeof plan.price_cop === 'number';
+	}
+
 	$: visiblePlans = SHOWN.map((id) => plans.find((p) => p.plan_id === id)).filter(
-		(plan): plan is Plan => Boolean(plan)
+		hasCopPrice
 	);
 
 	function formatCop(value: number): string {
