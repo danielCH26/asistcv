@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "AsistCV",
-    "tagline": "Descripción del puesto ↔ Perfil",
+    "title": "eptus",
+    "tagline": "Vacante ↔ Tu perfil",
     "nav": {
       "home": "Inicio",
       "history": "Historial",
@@ -140,7 +140,7 @@
     "userInfo": "{name} · {email}"
   },
   "onboarding": {
-    "heading": "Bienvenido a AsistCV",
+    "heading": "Bienvenido a eptus",
     "stepOf": "Paso {step} de 3",
     "roleConfirm": "Tu cuenta es de tipo: {role}. Podés continuar para cargar tu hoja de vida.",
     "next": "Continuar",

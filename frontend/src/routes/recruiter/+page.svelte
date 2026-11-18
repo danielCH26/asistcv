@@ -173,7 +173,7 @@
 </script>
 
 <svelte:head>
-	<title>AsistCV · {$_('recruiter.title')}</title>
+	<title>eptus · {$_('recruiter.title')}</title>
 </svelte:head>
 
 {#if ready && consentOk}

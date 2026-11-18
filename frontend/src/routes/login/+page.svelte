@@ -32,7 +32,7 @@
 </script>
 
 <svelte:head>
-	<title>AsistCV · {$_('login.title')}</title>
+	<title>eptus · {$_('login.title')}</title>
 </svelte:head>
 
 <section class="login">

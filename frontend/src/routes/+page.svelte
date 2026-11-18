@@ -110,7 +110,7 @@
 </script>
 
 <svelte:head>
-	<title>AsistCV · {$_('app.tagline')}</title>
+	<title>eptus · {$_('app.tagline')}</title>
 </svelte:head>
 
 <section class="home">

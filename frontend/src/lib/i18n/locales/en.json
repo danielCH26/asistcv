@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "AsistCV",
-    "tagline": "Job description ↔ Profile match",
+    "title": "eptus",
+    "tagline": "Role ↔ Your profile",
     "nav": {
       "home": "Home",
       "history": "History",
@@ -140,7 +140,7 @@
     "userInfo": "{name} · {email}"
   },
   "onboarding": {
-    "heading": "Welcome to AsistCV",
+    "heading": "Welcome to eptus",
     "stepOf": "Step {step} of 3",
     "roleConfirm": "Your account type is: {role}. You can continue to upload your CV.",
     "next": "Continue",

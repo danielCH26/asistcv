@@ -32,6 +32,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+from app.core import brand
 from app.core.logging import get_logger
 from app.services import email_service
 
@@ -104,7 +105,7 @@ def build_offer_summary_html(
 <html>
 <head><meta charset="utf-8"><title>{subject}</title></head>
 <body>
-<p><strong>AsistCV</strong></p>
+<p>{brand.brand_lockup()}</p>
 {framing}
 {offer_blocks}
 </body>

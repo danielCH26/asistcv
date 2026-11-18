@@ -149,7 +149,7 @@
 </script>
 
 <svelte:head>
-	<title>AsistCV · {$_('profile.title')}</title>
+	<title>eptus · {$_('profile.title')}</title>
 </svelte:head>
 
 {#if ready}

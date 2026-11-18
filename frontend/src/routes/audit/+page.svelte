@@ -96,7 +96,7 @@
 </script>
 
 <svelte:head>
-	<title>AsistCV · {$_('audit.title')}</title>
+	<title>eptus · {$_('audit.title')}</title>
 </svelte:head>
 
 <section class="audit">

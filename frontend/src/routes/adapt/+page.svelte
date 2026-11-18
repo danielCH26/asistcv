@@ -96,7 +96,7 @@
 </script>
 
 <svelte:head>
-	<title>AsistCV · {$_('adapt.pageTitle')}</title>
+	<title>eptus · {$_('adapt.pageTitle')}</title>
 </svelte:head>
 
 {#if ready}

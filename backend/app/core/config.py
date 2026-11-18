@@ -32,7 +32,7 @@ JWT_SECRET_ERROR = (
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
-    app_name: str = "AsistCV Backend"
+    app_name: str = "eptus Backend"
     environment: str = Field(default="development", validation_alias="APP_ENV")
     log_level: str = Field(default="INFO", validation_alias="LOG_LEVEL")
     cors_origins: list[str] = Field(
@@ -269,7 +269,7 @@ class Settings(BaseSettings):
     email_provider: str = Field(default="resend", validation_alias="EMAIL_PROVIDER")
     resend_api_key: str | None = Field(default=None, validation_alias="RESEND_API_KEY")
     email_from: str = Field(
-        default="AsistCV <noreply@asistcv.com>", validation_alias="EMAIL_FROM"
+        default="eptus <noreply@eptus.com>", validation_alias="EMAIL_FROM"
     )
     email_verification_ttl_seconds: int = Field(
         default=86400,  # 24h

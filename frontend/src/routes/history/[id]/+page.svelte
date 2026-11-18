@@ -76,7 +76,7 @@
 </script>
 
 <svelte:head>
-	<title>AsistCV · {$_('detail.heading')}</title>
+	<title>eptus · {$_('detail.heading')}</title>
 </svelte:head>
 
 <section class="detail">

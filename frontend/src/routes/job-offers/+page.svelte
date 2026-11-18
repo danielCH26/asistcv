@@ -99,7 +99,7 @@
 </script>
 
 <svelte:head>
-	<title>AsistCV · {$_('jobOffers.title')}</title>
+	<title>eptus · {$_('jobOffers.title')}</title>
 </svelte:head>
 
 {#if ready}

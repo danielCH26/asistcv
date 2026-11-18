@@ -38,7 +38,7 @@
 </script>
 
 <svelte:head>
-	<title>AsistCV · {$_('history.heading')}</title>
+	<title>eptus · {$_('history.heading')}</title>
 </svelte:head>
 
 <section class="history">

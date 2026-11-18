@@ -69,7 +69,7 @@
 </script>
 
 <svelte:head>
-	<title>AsistCV · {$_('signup.title')}</title>
+	<title>eptus · {$_('signup.title')}</title>
 </svelte:head>
 
 <section class="signup">

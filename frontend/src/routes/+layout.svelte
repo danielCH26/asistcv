@@ -2,6 +2,7 @@
 	import '../app.css';
 	import { setupI18n } from '$i18n/index';
 	import LanguageToggle from '$components/LanguageToggle.svelte';
+	import Logo from '$components/Logo.svelte';
 	import { page } from '$app/stores';
 	import { _ } from 'svelte-i18n';
 	import { isAuthenticated, isRecruiter, logout, session, startSessionRefresh } from '$stores/session';
@@ -15,7 +16,7 @@
 <div class="app-shell">
 	<header class="app-shell__header">
 		<a class="app-shell__brand" href="/">
-			<span class="app-shell__logo">CV</span>
+			<span class="app-shell__logo"><Logo size={26} /></span>
 			<span class="app-shell__title">
 				<strong>{$_('app.title')}</strong>
 				<small>{$_('app.tagline')}</small>
@@ -82,7 +83,7 @@
 	</main>
 
 	<footer class="app-shell__footer">
-		<small>AsistCV · Sprint 2</small>
+		<small>eptus</small>
 	</footer>
 </div>
 
@@ -119,12 +120,9 @@
 		justify-content: center;
 		width: var(--space-6);
 		height: var(--space-6);
-		background: var(--color-action);
-		color: var(--color-on-action);
-		border-radius: var(--radius-control);
-		font-weight: 700;
-		font-size: var(--text-sm);
-		box-shadow: var(--clay-raised);
+		/* La marca lleva el hue de marca: en light es el índigo del action,
+		   en dark el índigo claro. El token ya invierte solo. */
+		color: var(--color-action);
 	}
 
 	.app-shell__title {

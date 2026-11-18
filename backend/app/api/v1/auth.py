@@ -11,6 +11,7 @@ from sqlalchemy import and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, get_current_user
+from app.core import brand
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.core.security import (
@@ -458,7 +459,7 @@ async def request_verify_email(
     if user_email is not None:
         await email_service.send_email_async(
             to=user_email,
-            subject="Confirma tu email en AsistCV",
+            subject="Confirma tu email en eptus",
             html_body=html_body,
             text_body=text_body,
         )
@@ -556,18 +557,19 @@ def _verification_email_html(verify_url: str, ttl_seconds: int) -> str:
     return (
         "<html><body style=\"font-family: -apple-system, Segoe UI, "
         "Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: "
-        "24px; color: #1f2937;\">"
-        "<h2 style=\"color: #111827;\">Confirmá tu email</h2>"
+        f"24px; color: {brand.INK};\">"
+        f"<p style=\"margin: 0 0 24px;\">{brand.brand_lockup()}</p>"
+        f"<h2 style=\"color: {brand.INK};\">Confirmá tu email</h2>"
         "<p>Para terminar de configurar tu cuenta y poder comprar "
         "planes, abrí este enlace:</p>"
         f"<p style=\"margin: 24px 0;\"><a href=\"{verify_url}\""
-        " style=\"background-color: #2563eb; color: white; padding: "
+        f" style=\"background-color: {brand.ACTION}; color: white; padding: "
         "10px 18px; border-radius: 6px; text-decoration: none;\">"
         "Confirmar email</a></p>"
-        f"<p style=\"font-size: 13px; color: #6b7280;\">El enlace es "
+        f"<p style=\"font-size: 13px; color: {brand.INK_MUTED};\">El enlace es "
         f"válido por {hours} hora(s). Si no lo usás en ese plazo, "
         "pedí uno nuevo desde tu perfil.</p>"
-        "<p style=\"font-size: 13px; color: #6b7280;\">Si no pediste "
+        f"<p style=\"font-size: 13px; color: {brand.INK_MUTED};\">Si no pediste "
         "este mensaje, podés ignorarlo.</p>"
         "</body></html>"
     )

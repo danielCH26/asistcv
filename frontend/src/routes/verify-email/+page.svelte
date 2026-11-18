@@ -40,7 +40,7 @@
 </script>
 
 <svelte:head>
-	<title>AsistCV · {$_('verifyEmail.title')}</title>
+	<title>eptus · {$_('verifyEmail.title')}</title>
 </svelte:head>
 
 <section class="verify">

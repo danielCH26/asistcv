@@ -173,7 +173,11 @@ async def test_open_mode_root_returns_metadata(client: TestClient) -> None:
     response = client.get("/")
     assert response.status_code == 200
     data = response.json()
-    assert data["name"] == "AsistCV Backend"
+    # El nombre viene de Settings.app_name — la marca vive en un solo lugar
+    # (app/core/config.py), asi que el test no la vuelve a hardcodear.
+    from app.core.config import get_settings
+
+    assert data["name"] == get_settings().app_name
     assert data["docs"] == "/docs"
 
 
