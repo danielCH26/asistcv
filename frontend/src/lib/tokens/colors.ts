@@ -41,37 +41,41 @@ export const scoreInks = {
 } as const;
 
 /**
- * Sober palette (Layer 3, light scheme). Every text-on-surface pair is
+ * eptus palette (Layer 3, light scheme). Every text-on-surface pair is
  * asserted >= 4.5:1 by `contrast.test.ts` — the check app.css's comment used
  * to promise and never had.
  *
+ * Identity: deep indigo + cold neutrals with a violet cast. The action hue is
+ * separated from the semantic greens (success / score-high) so a primary
+ * button never reads as "state: good".
+ *
  * Boundary tokens:
- *   --color-line-strong #64748b measures 4.55:1 on canvas and 4.76:1 on
+ *   --color-line-strong #6b6b83 measures 4.89:1 on canvas and 5.18:1 on
  *   surface — it is the opt-in 3:1 boundary for WCAG 1.4.11 (form fields,
  *   focusable controls), not a text colour.
  */
 export const palette = {
 	// canvas + surfaces
-	'--color-canvas': '#f8fafc',
+	'--color-canvas': '#f8f8fc',
 	'--color-surface': '#ffffff',
-	'--color-surface-alt': '#f1f5f9',
-	'--color-line': '#e2e8f0',
-	'--color-line-strong': '#64748b',
+	'--color-surface-alt': '#f1f1f9',
+	'--color-line': '#e3e4ef',
+	'--color-line-strong': '#6b6b83',
 
 	// ink
-	'--color-ink': '#1f2937',
-	'--color-ink-strong': '#0f172a',
-	'--color-ink-muted': '#475569',
+	'--color-ink': '#1c1c2b',
+	'--color-ink-strong': '#111120',
+	'--color-ink-muted': '#4c4c63',
 
 	// action / primary
-	'--color-action': '#0f766e',
+	'--color-action': '#4f46e5',
 	'--color-on-action': '#ffffff',
-	'--color-action-muted': '#ccfbf1',
-	// Hover/pressed steps (issue #57). White label on either holds >= AA
-	// (5.47:1 hover — AA, 7.58:1 pressed — AAA). Dark-theme counterparts
-	// live in app.css dark block (#99f6e4 / #2dd4bf with a dark label).
-	'--color-accent-hover': '#115e59',
-	'--color-accent-pressed': '#134e4a',
+	'--color-action-muted': '#e0e7ff',
+	// Hover/pressed steps. White label on either holds AAA (7.90:1 hover,
+	// 9.93:1 pressed). Dark-theme counterparts live in app.css dark block
+	// (#c7d2fe / #a5b4fc with a dark label).
+	'--color-accent-hover': '#4338ca',
+	'--color-accent-pressed': '#3730a3',
 
 	// success
 	'--color-success': '#047857',
@@ -88,10 +92,10 @@ export const palette = {
 	'--color-on-danger': '#ffffff',
 	'--color-danger-muted': '#fef2f2',
 
-	// info
-	'--color-info': '#0f766e',
+	// info — shares the brand hue; on its muted tint it measures 5.10:1
+	'--color-info': '#4f46e5',
 	'--color-on-info': '#ffffff',
-	'--color-info-muted': '#ccfbf1',
+	'--color-info-muted': '#e0e7ff',
 } as const;
 
 /** Flat registry: every color token name -> its `app.css :root` value. */

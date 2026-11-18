@@ -91,32 +91,32 @@
    refuse the build otherwise — and confirm the contrast suite still passes.
 	   ========================================================================= */
 	/* canvas + surfaces */
-	--color-canvas: #f8fafc;
+	--color-canvas: #f8f8fc;
 	--color-surface: #ffffff;
-	--color-surface-alt: #f1f5f9;
-	--color-line: #e2e8f0;
+	--color-surface-alt: #f1f1f9;
+	--color-line: #e3e4ef;
 	/* Opt-in 3:1 boundary for WCAG 1.4.11 (form fields, focusable controls).
 	   --color-line is deliberately left untouched: it is a hairline that
-	   currently measures 1.23:1 against --surface, and darkening it would
+	   currently measures 1.19:1 against --surface, and darkening it would
 	   restyle every card and input on every screen. Adopt this one where the
-	   boundary is the only cue that a control exists. Measured 4.55:1 on
-	   --color-canvas and 4.76:1 on --color-surface. */
-	--color-line-strong: #64748b;
+	   boundary is the only cue that a control exists. Measured 4.89:1 on
+	   --color-canvas and 5.18:1 on --color-surface. */
+	--color-line-strong: #6b6b83;
 
 	/* ink */
-	--color-ink: #1f2937;
-	--color-ink-strong: #0f172a;
-	--color-ink-muted: #475569;
+	--color-ink: #1c1c2b;
+	--color-ink-strong: #111120;
+	--color-ink-muted: #4c4c63;
 
-	/* action / primary */
-	--color-action: #0f766e;
+	/* action / primary — eptus indigo */
+	--color-action: #4f46e5;
 	--color-on-action: #ffffff;
-	--color-action-muted: #ccfbf1;
-	/* Hover/pressed steps of the action colour (issue #57). White label:
-	   #115e59 measures 5.47:1 (AA), #134e4a 7.58:1 (AAA). Dark-theme
+	--color-action-muted: #e0e7ff;
+	/* Hover/pressed steps of the action colour. White label:
+	   #4338ca measures 7.90:1 (AAA), #3730a3 9.93:1 (AAA). Dark-theme
 	   counterparts live in the dark block below. */
-	--color-accent-hover: #115e59;
-	--color-accent-pressed: #134e4a;
+	--color-accent-hover: #4338ca;
+	--color-accent-pressed: #3730a3;
 
 	/* success */
 	--color-success: #047857;
@@ -134,10 +134,12 @@
 	--color-on-danger: #ffffff;
 	--color-danger-muted: #fef2f2;
 
-	/* info */
-	--color-info: #0f766e;
+	/* info — shares the action hue: in this product "info" IS the brand hue
+	   (badges, hints, the empty-state CTA). Measured on its muted tint:
+	   5.10:1. */
+	--color-info: #4f46e5;
 	--color-on-info: #ffffff;
-	--color-info-muted: #ccfbf1;
+	--color-info-muted: #e0e7ff;
 
 	/* -------------------------------------------------------------------------
 	   SCORE INKS — the text half of the score pair.
@@ -351,32 +353,32 @@
 @media (prefers-color-scheme: dark) {
 	:root {
 		/* --- LAYER 3: palette, re-pointed not re-picked -----------------
-		   Surfaces stay on the same slate ramp. Ink flips to the light end and
+		   Surfaces stay on the same cold ramp. Ink flips to the light end and
 		   gets LIGHTER, because contrast on a dark canvas comes from
 		   luminance above the surface, not from a different hue. */
-		--color-canvas: #0f172a;
-		--color-surface: #1e293b;
-		--color-surface-alt: #334155;
-		--color-line: #334155;
-		--color-line-strong: #94a3b8; /* measured 6.96:1 on --color-canvas */
+		--color-canvas: #12121f;
+		--color-surface: #1c1c2e;
+		--color-surface-alt: #2a2a40;
+		--color-line: #2a2a40;
+		--color-line-strong: #9a9ab5; /* measured 6.77:1 on --color-canvas */
 
-		--color-ink: #e2e8f0;
-		--color-ink-strong: #f8fafc;
-		--color-ink-muted: #cbd5e1; /* #94a3b8 was 4.04:1 on --surface-alt */
+		--color-ink: #e6e6f0;
+		--color-ink-strong: #f7f7fd;
+		--color-ink-muted: #b8b8cc;
 
-		/* The action colour is teal here, so its label must be DARK.
-		   --color-on-action flips with it: a white label on this teal measured
-		   2.14:1. Paired the other way round (#0f172a on #5eead4) measures
-		   12.07:1. */
-		--color-action: #5eead4;
-		--color-on-action: #0f172a;
-		--color-action-muted: #134e4a;
+		/* The action colour is a LIGHT indigo here, so its label must be DARK.
+		   --color-on-action flips with it: a white label on this indigo would
+		   measure 1.8:1. Paired the other way round (#1e1b4b on #a5b4fc)
+		   measures 8.02:1. */
+		--color-action: #a5b4fc;
+		--color-on-action: #1e1b4b;
+		--color-action-muted: #312e81;
 		/* Dark-theme hover/pressed: the accent LIGHTENS on hover (inverse of
 		   light theme) because contrast on dark comes from luminance above
-		   the surface. The dark label (#0f172a) holds 14.16:1 on hover,
-		   9.59:1 on pressed. */
-		--color-accent-hover: #99f6e4;
-		--color-accent-pressed: #2dd4bf;
+		   the surface. The dark label (#1e1b4b) holds 10.72:1 on hover,
+		   8.02:1 on pressed. */
+		--color-accent-hover: #c7d2fe;
+		--color-accent-pressed: #a5b4fc;
 
 		--color-success: #6ee7b7;
 		--color-on-success: #042f2e;
@@ -390,14 +392,14 @@
 
 		/* --color-danger also had no dark override. --error on --error-bg
 		   measured 1.55:1 in dark because both ends were dark; lifting the
-		   text end to rose and leaving the fill dark clears it at 5.28:1. */
+		   text end to rose and leaving the fill dark clears it at 8.51:1. */
 		--color-danger: #fca5a5;
 		--color-on-danger: #450a0a;
 		--color-danger-muted: #7f1d1d;
 
-		--color-info: #5eead4;
-		--color-on-info: #134e4a;
-		--color-info-muted: #134e4a;
+		--color-info: #a5b4fc;
+		--color-on-info: #1e1b4b;
+		--color-info-muted: #312e81;
 
 		/* Score INKS flip to the light end. The FILLS in Layer 0 are
 		   intentionally absent from this block — see the note there. */
