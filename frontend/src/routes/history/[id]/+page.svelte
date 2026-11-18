@@ -99,7 +99,7 @@
 	{/if}
 
 	{#if status === 'error'}
-		<div class="detail__error" role="alert">
+		<div class="detail__error alert" role="alert">
 			<p class="detail__error-title">{$_('detail.notFound')}</p>
 			{#if errorMessage}
 				<small>{errorMessage}</small>
@@ -229,9 +229,6 @@
 		flex-direction: column;
 		gap: var(--space-2);
 		padding: var(--space-4) var(--space-5);
-		background: var(--error-bg);
-		color: var(--error);
-		border: 1px solid var(--error);
 		border-radius: var(--radius-card);
 	}
 

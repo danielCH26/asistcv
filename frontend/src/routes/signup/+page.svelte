@@ -62,7 +62,7 @@
 	{/if}
 
 	{#if $clerkError}
-		<div class="signup__error" role="alert">
+		<div class="signup__error alert" role="alert">
 			<h2>{$_('clerk.errorTitle')}</h2>
 			<p>{$_('clerk.errorBody')}</p>
 			<button type="button" on:click={retry}>{$_('clerk.retry')}</button>
@@ -131,10 +131,7 @@
 		align-items: center;
 		gap: var(--space-3);
 		padding: var(--space-6);
-		border: 1px solid var(--color-danger);
 		border-radius: var(--radius-card);
-		background: var(--color-danger-muted);
-		color: var(--color-danger);
 		text-align: center;
 	}
 
@@ -151,10 +148,9 @@
 	.signup__error button {
 		margin-top: var(--space-2);
 		padding: var(--space-2) var(--space-4);
-		border: 1px solid var(--color-danger);
+		border: 1px solid var(--color-line);
 		border-radius: var(--radius-control);
 		background: transparent;
-		color: var(--color-danger);
 		font-weight: 600;
 		cursor: pointer;
 	}

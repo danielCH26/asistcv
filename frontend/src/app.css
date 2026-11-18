@@ -592,3 +592,28 @@ button {
 	font-size: var(--text-lg);
 	color: var(--color-ink-strong);
 }
+
+/* --- Alerta ----------------------------------------------------------------
+   Un error informa, no amenaza. Un bloque grande de rojo saturado es un
+   puñetazo en la cara: la pantalla entera se vuelve una alarma y el mensaje
+   deja de leerse.
+
+   Por eso el rojo va como TINTE sobre la superficie, con el borde apenas
+   marcado y el texto en el tono del color. `color-mix` baja la opacidad sin
+   inventar un color nuevo por superficie: el primer `background` es el
+   fallback para navegadores sin `color-mix`, el segundo lo reemplaza. */
+.alert {
+	background: var(--color-danger-muted);
+	background: color-mix(in srgb, var(--color-danger) 10%, var(--color-surface));
+	border: var(--border-width) solid var(--color-line);
+	border-color: color-mix(in srgb, var(--color-danger) 30%, var(--color-line));
+	color: var(--color-danger);
+}
+
+/* El botón del error tampoco se pinta entero de rojo: es una acción, no
+   un segundo aviso. */
+.alert button {
+	border-color: color-mix(in srgb, var(--color-danger) 40%, var(--color-line));
+	color: var(--color-danger);
+}
+

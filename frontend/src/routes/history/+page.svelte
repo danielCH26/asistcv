@@ -54,7 +54,7 @@
 	{/if}
 
 	{#if $historyStore.status === 'error'}
-		<div class="history__error" role="alert">
+		<div class="history__error alert" role="alert">
 			<p>{$historyStore.error ?? $_('history.errorLoad')}</p>
 			<button type="button" on:click={retry}>{$_('history.retry')}</button>
 		</div>
@@ -103,9 +103,6 @@
 
 	.history__error {
 		padding: var(--space-4) var(--space-5);
-		background: var(--error-bg);
-		color: var(--error);
-		border: 1px solid var(--error);
 		border-radius: var(--radius-card);
 	}
 

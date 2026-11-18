@@ -149,7 +149,7 @@
 		{/if}
 
 		{#if $analysisStore.status === 'error'}
-			<section class="home__error" role="alert">
+			<section class="home__error alert" role="alert">
 				<h2>{$_('error.title')}</h2>
 				<p>{$analysisStore.error}</p>
 				<button type="button" on:click={retry}>{$_('error.retry')}</button>
@@ -157,7 +157,7 @@
 		{/if}
 
 		{#if setupError}
-			<section class="home__error" role="alert" data-testid="home-setup-error">
+			<section class="home__error alert" role="alert" data-testid="home-setup-error">
 				<h2>{$_('error.title')}</h2>
 				<p>{setupError}</p>
 				<a class="home__setup-cta" href="/profile">{$_('home.profileMissingCta')}</a>
@@ -247,9 +247,7 @@
 	}
 
 	.home__error {
-		background: var(--color-danger-muted);
 		color: var(--color-danger);
-		border: var(--border-width) solid var(--color-danger);
 	}
 
 	.home__spinner {
@@ -271,7 +269,7 @@
 	.home__error button {
 		margin-top: var(--space-2);
 		padding: var(--space-2) var(--space-4);
-		border: var(--border-width) solid var(--color-danger);
+		border: var(--border-width) solid var(--color-line);
 		border-radius: var(--radius-control);
 		background: var(--clay-fill);
 		color: var(--color-danger);
