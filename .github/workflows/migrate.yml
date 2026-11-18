@@ -43,16 +43,21 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           if [ -z "$DATABASE_URL" ]; then
-            echo "::error::falta el secreto DATABASE_URL — agregalo en Settings → Secrets and variables → Actions"
-            exit 1
+            # Aviso, no fallo: un push no debería quedar en rojo por una
+            # variable de despliegue que no vive en el repo. La migración
+            # queda pendiente y hay que aplicarla a mano (docs/DEPLOY.md §3).
+            echo "::warning::falta el secreto DATABASE_URL — las migraciones NO se aplicaron. Agregalo en Settings → Secrets and variables → Actions, o corré 'alembic upgrade head' a mano."
+            echo "DATABASE_URL_MISSING=1" >> "$GITHUB_ENV"
           fi
 
       - name: Apply migrations
+        if: env.DATABASE_URL_MISSING != '1'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: cd backend && uv run alembic upgrade head
 
       - name: Show the applied revision
+        if: env.DATABASE_URL_MISSING != '1'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: cd backend && uv run alembic current

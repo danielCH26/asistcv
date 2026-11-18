@@ -203,8 +203,9 @@ to `main`. It needs one secret:
 |---|---|
 | GitHub → Settings → Secrets and variables → Actions | `DATABASE_URL` — the same pooled connection string Neon gives you (Neon → the project → **Connection string** → *Pooled connection*), with the password substituted |
 
-Until that secret exists the workflow fails with an explicit message, and the
-migrations have to be applied by hand:
+Without that secret the workflow **warns and skips** the migration (it does not
+fail the push: a missing deployment variable should not paint every commit red)
+and the migrations have to be applied by hand:
 
 ```bash
 cd backend
