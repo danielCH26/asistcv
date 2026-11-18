@@ -104,7 +104,11 @@
 
 {#if ready}
 	<section class="job-offers">
-		<h1>{$_('jobOffers.heading')}</h1>
+		<header class="page-header">
+			<div>
+				<h1 class="page-header__title">{$_('jobOffers.heading')}</h1>
+			</div>
+		</header>
 
 		<!-- Loading -->
 		{#if loading}
@@ -268,12 +272,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-6);
-	}
-
-	.job-offers h1 {
-		margin: 0;
-		font-size: var(--text-2xl);
-		color: var(--color-ink-strong);
 	}
 
 	.job-offers__loading {

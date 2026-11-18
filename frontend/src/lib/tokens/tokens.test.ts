@@ -17,11 +17,11 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { colorTokens } from './colors';
+import { colorTokens, appColorTokens } from './colors';
 import { typographyTokens } from './typography';
 import { spacingTokens } from './spacing';
 import { radiusTokens } from './radius';
-import { shadowTokens } from './shadow';
+import { shadowTokens, appShadowTokens } from './shadow';
 import { motionTokens } from './motion';
 
 // vitest always runs with cwd = frontend/ (npm scripts), and `import.meta.url`
@@ -33,8 +33,19 @@ const APP_CSS_PATH = resolve(process.cwd(), 'src', 'app.css');
 function parseRootVars(css: string): Map<string, string> {
 	const start = css.indexOf(':root');
 	if (start === -1) throw new Error('app.css has no :root block');
-	const open = css.indexOf('{', start);
-	// Walk to the matching closing brace (blocks are not nested in :root).
+	return parseBlockVars(css, start);
+}
+
+/**
+ * Parse the declarations of the block that starts at `selector`.
+ *
+ * The app surface lives in its own block (`[data-surface='app']`), so the
+ * marketing `:root` and the app surface are checked against two different
+ * registries — the same file, two materials.
+ */
+function parseBlockVars(css: string, selectorStart: number): Map<string, string> {
+	const open = css.indexOf('{', selectorStart);
+	// Walk to the matching closing brace (blocks are not nested).
 	let depth = 0;
 	let end = open;
 	for (let i = open; i < css.length; i++) {
@@ -56,8 +67,22 @@ function parseRootVars(css: string): Map<string, string> {
 	return vars;
 }
 
+/** Parse the `[data-surface='app']` block. */
+function parseAppSurfaceVars(css: string): Map<string, string> {
+	// The selector also appears in the file's header comment, so the block is
+	// located by the selector FOLLOWED BY its brace — matching the bare
+	// string would parse the `:root` block that follows the comment.
+	const match = /\[data-surface='app'\]\s*\{/.exec(css);
+	if (!match) throw new Error("app.css has no [data-surface='app'] block");
+	return parseBlockVars(css, match.index);
+}
+
 function loadRootVars(): Map<string, string> {
 	return parseRootVars(readFileSync(APP_CSS_PATH, 'utf8'));
+}
+
+function loadAppSurfaceVars(): Map<string, string> {
+	return parseAppSurfaceVars(readFileSync(APP_CSS_PATH, 'utf8'));
 }
 
 const registries: ReadonlyArray<readonly [string, Record<string, string>]> = [
@@ -128,5 +153,49 @@ describe('token registry ↔ app.css parity', () => {
 		const all = new Map(registries.flatMap(([, r]) => Object.entries(r)));
 		const missing = critical.filter((token) => !all.has(token));
 		expect(missing, `Registry is missing critical tokens: ${missing.join(', ')}`).toEqual([]);
+	});
+});
+
+/**
+ * The app surface is a SECOND material, not a theme switch: it lives in its
+ * own block in app.css and has its own registry. Without this check the two
+ * surfaces could drift apart silently — the app would keep the marketing
+ * palette's light ink and become unreadable.
+ */
+describe('app surface registry ↔ app.css parity', () => {
+	const appRegistries: ReadonlyArray<readonly [string, Record<string, string>]> = [
+		['colors', appColorTokens],
+		['shadow', appShadowTokens],
+	];
+
+	it('app.css declares the app surface block', () => {
+		expect(loadAppSurfaceVars().size).toBeGreaterThan(0);
+	});
+
+	for (const [name, registry] of appRegistries) {
+		it(`every app ${name} token exists in [data-surface='app'] with the byte-identical value`, () => {
+			const vars = loadAppSurfaceVars();
+			const problems: string[] = [];
+			for (const [token, value] of Object.entries(registry)) {
+				const cssValue = vars.get(token);
+				if (cssValue === undefined) {
+					problems.push(`  - ${token}: missing in [data-surface='app']`);
+				} else if (cssValue !== value) {
+					problems.push(`  - ${token}: TS "${value}" != CSS "${cssValue}"`);
+				}
+			}
+			expect(problems, `Drift between TS registry and app.css:\n${problems.join('\n')}`).toEqual(
+				[]
+			);
+		});
+	}
+
+	it('the app surface overrides the palette instead of inheriting it', () => {
+		const app = loadAppSurfaceVars();
+		const root = loadRootVars();
+		// The canvas has to actually change: if both surfaces shared a canvas
+		// the "app is dark" decision would be a comment, not a design.
+		expect(app.get('--color-canvas')).not.toBe(root.get('--color-canvas'));
+		expect(app.get('--color-canvas')).toBe('#0c0c14');
 	});
 });

@@ -29,6 +29,9 @@ export const spacing = {
 export const responsive = {
 	'--breakpoint-sm': '640px',
 	'--layout-content-max': '880px',
+	// La portada tiene una columna más ancha que la app: el aire es parte
+	// del diseño editorial.
+	'--layout-marketing-max': '1120px',
 } as const;
 
 /** Flat registry: every spacing token name -> its `app.css :root` value. */

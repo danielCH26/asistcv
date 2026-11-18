@@ -14,55 +14,91 @@
 	const GREEN_THRESHOLD = 75;
 
 	$: bucket = score < RED_THRESHOLD ? 'low' : score < GREEN_THRESHOLD ? 'mid' : 'high';
+	$: clamped = Math.max(0, Math.min(100, Math.round(score)));
 </script>
 
-<div class="score-card score-card--{bucket}" aria-label={$_('result.scoreLabel')}>
-	<span class="score-card__label">{$_('result.scoreLabel')}</span>
-	<span class="score-card__value">{Math.round(score)}</span>
-	<span class="score-card__suffix">/100</span>
+<div class="score score--{bucket}" aria-label={$_('result.scoreLabel')}>
+	<div class="score__row">
+		<span class="score__value">{clamped}</span>
+		<span class="score__suffix">/100</span>
+	</div>
+	<div class="score__meter" role="presentation">
+		<i style="width: {clamped}%"></i>
+	</div>
+	<span class="score__label">{$_('result.scoreLabel')}</span>
 </div>
 
 <style>
-	.score-card {
-		display: inline-flex;
+	/* El score es el protagonista del resultado: un número grande y una
+	   medida. Ya no es un bloque de color — en una superficie oscura un
+	   rectángulo rojo/verde compite con el contenido en vez de encabezarlo. */
+	.score {
+		display: flex;
 		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		padding: var(--space-4) var(--space-6);
-		border-radius: var(--radius-panel);
-		color: var(--color-on-score-fill);
-		font-family: var(--font-sans);
-		min-width: 140px;
+		gap: var(--space-2);
+		min-width: 160px;
 	}
 
-	.score-card--low {
+	.score__row {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-2);
+	}
+
+	.score__value {
+		font-size: var(--text-6xl);
+		font-weight: 650;
+		line-height: 1;
+		letter-spacing: var(--tracking-tighter);
+	}
+
+	.score--low .score__value {
+		color: var(--score-low-ink);
+	}
+
+	.score--mid .score__value {
+		color: var(--score-mid-ink);
+	}
+
+	.score--high .score__value {
+		color: var(--score-high-ink);
+	}
+
+	.score__suffix {
+		font-size: var(--text-sm);
+		color: var(--color-ink-muted);
+	}
+
+	.score__meter {
+		height: 4px;
+		border-radius: var(--radius-pill);
+		background: var(--color-surface-alt);
+		overflow: hidden;
+	}
+
+	.score__meter i {
+		display: block;
+		height: 100%;
+		border-radius: var(--radius-pill);
+	}
+
+	.score--low .score__meter i {
 		background: var(--score-low);
 	}
 
-	.score-card--mid {
+	.score--mid .score__meter i {
 		background: var(--score-mid);
 	}
 
-	.score-card--high {
+	.score--high .score__meter i {
 		background: var(--score-high);
 	}
 
-	.score-card__label {
-		font-size: var(--text-sm);
+	.score__label {
+		font-family: var(--font-mono);
+		font-size: var(--text-2xs);
+		letter-spacing: var(--tracking-widest);
 		text-transform: uppercase;
-		letter-spacing: var(--tracking-wide);
-		opacity: 0.85;
-	}
-
-	.score-card__value {
-		font-size: var(--text-6xl);
-		font-weight: 700;
-		line-height: var(--leading-tight);
-		margin: var(--space-1) 0;
-	}
-
-	.score-card__suffix {
-		font-size: var(--text-sm);
-		opacity: 0.85;
+		color: var(--color-ink-muted);
 	}
 </style>

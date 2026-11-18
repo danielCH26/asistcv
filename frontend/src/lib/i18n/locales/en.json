@@ -13,7 +13,8 @@
       "jobOffers": "Job Offers",
       "login": "Log in",
       "signup": "Sign up",
-      "logout": "Log out"
+      "logout": "Log out",
+      "jobSeekerPlan": "Job seeker"
     }
   },
   "session": {
@@ -59,6 +60,7 @@
     "401Hint": "Your session expired. Please log in again to continue."
   },
   "result": {
+    "heading": "Match result",
     "scoreLabel": "Score",
     "strengths": "Strengths",
     "gaps": "Gaps",
@@ -358,6 +360,108 @@
       "statusPending": "In progress",
       "statusCompleted": "Completed",
       "statusFailed": "Failed"
+    }
+  },
+  "marketing": {
+    "nav": {
+      "audit": "Free audit",
+      "pricing": "Plans",
+      "login": "Log in",
+      "signup": "Create account"
+    },
+    "hero": {
+      "kicker": "Role ↔ your profile",
+      "title": "Find out if you fit",
+      "accent": "before you apply.",
+      "subtitle": "Paste the job description and eptus gives you an honest match against your CV: what is missing, what is extra and why.",
+      "ctaPrimary": "Analyze a job",
+      "ctaSecondary": "See plans",
+      "trust1": "No credit card",
+      "trust2": "3 free analyses a month",
+      "trust3": "Cancel whenever you want"
+    },
+    "steps": {
+      "heading": "How it works",
+      "subtitle": "Three steps. The first one is on eptus.",
+      "one": {
+        "title": "Upload your CV",
+        "body": "Do it once. eptus reads it, structures it and builds the profile it will compare with."
+      },
+      "two": {
+        "title": "Paste the job",
+        "body": "Copy the full job description. That is enough: no forms, no steps."
+      },
+      "three": {
+        "title": "See the match",
+        "body": "A score, your strengths, what is missing and the reasoning. No hype, nothing invented."
+      }
+    },
+    "features": {
+      "heading": "What you get",
+      "subtitle": "eptus does not tell you that you are the best. It tells you where you fit.",
+      "match": {
+        "title": "An honest match",
+        "body": "The score comes with the reasons: strengths, gaps and the reasoning behind each one."
+      },
+      "adapt": {
+        "title": "A tailored CV, nothing invented",
+        "body": "We rewrite your experience so it fits the role. A honesty check blocks anything that is not in your CV."
+      },
+      "audit": {
+        "title": "Anonymous audit",
+        "body": "Paste your CV and get a quality diagnosis instantly, without creating an account."
+      },
+      "offers": {
+        "title": "Job alerts",
+        "body": "Tell us what you are looking for and we let you know when something matches your profile."
+      }
+    },
+    "pricing": {
+      "heading": "Plans",
+      "subtitle": "Prices in Colombian pesos. Pay with Wompi or Mercado Pago, no middlemen.",
+      "perMonth": "/month",
+      "free": "Free",
+      "freeNote": "To try the match without a card.",
+      "cta": "Pick this plan",
+      "current": "Your current plan",
+      "mostPopular": "Most chosen",
+      "forRecruiters": "For recruiting teams",
+      "freeFeatures": ["3 matches a month", "1 CV analysis", "History of your analyses"],
+      "seekerFeatures": ["50 matches a month", "10 CV adaptations", "Job alerts"],
+      "recruiterFeatures": ["50 ranked candidates", "Unlimited analyses", "Candidate roster"]
+    },
+    "faq": {
+      "heading": "Frequently asked questions",
+      "q1": "What happens to my CV?",
+      "a1": "It stays in your account and is only used to compare against the jobs you analyze. You can delete it whenever you want.",
+      "q2": "Does the score mean I will be hired?",
+      "a2": "No. It is an honest read of how well your profile fits the role, with the reasons in plain sight. The decision is yours.",
+      "q3": "Can I cancel whenever I want?",
+      "a3": "Yes. Cancel from your plan page and keep the free plan: your history and your CV stay.",
+      "q4": "Do I need a card to try it?",
+      "a4": "No. The free plan asks for no card and covers 3 analyses a month."
+    },
+    "final": {
+      "title": "Ready?",
+      "body": "Create your account, upload your CV and paste your first job. Three analyses are on us.",
+      "cta": "Create my account"
+    },
+    "footer": {
+      "product": "Product",
+      "account": "Account",
+      "legal": "Legal",
+      "match": "Job matching",
+      "adapt": "Tailor my CV",
+      "audit": "CV audit",
+      "offers": "Job alerts",
+      "pricing": "Plans",
+      "login": "Log in",
+      "signup": "Create account",
+      "privacy": "Privacy",
+      "terms": "Terms",
+      "contact": "Contact",
+      "rights": "© {year} eptus. All rights reserved.",
+      "madeIn": "Made in Colombia"
     }
   }
 }

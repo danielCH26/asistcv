@@ -1,167 +1,126 @@
 /* =============================================================================
    eptus — design token foundation
    -----------------------------------------------------------------------------
-   Direction: "Swiss structure + clay surfaces".
-   Swiss  -> strict grid, deliberate type scale, generous whitespace.
-   Clay   -> soft tactile elevation, reserved for interactive elements
-             (buttons, cards, inputs) so they read as "this can be touched".
+   Direction: "dos superficies, un producto".
+   -----------------------------------------------------------------------------
+   eptus tiene DOS superficies, y no son la misma cosa:
 
-   This file is TOKENS AND PRIMITIVES ONLY. It introduces no new global element
-   rules and changes no component markup. The pre-existing html/body/a/button
-   rules at the bottom are unchanged except for two declarations that now point
-   at tokens whose resolved values are byte-identical to what they were.
+     · PORTADA (marketing) — clara, editorial, tipografía grande y aire. Es la
+       que convierte: quien llega sin cuenta tiene que entender el producto en
+       segundos y ver los precios en COP.
 
-   Layering: each layer answers one question.
-     0. mode-invariant primitives   -- colours that must NOT change per mode
-     1. clay elevation              -- how a surface sits above its parent
-     2. swiss structure             -- spacing, type, font
-     3. sober palette               -- semantic colour, one place to change it
-     4. motion                      -- duration, easing, reduced-motion
+     · APP (producto) — oscura, densa, instrumentada. Bordes de 1px, sombras
+       casi ausentes, etiquetas en monoespaciada. Es donde se trabaja: pegar
+       una vacante, ver el score, adaptar el CV.
+
+   La diferencia NO es un interruptor de tema: son dos materiales distintos,
+   y por eso viven en dos bloques de tokens (`[data-surface='app']` sobre el
+   `:root`) en vez de en un `@media (prefers-color-scheme)`.
+
+   El color de marca es el mismo en las dos: índigo #4f46e5, con neutros
+   fríos. Lo que cambia es el entorno — y con él, cuánto contraste hay que
+   pelear para que el texto se lea.
+
+   Este archivo es TOKENS Y PRIMITIVAS. Cada capa responde una pregunta:
+     0. primitivas invariantes  -- colores que NO cambian entre superficies
+     1. profundidad             -- cómo se levanta una superficie sobre su padre
+     2. estructura              -- spacing, tipografía, grid
+     3. paleta                  -- color semántico, un solo lugar por cambiarlo
+     4. movimiento              -- duración, easing, reduced-motion
+
+   Cada valor de color está escrito una sola vez por superficie, y el
+   registro tipado (`src/lib/tokens/colors.ts`) lo replica byte a byte:
+   `tokens.test.ts` falla si las dos capas se separan, y `contrast.test.ts`
+   recalcula los ratios WCAG en cada `vitest`.
    ========================================================================== */
 
 :root {
-	color-scheme: light dark;
+	color-scheme: light;
 
 	/* =========================================================================
-	   LAYER 0 — MODE-INVARIANT PRIMITIVES
+	   LAYER 0 — PRIMITIVAS INVARIANTES
 	   -------------------------------------------------------------------------
-	   These literals are deliberately NOT re-declared in the dark block, so
-	   they resolve to the exact same value in both colour schemes.
+	   Los tres rellenos de score (bajo / medio / alto) viven FUERA de las
+	   superficies porque no cambian: van detrás de una etiqueta blanca, y el
+	   blanco tiene que pasar 4.5:1 contra los tres en AMBAS superficies. Si
+	   estos valores se movieran, el número blanco se rompería en una de las
+	   dos y el fallo sería silencioso.
 
-	   DO NOT "simplify" these into var() chains.
-
-	   A var() reference is not indirection from a mode override: var() resolves
-	   against the CASCADED value of the referenced token, and the cascade is
-	   what the dark @media block changes. So the moment one of these reads
-	   var(--color-danger) -- and --color-danger IS overridden in dark -- the dark
-	   value silently wins and drags this token with it. There is no warning and
-	   no visual bug to trace back here; the token just quietly becomes mode
-	   dependent again.
-
-	   --score-low/mid/high are FILLS. They sit behind a hardcoded white label
-	   (ScoreCard.svelte:33, HistoryList.svelte:91), so they are tuned so that
-	   WHITE passes 4.5:1 on them. That target is the same in both schemes, so
-	   the fills must not move per mode. Their text counterparts live in
-	   --score-*-ink below and are the tokens that DO change per mode.
+	   MEDIDO (WCAG 2.1, luminancia relativa), #ffffff contra cada relleno:
+	     --score-low  #dc2626   4.83:1
+	     --score-mid  #92400e   7.09:1
+	     --score-high #047857   5.48:1
 	   ========================================================================= */
 	--score-low: #dc2626;
 	--score-mid: #92400e;
 	--score-high: #047857;
 
-	/* -------------------------------------------------------------------------
-	   --color-on-score-fill — the LABEL ink for the three fills above.
-	   Used by ScoreCard.svelte and HistoryList.svelte, which sit a white number
-	   and a white label directly on the fill.
-
-	   MEASURED (WCAG 2.1 relative luminance), #ffffff against each fill:
-	     --score-low  #dc2626   4.83:1
-	     --score-mid  #92400e   7.09:1
-	     --score-high #047857   5.48:1
-	   All three clear AA for normal text (4.5:1). Those are the light-mode
-	   numbers AND the dark-mode numbers, and the fact that they are the same is
-	   the entire justification for this token existing: the fills are Layer 0,
-	   so they do not move, so a mode-invariant ink holds in both schemes.
-
-	   DO NOT re-point this at --color-on-action / --color-on-success /
-	   --color-on-danger. Those are mode-scoped and resolve to DARK ink in the
-	   dark block. Measured on the same three fills, dark ink #0f172a lands at
-	   3.70:1 / 2.52:1 / 3.26:1 — two of the three below AA for normal text.
-	   The failure is silent: the token exists, it resolves, nothing errors.
-
-	   Equally, do not treat this as a general "light ink on a dark thing". White
-	   is 1.00:1 against --color-surface and 1.05:1 against --color-canvas. It is
-	   legible HERE because these three fills stay deep in both modes, and only
-	   here. That is why it is named for the score fills and not --color-on-*.
-	   ------------------------------------------------------------------------- */
+	/* La tinta de la etiqueta sobre esos rellenos. Invariante por el mismo
+	   argumento que arriba. */
 	--color-on-score-fill: #ffffff;
 
 	/* =========================================================================
-	   LAYER 3 — SOBER PALETTE (light)
+	   LAYER 3 — PALETA DE LA PORTADA (editorial claro)
    -------------------------------------------------------------------------
-	   Semantic names only. No numeric ramp: this product needs to read as
-	   restrained, and a 50-step scale invites drift. Every colour below is
-	   written exactly once; the legacy names further down are pure aliases.
-
-   Every text-on-surface pair below is asserted >= 4.5:1 (light values) by
-   the automated check in `src/lib/tokens/contrast.test.ts`, which recomputes
-   WCAG 2.1 ratios from the hex values on every `vitest` run. Dark-scheme
-   ratios are documented in the comments of the dark block below. If you
-   change a colour value, a pair, or a mode, update
-   `src/lib/tokens/colors.ts` in the same commit — the parity test will
-   refuse the build otherwise — and confirm the contrast suite still passes.
-	   ========================================================================= */
-	/* canvas + surfaces */
-	--color-canvas: #f8f8fc;
+	   Canvas casi blanco con un punto de violeta, tinta casi negra con el
+	   mismo punto de violeta, y el índigo reservado para lo accionable.
+	   El índigo NO se usa como color de texto corrido ni como fondo de bloque:
+	   aparece en el CTA, en los links y en las marcas.
+   ========================================================================= */
+	--color-canvas: #fbfbfd;
 	--color-surface: #ffffff;
-	--color-surface-alt: #f1f1f9;
-	--color-line: #e3e4ef;
-	/* Opt-in 3:1 boundary for WCAG 1.4.11 (form fields, focusable controls).
-	   --color-line is deliberately left untouched: it is a hairline that
-	   currently measures 1.19:1 against --surface, and darkening it would
-	   restyle every card and input on every screen. Adopt this one where the
-	   boundary is the only cue that a control exists. Measured 4.89:1 on
-	   --color-canvas and 5.18:1 on --color-surface. */
+	--color-surface-alt: #f3f3f9;
+	--color-line: #e4e4ee;
+	/* Límite opcional de 3:1 (WCAG 1.4.11) para campos de formulario y
+	   controles enfocables. --color-line es una línea decorativa y se queda
+	   donde está: oscurecerla reestilizaría cada tarjeta de la portada. */
 	--color-line-strong: #6b6b83;
 
-	/* ink */
-	--color-ink: #1c1c2b;
-	--color-ink-strong: #111120;
-	--color-ink-muted: #4c4c63;
+	/* tinta */
+	--color-ink: #16161f;
+	--color-ink-strong: #0b0b12;
+	--color-ink-muted: #5b5b70;
 
-	/* action / primary — eptus indigo */
+	/* acción / primario — índigo eptus */
 	--color-action: #4f46e5;
 	--color-on-action: #ffffff;
-	--color-action-muted: #e0e7ff;
-	/* Hover/pressed steps of the action colour. White label:
-	   #4338ca measures 7.90:1 (AAA), #3730a3 9.93:1 (AAA). Dark-theme
-	   counterparts live in the dark block below. */
+	--color-action-muted: #e9e9fe;
+	/* Pasos de hover y pressed. La etiqueta blanca aguanta AAA en los dos
+	   (7.90:1 en hover, 9.93:1 en pressed). */
 	--color-accent-hover: #4338ca;
 	--color-accent-pressed: #3730a3;
 
-	/* success */
+	/* éxito */
 	--color-success: #047857;
 	--color-on-success: #ffffff;
 	--color-success-muted: #ecfdf5;
 
-	/* warning — used as TEXT at JdForm.svelte:121 and StrengthsGapsList.svelte:62,
-	   so it is held to 4.5:1, not the 3:1 a decorative tint would need */
+	/* warning — se usa como TEXTO (JdForm, StrengthsGapsList), así que se
+	   exige 4.5:1 y no el 3:1 de un tinte decorativo */
 	--color-warning: #92400e;
 	--color-on-warning: #ffffff;
 	--color-warning-muted: #fffbeb;
 
-	/* danger */
+	/* peligro */
 	--color-danger: #b91c1c;
 	--color-on-danger: #ffffff;
 	--color-danger-muted: #fef2f2;
 
-	/* info — shares the action hue: in this product "info" IS the brand hue
-	   (badges, hints, the empty-state CTA). Measured on its muted tint:
-	   5.10:1. */
+	/* info — comparte el tono de marca: en este producto "info" ES el índigo
+	   (badges, pistas, el CTA del estado vacío). */
 	--color-info: #4f46e5;
 	--color-on-info: #ffffff;
-	--color-info-muted: #e0e7ff;
+	--color-info-muted: #e9e9fe;
 
-	/* -------------------------------------------------------------------------
-	   SCORE INKS — the text half of the score pair.
-
-	   --score-low/mid/high are fills (Layer 0) and must stay put across modes.
-	   These are their text counterparts, used for LABELS: EnergyBadge.svelte:36/41/46,
-	   StrengthsGapsList.svelte:58, profile/+page.svelte:768.
-
-	   One token cannot be both a fill tuned for white-on-it and a text tuned for
-	   contrast-against-it, which is why the same hue failed in both directions.
-	   Keep the pair: fill on background, -ink on text. -ink is mode-scoped, so it
-	   IS legitimate for it to chain -- it is the fill that must never chain.
-	   ------------------------------------------------------------------------- */
+	/* Tintas de score: la mitad de texto del par relleno/tinta. */
 	--score-low-ink: #b91c1c;
 	--score-mid-ink: #92400e;
 	--score-high-ink: #065f46;
 
 	/* =========================================================================
-	   LEGACY ALIASES — the names the components already use.
-
-	   Kept so that no component has to change today, and re-pointed through
-	   var() so a colour is still changed in exactly one place.
+	   ALIAS LEGACY — los nombres que los componentes ya usan.
+	   Se mantienen para que ningún componente tenga que cambiar hoy, y se
+	   re-apuntan con var() para que un color siga teniendo un solo lugar.
 	   ========================================================================= */
 	--bg: var(--color-canvas);
 	--surface: var(--color-surface);
@@ -177,44 +136,38 @@
 	--error-bg: var(--color-danger-muted);
 
 	/* =========================================================================
-	   LAYER 1 — CLAY ELEVATION (light)
-
-	   Three depths, named by what they mean rather than by number, so
-	   "raised" reads as "more elevated" than "flat". Each depth is three parts:
-	   a light shadow, a dark shadow and an inner highlight, plus a composed
-	   value for direct use.
-
-	   Light surfaces are LIT, so the light shadow does real work: it is the
-	   bounce that makes the form read as convex. Offsets stay small and blurs
-	   stay wide on purpose. Hard offsets and tight blurs are what turn this into
-	   a 2000s Web 2.0 button; the softness IS the material.
+	   LAYER 1 — PROFUNDIDAD (portada)
+	   -------------------------------------------------------------------------
+	   Editorial plano: una sombra apenas perceptible para despegar la tarjeta
+	   del canvas, y nada más. La profundidad la dan las reglas y el aire.
 	   ========================================================================= */
-	--clay-fill: #eef1f6;
+	--clay-fill: #f1f1f8;
 
-	--clay-raised-shadow-light: -3px -3px 7px rgba(255, 255, 255, 0.9);
-	--clay-raised-shadow-dark: 3px 3px 7px rgba(163, 177, 198, 0.38);
-	--clay-raised-rim: inset 1.5px 1.5px 2px rgba(255, 255, 255, 0.75);
-	--clay-raised: var(--clay-raised-shadow-dark) var(--clay-raised-shadow-light) var(--clay-raised-rim);
+	--clay-raised-shadow-light: 0 1px 2px rgba(22, 22, 40, 0.05);
+	--clay-raised-shadow-dark: 0 1px 2px rgba(22, 22, 40, 0.05);
+	--clay-raised-rim: none;
+	--clay-raised: var(--clay-raised-shadow-dark) var(--clay-raised-shadow-light);
 
-	--clay-lifted-shadow-light: -5px -5px 11px rgba(255, 255, 255, 0.92);
-	--clay-lifted-shadow-dark: 5px 5px 11px rgba(163, 177, 198, 0.44);
-	--clay-lifted-rim: inset 1.5px 1.5px 2.5px rgba(255, 255, 255, 0.8);
-	--clay-lifted: var(--clay-lifted-shadow-dark) var(--clay-lifted-shadow-light) var(--clay-lifted-rim);
+	--clay-lifted-shadow-light: 0 2px 6px rgba(22, 22, 40, 0.07);
+	--clay-lifted-shadow-dark: 0 2px 6px rgba(22, 22, 40, 0.07);
+	--clay-lifted-rim: none;
+	--clay-lifted: var(--clay-lifted-shadow-dark) var(--clay-lifted-shadow-light);
 
-	--clay-floating-shadow-light: -8px -8px 18px rgba(255, 255, 255, 0.95);
-	--clay-floating-shadow-dark: 8px 8px 18px rgba(148, 163, 184, 0.48);
-	--clay-floating-rim: inset 2px 2px 3px rgba(255, 255, 255, 0.85);
-	--clay-floating: var(--clay-floating-shadow-dark) var(--clay-floating-shadow-light) var(--clay-floating-rim);
+	--clay-floating-shadow-light: 0 10px 30px rgba(22, 22, 40, 0.1);
+	--clay-floating-shadow-dark: 0 10px 30px rgba(22, 22, 40, 0.1);
+	--clay-floating-rim: none;
+	--clay-floating: var(--clay-floating-shadow-dark) var(--clay-floating-shadow-light);
 
-	--clay-focus-ring: 0 0 0 3px rgba(15, 118, 110, 0.45);
+	--clay-focus-ring: 0 0 0 3px rgba(79, 70, 229, 0.35);
 
 	/* =========================================================================
-	   LAYER 2 — SWISS STRUCTURE
-
-	   Spacing is a 4px grid that doubles then widens, so every gap is a
-	   multiple of the same base step. Type tightens as it grows: that pairing
-	   of a falling line-height with a negative tracking is the single strongest
-	   Swiss signal, and it is what stops large headings reading as generic web.
+	   LAYER 2 — ESTRUCTURA
+   -------------------------------------------------------------------------
+	   Espaciado en grilla de 4px que se duplica y después se ensancha, así
+	   que cada hueco es múltiplo del mismo paso base. La tipografía se
+	   aprieta a medida que crece: ese par (line-height descendente +
+	   tracking negativo) es la señal suiza más fuerte, y es lo que evita que
+	   un titular grande se lea como "web genérica".
 	   ========================================================================= */
 	--space-0: 0;
 	--space-1: 0.25rem;
@@ -229,39 +182,27 @@
 	--space-10: 8rem;
 
 	/* -------------------------------------------------------------------------
-	   RADIUS — named by what the shape IS, not by its number, so a form reads
-	   as "more contained" than its neighbour without anyone having to remember
-	   which pixel value that was.
-
-	   The four pixel steps are a genuine monotone scale (6 / 8 / 10 / 12), and
-	   the last two are not points on it: a pill is a BADGE, not a large card,
-	   and a circle is a DOT, not a rounded card. Keeping them in the same block
-	   is a readability choice, not a scale claim.
-
-	   Values are byte-identical to the 78 literals they replace across src
-	   (8px x35, 6px x17, 12px x12, 10px x6, 999px x5, 50% x3), so adopting
-	   these is a pure rename with zero visual change.
-
-	   There is deliberately no --radius-none. Nothing in src sets a zero
-	   radius; the places that want "no rounding" say `border: none` instead,
-	   which is a different thing and already a token-free literal.
+	   RADIO — nombrados por lo que la FORMA es, no por su número.
+	   Los cuatro escalones de píxel (6/8/10/12) sí forman una escala monótona;
+	   los dos últimos no: una pastilla es un BADGE, no una tarjeta grande, y un
+	   círculo es un PUNTO, no una tarjeta redondeada.
 	   ------------------------------------------------------------------------- */
-	--radius-control: 6px; /* input, small button */
-	--radius-card: 8px; /* default button, list row, inline card */
-	--radius-card-lg: 10px; /* larger card, block that sits on the canvas */
-	--radius-panel: 12px; /* the page's main panel */
-	--radius-pill: 999px; /* badge, status chip */
+	--radius-control: 6px; /* input, botón chico */
+	--radius-card: 8px; /* botón, fila de lista, tarjeta chica */
+	--radius-card-lg: 10px; /* tarjeta grande, bloque sobre el canvas */
+	--radius-panel: 12px; /* el panel principal de la página */
+	--radius-pill: 999px; /* badge, chip de estado */
 	--radius-circle: 50%; /* spinner, avatar */
 
 	/* -------------------------------------------------------------------------
-	   BORDER WIDTH — three steps, all three in use (1px x58, 2px x1, 3px x1).
-	   Written as longhands rather than in a `border:` shorthand so a component
-	   can change width without also having to restate style and colour. */
-	--border-width: 1px; /* hairline: the default boundary */
-	--border-width-thick: 2px; /* emphasised boundary, spinnable arc */
-	--border-width-heavy: 3px; /* the arc of a large spinner */
+	   ANCHO DE BORDE — tres escalones, todos en uso.
+	   Escritos como longhands para que un componente pueda cambiar el grosor
+	   sin tener que repetir style y color. */
+	--border-width: 1px; /* hairline: el límite por defecto */
+	--border-width-thick: 2px; /* límite acentuado */
+	--border-width-heavy: 3px; /* el arco del spinner grande */
 
-	/* type scale */
+	/* Escala de texto */
 	--text-2xs: 0.6875rem;
 	--text-xs: 0.75rem;
 	--text-sm: 0.875rem;
@@ -274,13 +215,19 @@
 	--text-5xl: 3rem;
 	--text-6xl: 3.75rem;
 
-	/* line-height: tighter the larger the size */
+	/* Escala de display — solo para la portada. Arriba de --text-4xl la
+	   jerarquía la hace el tracking y el aire, no el cuerpo. */
+	--text-display-sm: 2.25rem;
+	--text-display: 2.875rem;
+	--text-display-lg: 3.5rem;
+
+	/* line-height: más apretado cuanto más grande */
 	--leading-tight: 1.1;
 	--leading-snug: 1.25;
 	--leading-normal: 1.5;
 	--leading-relaxed: 1.65;
 
-	/* tracking: negative on display sizes, positive only on small caps labels */
+	/* tracking: negativo en display, positivo sólo en etiquetas versalitas */
 	--tracking-tighter: -0.03em;
 	--tracking-tight: -0.02em;
 	--tracking-snug: -0.01em;
@@ -288,51 +235,49 @@
 	--tracking-wide: 0.04em;
 	--tracking-widest: 0.08em;
 
-	/* Inter is the stack the app already shipped. Exposed, not replaced. */
+	/* Inter es la pila que la app ya usaba. Expuesta, no reemplazada. */
 	--font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
 	--font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 
 	/* -------------------------------------------------------------------------
 	   RESPONSIVE
+	   -------------------------------------------------------------------------
+	   *** LEÉ ESTO ANTES DE USAR CUALQUIER TOKEN EN UN @media QUERY ***
 
-	   *** READ THIS BEFORE USING EITHER TOKEN IN AN @media QUERY ***
+	   `--breakpoint-sm` es un VALOR REGISTRADO, no consumible. No puede usarse
+	   en una condición de media query:
 
-	   `--breakpoint-sm` is a RECORDED VALUE, not a consumable one. It cannot be
-	   used in a media condition:
+	     @media (max-width: var(--breakpoint-sm))   <-- NO HACE NADA
 
-	     @media (max-width: var(--breakpoint-sm))   <-- SILENTLY DOES NOTHING
+	   Verificado en Chromium a 500px contra un control: el literal
+	   `@media (max-width: 640px)` matcheó, la forma con `var()` no. Una media
+	   query se evalúa contra el dispositivo ANTES de sustituir las custom
+	   properties, así que la condición es inválida y el bloque entero se
+	   descarta. No hay warning ni error: svelte-check pasa, vitest pasa,
+	   `vite build` pasa. El único síntoma es que ningún layout móvil colapsa.
 
-	   Verified in Chromium at a 500px viewport against a control: the literal
-	   `@media (max-width: 640px)` matched, the `var()` form did not. A media
-	   query is evaluated against the device before custom properties are
-	   substituted, so the condition is invalid and the whole block is dropped.
-	   There is no warning and no error — svelte-check passes, vitest passes,
-	   `vite build` passes. The only symptom is that every mobile layout in the
-	   app stops collapsing.
+	   Por eso los preludios @media de este repo conservan el literal 640px, a
+   propósito. Este token existe para que el valor tenga una casa documentada
+   y para que un segundo breakpoint se agregue en un lugar consistente. No
+   "ordenes" los preludios para que apunten a este token.
 
-	   So @media preludes in this codebase keep the literal 640px, on purpose.
-	   This token exists so the value has one documented home and so a future
-	   second breakpoint is added in a consistent place. Do not "tidy" the
-	   preludes to reference it.
-
-	   `--layout-content-max`, by contrast, is a normal declaration value and
-	   works normally: `max-width: var(--layout-content-max)`.
-
-	   --layout-content-max is deliberately NOT a breakpoint. It is the measure
-	   of the centred content column and never switches a layout. It is a
-	   container width, and filing it under the breakpoint namespace would imply
-	   a viewport rule that does not exist.
-	   ------------------------------------------------------------------------- */
+	   `--layout-content-max` sí es un valor de declaración normal y funciona
+   normal: `max-width: var(--layout-content-max)`. No es un breakpoint: es la
+   medida de la columna de contenido, y nunca cambia un layout.
+   ------------------------------------------------------------------------- */
 	--breakpoint-sm: 640px;
 	--layout-content-max: 880px;
+	/* La portada tiene una columna más ancha que la app: el aire es parte
+	   del diseño editorial. */
+	--layout-marketing-max: 1120px;
 
 	/* =========================================================================
-	   LAYER 4 — MOTION
-
-	   Durations are short and the default easing is decelerating, which suits a
-	   layout that is mostly static. Nothing here animates by itself; these are
-	   values a component opts into.
-	   ========================================================================= */
+	   LAYER 4 — MOVIMIENTO
+   -------------------------------------------------------------------------
+	   Duraciones cortas y easing desacelerado por defecto, que es lo que pide
+	   un layout casi estático. Nada se anima solo; son valores que un
+	   componente opta por usar.
+   ========================================================================= */
 	--duration-instant: 80ms;
 	--duration-fast: 140ms;
 	--duration-base: 220ms;
@@ -345,138 +290,120 @@
 }
 
 /* =============================================================================
-   DARK SCHEME
+   APP — la superficie instrumentada
+   -----------------------------------------------------------------------------
+   Oscura siempre, no "oscura si el sistema lo pide". Es una decisión de
+   producto: la app es una herramienta de trabajo y se usa de noche tanto
+   como de día; el material no cambia con la hora.
 
-   A genuinely different material, not the light palette with the values
-   inverted. Each layer states what changed and why.
-   ========================================================================= */
-@media (prefers-color-scheme: dark) {
-	:root {
-		/* --- LAYER 3: palette, re-pointed not re-picked -----------------
-		   Surfaces stay on the same cold ramp. Ink flips to the light end and
-		   gets LIGHTER, because contrast on a dark canvas comes from
-		   luminance above the surface, not from a different hue. */
-		--color-canvas: #12121f;
-		--color-surface: #1c1c2e;
-		--color-surface-alt: #2a2a40;
-		--color-line: #2a2a40;
-		--color-line-strong: #9a9ab5; /* measured 6.77:1 on --color-canvas */
+   Se aplica con `data-surface="app"` en el contenedor raíz del shell. Todo lo
+   que está dentro hereda los tokens, así que los componentes no cambian:
+   leen `var(--color-*)` y reciben el material de la superficie en la que
+   están.
+   ========================================================================== */
+[data-surface='app'] {
+	color-scheme: dark;
 
-		--color-ink: #e6e6f0;
-		--color-ink-strong: #f7f7fd;
-		--color-ink-muted: #b8b8cc;
+	/* --- LAYER 3: paleta, re-apuntada no re-elegida -----------------------
+	   La rampa fría se mantiene; la tinta salta al extremo claro y sube de
+	   luminancia, porque sobre un canvas oscuro el contraste viene de estar
+	   POR ENCIMA de la superficie, no de cambiar de tono. */
+	--color-canvas: #0c0c14;
+	--color-surface: #10101a;
+	--color-surface-alt: #171726;
+	--color-line: #1f1f2e;
+	--color-line-strong: #75759a; /* 4.5:1 sobre el canvas de la app */
 
-		/* The action colour is a LIGHT indigo here, so its label must be DARK.
-		   --color-on-action flips with it: a white label on this indigo would
-		   measure 1.8:1. Paired the other way round (#1e1b4b on #a5b4fc)
-		   measures 8.02:1. */
-		--color-action: #a5b4fc;
-		--color-on-action: #1e1b4b;
-		--color-action-muted: #312e81;
-		/* Dark-theme hover/pressed: the accent LIGHTENS on hover (inverse of
-		   light theme) because contrast on dark comes from luminance above
-		   the surface. The dark label (#1e1b4b) holds 10.72:1 on hover,
-		   8.02:1 on pressed. */
-		--color-accent-hover: #c7d2fe;
-		--color-accent-pressed: #a5b4fc;
+	--color-ink: #e8e8f2;
+	--color-ink-strong: #f7f7fd;
+	--color-ink-muted: #9a9ab2;
 
-		--color-success: #6ee7b7;
-		--color-on-success: #042f2e;
-		--color-success-muted: #022c22;
+	/* El acción es el índigo CLARO y la etiqueta es oscura. Sobre un canvas
+	   oscuro el contraste viene de estar por encima de la superficie, no de
+	   usar el mismo índigo de siempre: con #4f46e5 la etiqueta blanca midía
+	   7.7:1 y el botón quedaba apagado; con #a5b4fc la etiqueta #0c0c14 mide
+	   8.02:1 y el botón aparece. Además, los chips de estado (texto del tono
+	   sobre su tinte oscuro) necesitan un tono claro: --color-action sobre
+	   --color-action-muted daba 2.7:1 y quedaba ilegible. */
+	--color-action: #a5b4fc;
+	--color-on-action: #0c0c14;
+	--color-action-muted: #1a1a3a;
+	/* En oscuro el acento se ACLARA al pasar el mouse (inverso del claro):
+	   el contraste sobre fondo oscuro viene de la luminancia por encima. */
+	--color-accent-hover: #c7d2fe;
+	--color-accent-pressed: #a5b4fc;
 
-		/* --color-warning had NO dark override, so a light-mode amber was
-		   being rendered on a dark surface. It needs one. */
-		--color-warning: #fbbf24;
-		--color-on-warning: #422006;
-		--color-warning-muted: #451a03;
+	--color-success: #34d399;
+	--color-on-success: #042f2e;
+	--color-success-muted: #0d2a22;
 
-		/* --color-danger also had no dark override. --error on --error-bg
-		   measured 1.55:1 in dark because both ends were dark; lifting the
-		   text end to rose and leaving the fill dark clears it at 8.51:1. */
-		--color-danger: #fca5a5;
-		--color-on-danger: #450a0a;
-		--color-danger-muted: #7f1d1d;
+	--color-warning: #fbbf24;
+	--color-on-warning: #422006;
+	--color-warning-muted: #2a1e08;
 
-		--color-info: #a5b4fc;
-		--color-on-info: #1e1b4b;
-		--color-info-muted: #312e81;
+	--color-danger: #fb7185;
+	--color-on-danger: #450a0a;
+	--color-danger-muted: #2c1218;
 
-		/* Score INKS flip to the light end. The FILLS in Layer 0 are
-		   intentionally absent from this block — see the note there. */
-		--score-low-ink: #fca5a5;
-		--score-mid-ink: #fde047;
-		--score-high-ink: #6ee7b7;
+	--color-info: #c7d2fe;
+	--color-on-info: #0c0c14;
+	--color-info-muted: #1a1a3a;
 
-		/* --- legacy names, kept and re-pointed (as in the original) ----- */
-		--bg: var(--color-canvas);
-		--surface: var(--color-surface);
-		--surface-alt: var(--color-surface-alt);
-		--text: var(--color-ink);
-		--text-strong: var(--color-ink-strong);
-		--text-muted: var(--color-ink-muted);
-		--border: var(--color-line);
-		--accent: var(--color-action);
-		--error-bg: var(--color-danger-muted);
+	/* Tintas de score: saltan al extremo claro. Los RELLENOS (Layer 0) no
+	   se tocan — ver la nota de invariancia arriba. */
+	--score-low-ink: #fca5a5;
+	--score-mid-ink: #fde047;
+	--score-high-ink: #6ee7b7;
 
-		/* =====================================================================
-		   LAYER 1: CLAY ELEVATION (dark)
+	/* --- alias legacy, re-apuntados (como en la portada) ---------------- */
+	--bg: var(--color-canvas);
+	--surface: var(--color-surface);
+	--surface-alt: var(--color-surface-alt);
+	--text: var(--color-ink);
+	--text-strong: var(--color-ink-strong);
+	--text-muted: var(--color-ink-muted);
+	--border: var(--color-line);
+	--accent: var(--color-action);
+	--error-bg: var(--color-danger-muted);
 
-		   READ THIS BEFORE EDITING THE VALUES ABOVE.
+	/* --- LAYER 1: profundidad (app) --------------------------------------
+	   En una superficie oscura el rebote de luz no tiene de dónde venir: el
+	   fondo ya está en el piso del rango. Una sombra blanca fuerte no deja
+	   un degradado donde apoyarse y produce un contorno duro — parece un
+	   borde, no luz. Así que la sombra clara se colapsa y la profundidad la
+	   carga la sombra oscura, más larga y más difusa. */
+	--clay-fill: #171726;
 
-		   On a light surface the light shadow is a real bounce: light comes
-		   from the top-left, the surface below-right is lit by the environment,
-		   and the element reads as convex. On a DARK surface that bounce has
-		   nothing to come from. The background is already near the bottom of
-		   the range, so a strong white shadow has no gradient left to sit in —
-		   all it produces is a hard glowing outline, which looks like a stroke,
-		   not like light. Pushed further it looks like a cheap neon border.
+	--clay-raised-shadow-light: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+	--clay-raised-shadow-dark: 0 1px 2px rgba(0, 0, 0, 0.5);
+	--clay-raised-rim: none;
+	--clay-raised: var(--clay-raised-shadow-dark) var(--clay-raised-shadow-light);
 
-		   So the treatment is not "the same shadows, darker". The light shadow
-		   COLLAPSES to a faint rim: a sub-0.1-alpha inset that only says
-		   "this edge catches light" without outlining the element. Depth is
-		   then carried entirely by the DARK shadow, which is why it is pushed
-		   much further here than in light mode — 0.75-0.85 alpha against
-		   0.38-0.48, with a wider blur to keep it soft. The two are read
-		   together: a soft dark occlusion for mass, a whisper of a rim for
-		   direction.
+	--clay-lifted-shadow-light: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+	--clay-lifted-shadow-dark: 0 4px 12px rgba(0, 0, 0, 0.55);
+	--clay-lifted-rim: none;
+	--clay-lifted: var(--clay-lifted-shadow-dark) var(--clay-lifted-shadow-light);
 
-		   Collapsing the light shadow to a stronger white outline, or matching
-		   the light-mode alphas, destroys the material. Do not harmonise these
-		   two blocks to look tidy.
-		   ===================================================================== */
-		--clay-fill: #24314a;
+	--clay-floating-shadow-light: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+	--clay-floating-shadow-dark: 0 12px 32px rgba(0, 0, 0, 0.6);
+	--clay-floating-rim: none;
+	--clay-floating: var(--clay-floating-shadow-dark) var(--clay-floating-shadow-light);
 
-		--clay-raised-shadow-light: -2px -2px 5px rgba(255, 255, 255, 0.05);
-		--clay-raised-shadow-dark: 3px 3px 10px rgba(2, 6, 23, 0.75);
-		--clay-raised-rim: inset 1px 1px 1.5px rgba(255, 255, 255, 0.06);
-		--clay-raised: var(--clay-raised-shadow-dark) var(--clay-raised-shadow-light) var(--clay-raised-rim);
-
-		--clay-lifted-shadow-light: -3px -3px 7px rgba(255, 255, 255, 0.055);
-		--clay-lifted-shadow-dark: 5px 5px 14px rgba(2, 6, 23, 0.8);
-		--clay-lifted-rim: inset 1px 1px 2px rgba(255, 255, 255, 0.07);
-		--clay-lifted: var(--clay-lifted-shadow-dark) var(--clay-lifted-shadow-light) var(--clay-lifted-rim);
-
-		--clay-floating-shadow-light: -4px -4px 10px rgba(255, 255, 255, 0.06);
-		--clay-floating-shadow-dark: 8px 8px 22px rgba(2, 6, 23, 0.85);
-		--clay-floating-rim: inset 1.5px 1.5px 2.5px rgba(255, 255, 255, 0.08);
-		--clay-floating: var(--clay-floating-shadow-dark) var(--clay-floating-shadow-light) var(--clay-floating-rim);
-
-		--clay-focus-ring: 0 0 0 3px rgba(94, 234, 212, 0.5);
-	}
+	--clay-focus-ring: 0 0 0 3px rgba(129, 140, 248, 0.45);
 }
 
 /* =============================================================================
-   LAYER 4 — REDUCED MOTION
+   MOVIMIENTO REDUCIDO
+   -----------------------------------------------------------------------------
+   Las duraciones colapsan a 0.01ms, NO a 0. Una transición de 0s se saca de
+   la lista y `transitionend` nunca dispara: cualquier código que espere ese
+   evento se queda colgado para siempre. Un valor minúsculo no nulo termina
+   al instante pero todavía dispara el evento. Es el patrón estándar y la
+   razón de que esté escrito así.
 
-   The durations collapse to 0.01ms, NOT to 0. A 0s transition is removed from
-   the transition list entirely, so `transitionend` never fires and any code
-   waiting on it hangs forever. A tiny non-zero duration still completes
-   immediately but still dispatches the event. This is the standard pattern and
-   the reason it is spelled out here.
-
-   This block is mode-agnostic by design: reduced motion is about the person's
-   preference, not the colour scheme, so it must apply identically in both.
-   ========================================================================= */
+   Este bloque es invariante a la superficie por diseño: el movimiento
+   reducido es una preferencia de la persona, no un tema.
+   ========================================================================== */
 @media (prefers-reduced-motion: reduce) {
 	:root {
 		--duration-instant: 0.01ms;
@@ -486,14 +413,15 @@
 	}
 }
 
-/* -----------------------------------------------------------------------------
-   Pre-existing element rules. Unchanged in behaviour.
-   font-family and line-height now read from tokens whose resolved values are
-   identical to the literals they replaced, so nothing renders differently.
-   font-size stays a literal on purpose: --text-md is 1rem, and 1rem would
-   change how the page responds to a user's browser font-size setting, which
-   16px does not. That swap would be a real behaviour change.
-   -------------------------------------------------------------------------- */
+/* =============================================================================
+   REGLAS GLOBALES
+   -----------------------------------------------------------------------------
+   font-family y line-height leen de tokens cuyos valores resueltos son
+   idénticos a los literales que reemplazaron, así que nada se ve distinto.
+   font-size sigue siendo literal a propósito: --text-md es 1rem, y 1rem
+   cambiaría cómo responde la página al tamaño de fuente del navegador,
+   que 16px no cambia. Ese swap sería un cambio real de comportamiento.
+   ========================================================================== */
 html,
 body {
 	margin: 0;
@@ -523,4 +451,144 @@ a:hover {
 
 button {
 	font-family: inherit;
+}
+
+/* =============================================================================
+   PRIMITIVAS COMPARTIDAS
+   -----------------------------------------------------------------------------
+   Patrones que usan varias páginas. Antes cada pantalla repetía su propia
+   versión de "un botón", "una tarjeta" y "un encabezado de página"; ahora
+   hay una sola definición de cada uno y las pantallas selimitan a usarlos.
+   ========================================================================== */
+
+/* --- Botón ---------------------------------------------------------------- */
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-2);
+	padding: var(--space-3) var(--space-5);
+	border: var(--border-width) solid transparent;
+	border-radius: var(--radius-control);
+	font-size: var(--text-sm);
+	font-weight: 600;
+	line-height: 1.2;
+	text-decoration: none;
+	cursor: pointer;
+	transition:
+		background-color var(--duration-fast) var(--ease-standard),
+		border-color var(--duration-fast) var(--ease-standard),
+		color var(--duration-fast) var(--ease-standard),
+		box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.btn:hover {
+	text-decoration: none;
+}
+
+.btn:focus-visible {
+	outline: none;
+	box-shadow: var(--clay-focus-ring);
+}
+
+/* primario: el índigo de marca */
+.btn--primary {
+	background: var(--color-action);
+	color: var(--color-on-action);
+}
+
+.btn--primary:hover {
+	background: var(--color-accent-hover);
+}
+
+.btn--primary:active {
+	background: var(--color-accent-pressed);
+}
+
+/* secundario: superficie con borde, para competir con el primario */
+.btn--secondary {
+	background: var(--color-surface);
+	border-color: var(--color-line-strong);
+	color: var(--color-ink-strong);
+}
+
+.btn--secondary:hover {
+	background: var(--color-surface-alt);
+}
+
+/* terciario: sólo texto, para acciones terciarias */
+.btn--ghost {
+	background: transparent;
+	color: var(--color-ink);
+}
+
+.btn--ghost:hover {
+	background: var(--color-surface-alt);
+	color: var(--color-ink-strong);
+}
+
+/* --- Tarjeta -------------------------------------------------------------- */
+.card {
+	background: var(--color-surface);
+	border: var(--border-width) solid var(--color-line);
+	border-radius: var(--radius-card-lg);
+	padding: var(--space-5);
+}
+
+/* --- Encabezado de página --------------------------------------------------
+   El patrón que todas las pantallas de la app repiten: título, bajada y
+   (opcionalmente) una acción a la derecha. */
+.page-header {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: var(--space-5);
+	padding-bottom: var(--space-4);
+	border-bottom: var(--border-width) solid var(--color-line);
+	margin-bottom: var(--space-6);
+}
+
+.page-header__title {
+	margin: 0;
+	font-size: var(--text-2xl);
+	line-height: var(--leading-tight);
+	letter-spacing: var(--tracking-tight);
+	color: var(--color-ink-strong);
+}
+
+.page-header__intro {
+	margin: var(--space-2) 0 0;
+	color: var(--color-ink-muted);
+	font-size: var(--text-sm);
+	max-width: 62ch;
+}
+
+/* --- Etiqueta versalita ---------------------------------------------------
+   El patrón de las metadatos: en la app va en monoespaciada y en versalitas
+   (dato, no texto); en la portada va en la misma familia pero con más aire. */
+.eyebrow {
+	font-family: var(--font-mono);
+	font-size: var(--text-2xs);
+	letter-spacing: var(--tracking-widest);
+	text-transform: uppercase;
+	color: var(--color-ink-muted);
+}
+
+/* --- Estado vacío --------------------------------------------------------- */
+.empty-state {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--space-3);
+	padding: var(--space-8) var(--space-5);
+	border: var(--border-width) dashed var(--color-line-strong);
+	border-radius: var(--radius-panel);
+	text-align: center;
+	color: var(--color-ink-muted);
+}
+
+.empty-state h2 {
+	margin: 0;
+	font-size: var(--text-lg);
+	color: var(--color-ink-strong);
 }

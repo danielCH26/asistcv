@@ -18,6 +18,11 @@ export const typeScale = {
 	'--text-4xl': '2.25rem',
 	'--text-5xl': '3rem',
 	'--text-6xl': '3.75rem',
+	// Escala de display — solo para la portada. Arriba de --text-4xl la
+	// jerarquía la hacen el tracking y el aire, no el cuerpo.
+	'--text-display-sm': '2.25rem',
+	'--text-display': '2.875rem',
+	'--text-display-lg': '3.5rem',
 } as const;
 
 /** Line heights: tighter the larger the size. */

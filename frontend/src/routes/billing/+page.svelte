@@ -92,7 +92,11 @@
 
 {#if ready}
 	<section class="billing">
-		<h1>{$_('billing.heading')}</h1>
+		<header class="page-header">
+			<div>
+				<h1 class="page-header__title">{$_('billing.heading')}</h1>
+			</div>
+		</header>
 
 		{#if loadError}<p class="billing__error" role="alert">{loadError}</p>{/if}
 
@@ -167,12 +171,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-6);
-	}
-
-	.billing h1 {
-		margin: 0;
-		font-size: var(--text-2xl);
-		color: var(--color-ink-strong);
 	}
 
 	.billing h2 {

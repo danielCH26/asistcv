@@ -7,7 +7,10 @@
 
 <div class="strengths-gaps">
 	<section class="strengths-gaps__panel">
-		<h3 class="strengths-gaps__heading strengths-gaps__heading--strength">{$_('result.strengths')}</h3>
+		<h3 class="strengths-gaps__heading">
+			<span class="strengths-gaps__dot strengths-gaps__dot--strength" aria-hidden="true"></span>
+			{$_('result.strengths')}
+		</h3>
 		{#if strengths.length === 0}
 			<p class="strengths-gaps__empty">—</p>
 		{:else}
@@ -20,7 +23,10 @@
 	</section>
 
 	<section class="strengths-gaps__panel">
-		<h3 class="strengths-gaps__heading strengths-gaps__heading--gap">{$_('result.gaps')}</h3>
+		<h3 class="strengths-gaps__heading">
+			<span class="strengths-gaps__dot strengths-gaps__dot--gap" aria-hidden="true"></span>
+			{$_('result.gaps')}
+		</h3>
 		{#if gaps.length === 0}
 			<p class="strengths-gaps__empty">—</p>
 		{:else}
@@ -34,40 +40,55 @@
 </div>
 
 <style>
+	/* Las columnas van planas: viven dentro del panel del resultado y una
+	   tarjeta dentro de otra tarjeta sólo agrega ruido. */
 	.strengths-gaps {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: var(--space-4);
+		gap: var(--space-6);
 	}
 
 	.strengths-gaps__panel {
-		background: var(--color-surface);
-		border: 1px solid var(--color-line);
-		border-radius: var(--radius-card-lg);
-		padding: var(--space-4);
+		min-width: 0;
 	}
 
 	.strengths-gaps__heading {
-		margin: 0 0 var(--space-2);
-		font-size: var(--text-sm);
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		margin: 0 0 var(--space-3);
+		font-family: var(--font-mono);
+		font-size: var(--text-2xs);
+		letter-spacing: var(--tracking-widest);
 		text-transform: uppercase;
-		letter-spacing: var(--tracking-wide);
+		color: var(--color-ink-muted);
 	}
 
-	.strengths-gaps__heading--strength {
-		color: var(--score-high-ink);
+	.strengths-gaps__dot {
+		width: 6px;
+		height: 6px;
+		border-radius: var(--radius-circle);
+		flex: none;
 	}
 
-	.strengths-gaps__heading--gap {
-		color: var(--color-warning);
+	.strengths-gaps__dot--strength {
+		background: var(--score-high);
+	}
+
+	.strengths-gaps__dot--gap {
+		background: var(--score-mid);
 	}
 
 	.strengths-gaps__list {
 		margin: 0;
-		padding-left: var(--space-4);
+		padding: 0;
+		list-style: none;
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-1);
+		gap: var(--space-2);
+		font-size: var(--text-sm);
+		line-height: var(--leading-relaxed);
+		color: var(--color-ink);
 	}
 
 	.strengths-gaps__empty {
@@ -78,6 +99,7 @@
 	@media (max-width: 640px) {
 		.strengths-gaps {
 			grid-template-columns: 1fr;
+			gap: var(--space-4);
 		}
 	}
 </style>

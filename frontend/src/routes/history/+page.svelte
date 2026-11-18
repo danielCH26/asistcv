@@ -42,9 +42,11 @@
 </svelte:head>
 
 <section class="history">
-	<header class="history__intro">
-		<h1>{$_('history.heading')}</h1>
-		<p>{$_('history.intro')}</p>
+	<header class="page-header">
+		<div>
+			<h1 class="page-header__title">{$_('history.heading')}</h1>
+			<p class="page-header__intro">{$_('history.intro')}</p>
+		</div>
 	</header>
 
 	{#if $historyStore.status === 'loading' && $historyStore.items.length === 0}
@@ -88,16 +90,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-5);
-	}
-
-	.history__intro h1 {
-		margin: 0 0 var(--space-2);
-		color: var(--text-strong);
-	}
-
-	.history__intro p {
-		margin: 0;
-		color: var(--text-muted);
 	}
 
 	.history__empty {

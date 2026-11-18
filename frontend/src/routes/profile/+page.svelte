@@ -154,14 +154,17 @@
 
 {#if ready}
 	<section class="profile">
-		<h1>{$_('profile.heading')}</h1>
-
-		{#if user}
-			<p class="profile__user">
-				{$_('profile.userInfo', { values: { name: user.full_name, email: user.email } })}
-				· {$_(user.role === 'recruiter' ? 'signup.roleRecruiter' : 'signup.roleSeeker')}
-			</p>
-		{/if}
+		<header class="page-header">
+			<div>
+				<h1 class="page-header__title">{$_('profile.heading')}</h1>
+				{#if user}
+					<p class="page-header__intro">
+						{$_('profile.userInfo', { values: { name: user.full_name, email: user.email } })}
+						· {$_(user.role === 'recruiter' ? 'signup.roleRecruiter' : 'signup.roleSeeker')}
+					</p>
+				{/if}
+			</div>
+		</header>
 
 		{#if onboardingActive}
 			<section class="onboarding">
@@ -243,22 +246,10 @@
 		gap: var(--space-6);
 	}
 
-	.profile h1 {
-		margin: 0;
-		font-size: var(--text-2xl);
-		color: var(--color-ink-strong);
-	}
-
 	.profile h2 {
 		margin: 0 0 var(--space-2);
 		font-size: var(--text-lg);
 		color: var(--color-ink-strong);
-	}
-
-	.profile__user {
-		margin: calc(-1 * var(--space-2)) 0 0;
-		color: var(--color-ink-muted);
-		font-size: var(--text-sm);
 	}
 
 	.onboarding {

@@ -28,7 +28,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { colorTokens } from './colors';
+import { colorTokens, appColorTokens } from './colors';
 
 /** Parse `#rgb` / `#rrggbb` into an [r, g, b] triplet of 0-255 integers. */
 function parseHex(hex: string): [number, number, number] {
@@ -69,6 +69,14 @@ export function contrastRatio(fgHex: string, bgHex: string): number {
 function token(name: string): string {
 	const value = colorTokens[name];
 	if (!value) throw new Error(`colorTokens has no entry for ${name}`);
+	if (!value.startsWith('#')) throw new Error(`${name} is not a plain hex value: ${value}`);
+	return value;
+}
+
+/** The same lookup against the app (dark instrument) surface. */
+function appToken(name: string): string {
+	const value = appColorTokens[name];
+	if (!value) throw new Error(`appColorTokens has no entry for ${name}`);
 	if (!value.startsWith('#')) throw new Error(`${name} is not a plain hex value: ${value}`);
 	return value;
 }
@@ -202,5 +210,64 @@ describe('WCAG 2.1 AA contrast (light scheme, from TS registry)', () => {
 		// Black on white is exactly 21:1; white on white is 1:1.
 		expect(contrastRatio('#000000', '#ffffff')).toBe(21);
 		expect(contrastRatio('#ffffff', '#ffffff')).toBe(1);
+	});
+});
+
+/**
+ * The app surface is a SECOND material with its own palette, so it needs its
+ * own contrast proof. The pairs are the same relationships as the marketing
+ * surface, measured against the dark tokens.
+ */
+const APP_TEXT_PAIRS: ReadonlyArray<readonly [string, string]> = [
+	// ink family on surfaces
+	['--color-ink', '--color-canvas'],
+	['--color-ink', '--color-surface'],
+	['--color-ink', '--color-surface-alt'],
+	['--color-ink-strong', '--color-canvas'],
+	['--color-ink-strong', '--color-surface'],
+	['--color-ink-strong', '--color-surface-alt'],
+	['--color-ink-muted', '--color-canvas'],
+	['--color-ink-muted', '--color-surface'],
+	['--color-ink-muted', '--color-surface-alt'],
+	// status: the regular token over its own dark tint (the chip body)
+	['--color-action', '--color-action-muted'],
+	['--color-success', '--color-success-muted'],
+	['--color-warning', '--color-warning-muted'],
+	['--color-danger', '--color-danger-muted'],
+	['--color-info', '--color-info-muted'],
+	// the dark label over the light action fill (the primary button)
+	['--color-on-action', '--color-action'],
+	['--color-on-action', '--color-accent-hover'],
+	['--color-on-action', '--color-accent-pressed'],
+	['--color-on-success', '--color-success'],
+	['--color-on-warning', '--color-warning'],
+	['--color-on-danger', '--color-danger'],
+	['--color-on-info', '--color-info'],
+	// score inks as LABEL text on surfaces
+	['--score-low-ink', '--color-surface'],
+	['--score-mid-ink', '--color-surface'],
+	['--score-high-ink', '--color-surface'],
+];
+
+const APP_UI_PAIRS: ReadonlyArray<readonly [string, string]> = [
+	['--color-line-strong', '--color-canvas'],
+	['--color-line-strong', '--color-surface'],
+];
+
+describe('WCAG 2.1 AA contrast (app surface, from TS registry)', () => {
+	it.each(APP_TEXT_PAIRS)('text %s on %s clears AA (4.5:1)', (fg, bg) => {
+		const ratio = contrastRatio(appToken(fg), appToken(bg));
+		expect(ratio, `${fg} on ${bg} measures ${ratio}:1`).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+	});
+
+	it.each(APP_UI_PAIRS)('essential UI %s on %s clears 1.4.11 (3:1)', (fg, bg) => {
+		const ratio = contrastRatio(appToken(fg), appToken(bg));
+		expect(ratio, `${fg} on ${bg} measures ${ratio}:1`).toBeGreaterThanOrEqual(AA_NON_TEXT);
+	});
+
+	it('the app action fill is NOT the marketing indigo', () => {
+		// Same brand, different material. If these ever match again, the app
+		// buttons are back to the muted look and the chips go unreadable.
+		expect(appToken('--color-action')).not.toBe(token('--color-action'));
 	});
 });

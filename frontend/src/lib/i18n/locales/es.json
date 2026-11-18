@@ -13,7 +13,8 @@
       "jobOffers": "Ofertas",
       "login": "Ingresar",
       "signup": "Crear cuenta",
-      "logout": "Salir"
+      "logout": "Salir",
+      "jobSeekerPlan": "Job seeker"
     }
   },
   "session": {
@@ -51,7 +52,7 @@
   "loading": {
     "title": "Analizando…",
     "subtitle": "Puede tardar hasta 1 minuto si el servidor está en cold start.",
-    "detail": "Cuando Render hiberna el contenedor, el primer request despierta la instancia."
+    "detail": "Si el servidor estaba dormido, el primer análisis tarda un poco más."
   },
   "error": {
     "title": "No se pudo completar el análisis",
@@ -59,6 +60,7 @@
     "401Hint": "Tu sesión expiró. Iniciá sesión nuevamente para continuar."
   },
   "result": {
+    "heading": "Resultado del match",
     "scoreLabel": "Score",
     "strengths": "Fortalezas",
     "gaps": "Gaps",
@@ -254,10 +256,10 @@
     "fileClear": "Quitar",
     "fileTooLarge": "El archivo supera el límite de 10 MB.",
     "wrongFileType": "El archivo debe ser un PDF.",
-    "pdfNoText": "El PDF no contiene texto extraíble (parece escaneado). Intente con otro archivo.",
-    "pdfParseFailed": "No se pudo procesar el PDF. Intente con otro archivo.",
-    "cvRequired": "Adjunte un PDF o pegue el texto de su CV.",
-    "cvTooShort": "El texto de la hoja de vida debe tener al menos 50 caracteres.",
+    "pdfNoText": "El PDF no contiene texto extraíble (parece escaneado). Probá con otro archivo.",
+    "pdfParseFailed": "No se pudo procesar el PDF. Probá con otro archivo.",
+    "cvRequired": "Adjuntá un PDF o pegá el texto de tu CV.",
+    "cvTooShort": "El texto de tu hoja de vida debe tener al menos 50 caracteres.",
     "jdLabel": "Descripción del puesto",
     "jdOptionalToggle": "¿Tenés una vacante en mente? Pegá la descripción para un análisis dirigido (opcional)",
     "submit": "Auditar mi CV",
@@ -358,6 +360,108 @@
       "statusPending": "En curso",
       "statusCompleted": "Completada",
       "statusFailed": "Fallida"
+    }
+  },
+  "marketing": {
+    "nav": {
+      "audit": "Auditoría gratis",
+      "pricing": "Planes",
+      "login": "Ingresar",
+      "signup": "Crear cuenta"
+    },
+    "hero": {
+      "kicker": "Vacante ↔ tu perfil",
+      "title": "Sabés si encajás",
+      "accent": "antes de postular.",
+      "subtitle": "Pegá la descripción del puesto y eptus te devuelve una coincidencia honesta contra tu CV: qué te falta, qué sobraba y por qué.",
+      "ctaPrimary": "Analizar una vacante",
+      "ctaSecondary": "Ver planes",
+      "trust1": "Sin tarjeta de crédito",
+      "trust2": "3 análisis gratis al mes",
+      "trust3": "Cancela cuando quieras"
+    },
+    "steps": {
+      "heading": "Cómo funciona",
+      "subtitle": "Tres pasos. El primero se lo hacés a eptus.",
+      "one": {
+        "title": "Cargá tu CV",
+        "body": "Subilo una vez. eptus lo lee, lo estructura y te arma el perfil con el que va a comparar."
+      },
+      "two": {
+        "title": "Pegá la vacante",
+        "body": "Copiá la descripción completa del puesto. Con eso alcanza: no hay formularios ni pasos."
+      },
+      "three": {
+        "title": "Mirá la coincidencia",
+        "body": "Un score, tus fortalezas, lo que te falta y el razonamiento. Sin adornos y sin inventar nada."
+      }
+    },
+    "features": {
+      "heading": "Qué te da",
+      "subtitle": "eptus no te dice que sos el mejor. Te dice dónde encajás.",
+      "match": {
+        "title": "Match honesto",
+        "body": "El score viene con las razones: fortalezas, gaps y el razonamiento detrás de cada uno."
+      },
+      "adapt": {
+        "title": "CV adaptado, sin inventar",
+        "body": "Reescribimos tus logros para que encajen con la vacante. Un control de honestidad bloquea lo que no está en tu CV."
+      },
+      "audit": {
+        "title": "Auditoría anónima",
+        "body": "Pegá tu CV y recibí un diagnóstico de calidad al instante, sin crear cuenta."
+      },
+      "offers": {
+        "title": "Alertas de ofertas",
+        "body": "Configurás qué buscás y te avisamos cuando aparece algo que coincide con tu perfil."
+      }
+    },
+    "pricing": {
+      "heading": "Planes",
+      "subtitle": "Precios en pesos colombianos. Pagás con Wompi o Mercado Pago, sin intermediarios.",
+      "perMonth": "/mes",
+      "free": "Gratis",
+      "freeNote": "Para probar el match sin tarjeta.",
+      "cta": "Elegir este plan",
+      "current": "Tu plan actual",
+      "mostPopular": "El más elegido",
+      "forRecruiters": "Para equipos de reclutamiento",
+      "freeFeatures": ["3 matches al mes", "1 análisis de CV", "Historial de tus análisis"],
+      "seekerFeatures": ["50 matches al mes", "10 adaptaciones de CV", "Alertas de ofertas"],
+      "recruiterFeatures": ["50 candidatos rankeados", "Análisis ilimitados", "Roster de candidatos"]
+    },
+    "faq": {
+      "heading": "Preguntas frecuentes",
+      "q1": "¿Qué pasa con mi CV?",
+      "a1": "Queda guardado en tu cuenta y se usa solo para comparar contra las vacantes que analizás. Podés borrarlo cuando quieras.",
+      "q2": "¿El score significa que me van a contratar?",
+      "a2": "No. Es una lectura honesta de cuánto encaja tu perfil con la vacante, con las razones a la vista. La decisión es tuya.",
+      "q3": "¿Puedo cancelar cuando quiera?",
+      "a3": "Sí. Cancelás desde la página de tu plan y seguís con el plan gratuito: tu historial y tu CV quedan ahí.",
+      "q4": "¿Necesito tarjeta para probar?",
+      "a4": "No. El plan gratuito no pide tarjeta y alcanza para 3 análisis al mes."
+    },
+    "final": {
+      "title": "¿Arrancamos?",
+      "body": "Creá tu cuenta, subí tu CV y pegá la primera vacante. Te llevás tres análisis gratis.",
+      "cta": "Crear mi cuenta"
+    },
+    "footer": {
+      "product": "Producto",
+      "account": "Cuenta",
+      "legal": "Legal",
+      "match": "Match de vacantes",
+      "adapt": "Adaptar mi CV",
+      "audit": "Auditoría de CV",
+      "offers": "Alertas de ofertas",
+      "pricing": "Planes",
+      "login": "Ingresar",
+      "signup": "Crear cuenta",
+      "privacy": "Privacidad",
+      "terms": "Términos",
+      "contact": "Contacto",
+      "rights": "© {year} eptus. Todos los derechos reservados.",
+      "madeIn": "Hecho en Colombia"
     }
   }
 }

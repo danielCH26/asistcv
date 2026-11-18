@@ -100,9 +100,11 @@
 </svelte:head>
 
 <section class="audit">
-	<header class="audit__intro">
-		<h1>{$_('audit.heading')}</h1>
-		<p>{$_('audit.intro')}</p>
+	<header class="page-header">
+		<div>
+			<h1 class="page-header__title">{$_('audit.heading')}</h1>
+			<p class="page-header__intro">{$_('audit.intro')}</p>
+		</div>
 	</header>
 
 	{#if audit.status !== 'done'}
@@ -281,17 +283,6 @@
 		gap: var(--space-5);
 	}
 
-	.audit__intro h1 {
-		margin: 0 0 var(--space-2);
-		font-size: var(--text-2xl);
-		color: var(--color-ink-strong);
-	}
-
-	.audit__intro p {
-		margin: 0;
-		color: var(--color-ink-muted);
-	}
-
 	.audit__form {
 		display: flex;
 		flex-direction: column;
@@ -417,7 +408,10 @@
 		box-shadow: var(--clay-lifted);
 	}
 
-	.audit__form button,
+	/* El toggle de la vacante opcional NO es un botón de acción: es una
+	   pista. Sin el `:not()`, la regla de abajo (más específica) lo pintaba
+	   del color de marca y competía con el CTA real de la página. */
+	.audit__form button:not(.audit__jd-toggle),
 	.audit__capture-form button {
 		align-self: flex-start;
 		padding: var(--space-2) var(--space-4);
@@ -431,13 +425,13 @@
 		transition: box-shadow var(--duration-fast) var(--ease-standard);
 	}
 
-	.audit__form button:hover:not(:disabled),
+	.audit__form button:not(.audit__jd-toggle):hover:not(:disabled),
 	.audit__capture-form button:hover:not(:disabled) {
 		background: var(--color-accent-hover);
 		box-shadow: var(--clay-lifted);
 	}
 
-	.audit__form button:focus-visible,
+	.audit__form button:not(.audit__jd-toggle):focus-visible,
 	.audit__capture-form button:focus-visible {
 		box-shadow: var(--clay-focus-ring), var(--clay-raised);
 		outline: none;
@@ -486,19 +480,21 @@
 	.audit__jd-toggle {
 		align-self: flex-start;
 		padding: var(--space-2) var(--space-4);
-		border: var(--border-width) dashed var(--color-line);
+		border: var(--border-width) dashed var(--color-line-strong);
 		border-radius: var(--radius-card);
-		background: var(--clay-fill);
+		background: transparent;
 		color: var(--color-ink-muted);
 		font-size: var(--text-sm);
 		cursor: pointer;
 		text-align: left;
-		box-shadow: var(--clay-raised);
-		transition: box-shadow var(--duration-fast) var(--ease-standard);
+		transition:
+			color var(--duration-fast) var(--ease-standard),
+			border-color var(--duration-fast) var(--ease-standard);
 	}
 
 	.audit__jd-toggle:hover {
-		box-shadow: var(--clay-lifted);
+		color: var(--color-ink-strong);
+		border-color: var(--color-ink-muted);
 	}
 
 	.audit__jd-toggle:focus-visible {

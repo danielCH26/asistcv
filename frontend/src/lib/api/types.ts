@@ -173,6 +173,9 @@ export interface Plan {
 	interval: string;
 	features: string[];
 	limits: Record<string, unknown>;
+	/** Precio en pesos colombianos (0 = plan gratuito). Es el precio que
+	 *  cobran Wompi y Mercado Pago; el catálogo oficial está en USD. */
+	price_cop: number;
 }
 
 export interface SubscriptionInfo {

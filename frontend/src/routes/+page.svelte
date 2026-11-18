@@ -3,6 +3,7 @@
 	import { _ } from 'svelte-i18n';
 	import { get } from 'svelte/store';
 	import JdForm from '$components/JdForm.svelte';
+	import Landing from '$components/Landing.svelte';
 	import MatchResult from '$components/MatchResult.svelte';
 	import { analysisStore } from '$stores/analysis';
 	import { profileStore } from '$stores/profile';
@@ -109,60 +110,66 @@
 </script>
 
 <svelte:head>
-	<title>eptus · {$_('app.tagline')}</title>
+	<title>eptus · {$isAuthenticated ? $_('app.tagline') : $_('marketing.hero.title') + ' ' + $_('marketing.hero.accent')}</title>
 </svelte:head>
 
-<section class="home">
-	<header class="home__intro">
-		<h1>{$_('home.heading')}</h1>
-		<p>{$_('home.intro')}</p>
-		{#if $profileStore !== null}
-			<p class="home__profile">
-				{$_('home.profileLabel')}: <strong>#{$profileStore}</strong>
-			</p>
-		{:else if !$isAuthenticated || cvState === 'none'}
-			<p class="home__profile" data-testid="home-no-profile">
-				{$_('home.profileMissing')}
-				<a href="/profile">{$_('home.profileMissingCta')}</a>
-			</p>
+{#if !$isAuthenticated}
+	<!-- Sin cuenta, "/" es la portada: la herramienta exige CV, cuenta y una
+	   vacante pegada, y nada de eso se entiende en los primeros dos segundos. -->
+	<Landing />
+{:else}
+	<section class="home">
+		<header class="home__intro">
+			<h1>{$_('home.heading')}</h1>
+			<p>{$_('home.intro')}</p>
+			{#if $profileStore !== null}
+				<p class="home__profile">
+					{$_('home.profileLabel')}: <strong>#{$profileStore}</strong>
+				</p>
+			{:else if cvState === 'none'}
+				<p class="home__profile" data-testid="home-no-profile">
+					{$_('home.profileMissing')}
+					<a href="/profile">{$_('home.profileMissingCta')}</a>
+				</p>
+			{/if}
+			{#if usageLabel()}
+				<p class="home__usage">{usageLabel()}</p>
+			{/if}
+		</header>
+
+		<JdForm on:submit={handleSubmit} loading={$analysisStore.status === 'loading'} />
+
+		{#if $analysisStore.status === 'loading'}
+			<section class="home__loading" aria-live="polite">
+				<div class="home__spinner" aria-hidden="true"></div>
+				<h2>{$_('loading.title')}</h2>
+				<p>{$_('loading.subtitle')}</p>
+				<small>{$_('loading.detail')}</small>
+			</section>
 		{/if}
-		{#if $isAuthenticated && usageLabel()}
-			<p class="home__usage">{usageLabel()}</p>
+
+		{#if $analysisStore.status === 'error'}
+			<section class="home__error" role="alert">
+				<h2>{$_('error.title')}</h2>
+				<p>{$analysisStore.error}</p>
+				<button type="button" on:click={retry}>{$_('error.retry')}</button>
+			</section>
 		{/if}
-	</header>
 
-	<JdForm on:submit={handleSubmit} loading={$analysisStore.status === 'loading'} />
+		{#if setupError}
+			<section class="home__error" role="alert" data-testid="home-setup-error">
+				<h2>{$_('error.title')}</h2>
+				<p>{setupError}</p>
+				<a class="home__setup-cta" href="/profile">{$_('home.profileMissingCta')}</a>
+			</section>
+		{/if}
 
-	{#if $analysisStore.status === 'loading'}
-		<section class="home__loading" aria-live="polite">
-			<div class="home__spinner" aria-hidden="true"></div>
-			<h2>{$_('loading.title')}</h2>
-			<p>{$_('loading.subtitle')}</p>
-			<small>{$_('loading.detail')}</small>
-		</section>
-	{/if}
-
-	{#if $analysisStore.status === 'error'}
-		<section class="home__error" role="alert">
-			<h2>{$_('error.title')}</h2>
-			<p>{$analysisStore.error}</p>
-			<button type="button" on:click={retry}>{$_('error.retry')}</button>
-		</section>
-	{/if}
-
-	{#if setupError}
-		<section class="home__error" role="alert" data-testid="home-setup-error">
-			<h2>{$_('error.title')}</h2>
-			<p>{setupError}</p>
-			<a class="home__setup-cta" href="/profile">{$_('home.profileMissingCta')}</a>
-		</section>
-	{/if}
-
-	{#if $analysisStore.status === 'done' && $analysisStore.result}
-		<MatchResult analysis={$analysisStore.result} />
-		<a class="home__adapt-cta" href="/adapt">{$_('home.adaptCta')}</a>
-	{/if}
-</section>
+		{#if $analysisStore.status === 'done' && $analysisStore.result}
+			<MatchResult analysis={$analysisStore.result} />
+			<a class="home__adapt-cta" href="/adapt">{$_('home.adaptCta')}</a>
+		{/if}
+	</section>
+{/if}
 
 <style>
 	.home {

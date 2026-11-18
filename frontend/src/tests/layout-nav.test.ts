@@ -104,7 +104,9 @@ describe('layout navigation — signed-in state', () => {
 		await renderLayout();
 
 		await waitFor(() => {
-			expect(screen.getByRole('link', { name: 'Ingresar' })).toBeTruthy();
+			// La portada lleva "Ingresar" en el header y en el footer, así que
+			// se comprueba que exista, no que sea único.
+			expect(screen.getAllByRole('link', { name: 'Ingresar' }).length).toBeGreaterThan(0);
 		});
 		expect(screen.queryByRole('link', { name: 'Mi perfil' })).toBeNull();
 	});

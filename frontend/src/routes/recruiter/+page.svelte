@@ -178,7 +178,11 @@
 
 {#if ready && consentOk}
 	<section class="recruiter">
-		<h1>{$_('recruiter.heading')}</h1>
+		<header class="page-header">
+			<div>
+				<h1 class="page-header__title">{$_('recruiter.heading')}</h1>
+			</div>
+		</header>
 
 		<section class="recruiter__jd">
 			<h2>{$_('recruiter.jdHeading')}</h2>
@@ -318,12 +322,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-6);
-	}
-
-	.recruiter h1 {
-		margin: 0;
-		font-size: var(--text-2xl);
-		color: var(--color-ink-strong);
 	}
 
 	.recruiter h2 {

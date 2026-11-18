@@ -101,8 +101,12 @@
 
 {#if ready}
 	<section class="adapt">
-		<h1>{$_('adapt.heading')}</h1>
-		<p class="adapt__subtitle">{$_('adapt.subtitle')}</p>
+		<header class="page-header">
+			<div>
+				<h1 class="page-header__title">{$_('adapt.heading')}</h1>
+				<p class="page-header__intro">{$_('adapt.subtitle')}</p>
+			</div>
+		</header>
 
 		{#if listError}<p class="adapt__error" role="alert">{listError}</p>{/if}
 
@@ -199,22 +203,10 @@
 		gap: var(--space-6);
 	}
 
-	.adapt h1 {
-		margin: 0;
-		font-size: var(--text-2xl);
-		color: var(--color-ink-strong);
-	}
-
 	.adapt h2 {
 		margin: 0 0 var(--space-2);
 		font-size: var(--text-lg);
 		color: var(--color-ink-strong);
-	}
-
-	.adapt__subtitle {
-		margin: calc(-1 * var(--space-2)) 0 0;
-		color: var(--color-ink-muted);
-		font-size: var(--text-sm);
 	}
 
 	.adapt__error {
