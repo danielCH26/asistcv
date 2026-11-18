@@ -28,6 +28,7 @@ from app.services.billing_provider import (
     SubStatus,
     WebhookEvent,
 )
+from app.services.providers.cop_prices import cop_amount_cents
 from app.services.wompi_client import (
     WompiAuthError,
     WompiClient,
@@ -40,15 +41,6 @@ from app.services.wompi_client import (
 if TYPE_CHECKING:
     from app.core.config import Settings
     from app.services.wompi_client import WompiClient
-
-
-# Plan prices in cents (COP) — align with Stripe/Lemon Squeezy pricing
-_PLAN_PRICES: dict[str, int] = {
-    "job_seeker_monthly": 29000,  # ~$7 USD
-    "recruiter_starter": 99000,   # ~$25 USD
-    "recruiter_business": 199000, # ~$50 USD
-    "recruiter_agency": 499000,   # ~$125 USD
-}
 
 
 class WompiProvider(BillingProvider):
@@ -102,10 +94,13 @@ class WompiProvider(BillingProvider):
         """
         plan_id = plan.get("plan_id") or plan.get("tier", "")
 
-        # Get price from plan or fallback to defaults
-        amount = plan.get("price", {}).get("amount", 0)
-        if amount == 0:
-            amount = _PLAN_PRICES.get(plan_id, 29000)
+        # Get price from the shared COP price table.
+        #
+        # Wompi pide el monto en CENTAVOS: 29.000 COP son 2.900.000. La
+        # tabla compartida guarda los precios en pesos y convierte acá.
+        # (La versión anterior mandaba 29000 como centavos → cobraba
+        # 290.000 COP, diez veces lo que dice el catálogo.)
+        amount = cop_amount_cents(plan_id)
 
         user_email = user.get("email", "")
         user_id = user.get("id", 0)

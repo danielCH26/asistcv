@@ -24,7 +24,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import and_, select
 
-from app.db.models import PaymentMethod, PaymentWebhookEvent, Subscription
+from app.db.models import PaymentMethod, PaymentWebhookEvent, Subscription, User
 from app.db.session import get_session_context
 from app.services.billing_provider import ProviderNotConfiguredError, get_billing_provider
 from app.services.rls_context import set_rls_service
@@ -89,15 +89,27 @@ async def _handle_webhook_event(
     data: dict[str, Any] = body_dict.get("data", {})
     transaction: dict[str, Any] = data.get("transaction", {})
 
-    # Try various ID fields depending on provider
-    event_id: str = (
-        str(transaction.get("id"))
-        or str(data.get("id"))
-        or str(body_dict.get("id", ""))
+    # OJO con el `or ""`: sin él, ``str(None)`` == "None" es truthy y el
+    # `or` se cortaba ahí. Mercado Pago manda ``data.id`` sin ``transaction``,
+    # así que TODOS sus eventos se guardaban con event_id == "None": el
+    # segundo evento (el que activa la suscripcion) se deduplicaba como
+    # repetido y el usuario pagaba sin que su plan se activara.
+    base_id: str = (
+        str(transaction.get("id") or "")
+        or str(data.get("id") or "")
+        or str(body_dict.get("id") or "")
         or ""
     )
-    if not event_id:
-        event_id = hashlib.sha256(payload).hexdigest()
+    if not base_id:
+        base_id = hashlib.sha256(payload).hexdigest()
+
+    # La clave incluye el tipo de evento: un mismo pago notifica primero
+    # "pending" y después "approved", y con la clave sola (el id del pago) la
+    # segunda notificación se deduplicaba como repetida → el usuario pagaba y
+    # su plan no cambiaba.
+    event_id = f"{base_id}:{event.event_type}"
+    if len(event_id) > 100:
+        event_id = hashlib.sha256(event_id.encode()).hexdigest()
 
     # --- Idempotency ---
     async with get_session_context() as session:
@@ -328,6 +340,20 @@ async def _handle_subscription_upsert(event) -> None:
 
     async with get_session_context() as session:
         await set_rls_service(session)
+
+        # Si el usuario no existe (evento de una cuenta borrada o un id
+        # equivocado), el INSERT de la suscripcion revienta por la FK con un
+        # 500 — y la pasarela reintenta ese webhook para siempre. Se registra
+        # y se sigue: el evento se marca como procesado y no se reintenta.
+        result = await session.execute(
+            select(User).where(User.id == event.user_id)
+        )
+        if result.scalar_one_or_none() is None:
+            logger.warning(
+                f"webhook de {event.provider_id}: el usuario {event.user_id} no existe, "
+                "se ignora el evento."
+            )
+            return
 
         # Upsert Subscription.
         result = await session.execute(

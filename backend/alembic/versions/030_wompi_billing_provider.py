@@ -1,5 +1,5 @@
 """
-029_wompi_billing_provider: permite 'wompi' en las tablas de billing.
+030_wompi_billing_provider: permite 'wompi' en las tablas de billing.
 
 La migración 028 creó `payment_methods` y `payment_webhook_events` con un
 CHECK sobre `provider` limitado a ('stripe', 'lemon_squeezy', 'mercadopago').
@@ -11,6 +11,10 @@ Acá se reemplazan los dos CHECK por los que incluyen 'wompi'. No se cambia
 nada más: las columnas, los índices, las políticas RLS y los datos siguen
 igual.
 
+Va después de `029_users_clerk_id` (la línea Clerk) porque en origin/main ya
+existía una 029; dos migraciones con el mismo id habrían dejado la cadena
+con dos cabezas y `alembic upgrade head` fallaría.
+
 Downgrade: vuelve el CHECK original (y con él, Wompi vuelve a fallar — es
 lo esperado al revertir).
 """
@@ -19,8 +23,8 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "029_wompi_billing_provider"
-down_revision: str = "028_payment_methods"
+revision: str = "030_wompi_billing_provider"
+down_revision: str = "029_users_clerk_id"
 branch_labels: Sequence[str] | None = None
 depends_on: Sequence[str] | None = None
 

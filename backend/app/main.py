@@ -276,6 +276,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         include_in_schema=False,
     )
 
+    # Mercado Pago webhook endpoint (no auth - uses the x-signature HMAC).
+    # La URL que se configura en el panel de Mercado Pago es
+    # https://<host>/api/v1/webhooks/mercadopago.
+    from app.api.v1.webhooks import mercadopago as mp_webhook
+
+    app.include_router(
+        mp_webhook.router,
+        prefix="/api/v1",
+        include_in_schema=False,
+    )
+
     # Internal cleanup endpoint for the adaptation sweeper cron. No
     # router-level auth; per-endpoint BACKEND_API_KEY check inside the
     # handler. Mounted at /internal (no /v1 prefix) to match the

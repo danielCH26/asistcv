@@ -113,7 +113,7 @@ async def test_create_checkout_builds_the_reference_and_calls_the_client(
     client.create_transaction.assert_awaited_once()
     kwargs = client.create_transaction.await_args.kwargs
     assert kwargs["reference"].startswith("7_job_seeker_monthly_")
-    assert kwargs["amount_in_cents"] == 29000
+    assert kwargs["amount_in_cents"] == 2_900_000
     assert kwargs["currency"] == "COP"
 
 

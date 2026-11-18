@@ -190,7 +190,7 @@ class Settings(BaseSettings):
         description="Use LS test-mode checkouts (default true; flip false only with live keys)",
     )
 
-    # Mercado Pago — stub fields, validated and functional in slice 3
+    # Mercado Pago — provider operativo (slice 3)
     mercadopago_access_token: str | None = Field(
         default=None, validation_alias="MERCADOPAGO_ACCESS_TOKEN"
     )
@@ -199,6 +199,14 @@ class Settings(BaseSettings):
     )
     mercadopago_webhook_secret: str | None = Field(
         default=None, validation_alias="MERCADOPAGO_WEBHOOK_SECRET"
+    )
+    mercadopago_notification_url: str | None = Field(
+        default=None,
+        validation_alias="MERCADOPAGO_NOTIFICATION_URL",
+        description=(
+            "URL publica del backend donde Mercado Pago notifica los pagos. "
+            "Sin esto el checkout se crea pero la suscripcion nunca se activa."
+        ),
     )
     mercadopago_test_mode: bool = Field(
         default=True,

@@ -953,7 +953,7 @@ class PaymentMethod(SQLModel, table=True):
     )
     provider: str = Field(
         max_length=30,
-        description="Billing provider: stripe | lemon_squeezy | mercadopago",
+        description="Billing provider: stripe | lemon_squeezy | mercadopago | wompi",
     )
     provider_customer_id: str | None = Field(
         default=None, max_length=100, description="Provider's customer identifier"
@@ -1003,7 +1003,7 @@ class PaymentWebhookEvent(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     provider: str = Field(
         max_length=30,
-        description="Billing provider: stripe | lemon_squeezy | mercadopago",
+        description="Billing provider: stripe | lemon_squeezy | mercadopago | wompi",
     )
     event_id: str = Field(
         max_length=100,
