@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from base64 import urlsafe_b64decode
 from urllib.parse import urlparse
@@ -99,12 +100,44 @@ def check(client: httpx.Client, fsa: str, origin: str | None) -> int:
     return failures
 
 
+def key_from_deployed_frontend(frontend_url: str) -> str:
+    """Lee la publishable key del frontend YA desplegado.
+
+    La app es CSR (ssr=false) y publica sus variables PUBLIC_* en
+    `/_app/env.js`. La key es pública por diseño, así que se puede leer
+    desde afuera: eso permite vigilar el despliegue sin ningún secreto.
+    """
+    base = frontend_url.rstrip("/")
+    with httpx.Client(timeout=30, follow_redirects=True) as client:
+        r = client.get(f"{base}/_app/env.js")
+        r.raise_for_status()
+        body = r.text
+
+    match = re.search(r'"PUBLIC_CLERK_PUBLISHABLE_KEY"\s*:\s*"([^"]+)"', body)
+    if not match:
+        raise ValueError(f"PUBLIC_CLERK_PUBLISHABLE_KEY no está en {base}/_app/env.js")
+    return match.group(1)
+
+
 def main() -> int:
+    frontend = os.environ.get("DEPLOYED_FRONTEND_URL")
     key = os.environ.get("CLERK_PUBLISHABLE_KEY") or os.environ.get(
         "PUBLIC_CLERK_PUBLISHABLE_KEY"
     )
+
+    if frontend and not key:
+        try:
+            key = key_from_deployed_frontend(frontend)
+        except Exception as exc:
+            print(f"No se pudo leer la key del frontend desplegado: {exc}")
+            return 2
+        print(f"Key tomada del frontend desplegado ({frontend}).\n")
+
     if not key:
-        print("Falta CLERK_PUBLISHABLE_KEY (o PUBLIC_CLERK_PUBLISHABLE_KEY).")
+        print(
+            "Falta CLERK_PUBLISHABLE_KEY (o PUBLIC_CLERK_PUBLISHABLE_KEY).\n"
+            "Para vigilar el despliegue sin secretos: DEPLOYED_FRONTEND_URL=https://…"
+        )
         return 2
 
     try:
@@ -113,7 +146,7 @@ def main() -> int:
         print(f"No se pudo leer el dominio de la publishable key: {exc}")
         return 2
 
-    origin = os.environ.get("FRONTEND_URL")
+    origin = os.environ.get("FRONTEND_URL") or frontend
     if origin:
         host = urlparse(origin).hostname or ""
         if host.endswith(".pages.dev"):

@@ -1,0 +1,51 @@
+name: Clerk availability
+
+# Vigila que el Frontend API de Clerk al que apunta la app realmente
+# responda, en los DOS extremos:
+#
+#   · /v1/environment  → lo llama clerk.load() en el navegador
+#   · /.well-known/jwks.json → lo usa el backend para verificar los tokens
+#
+# Si uno de los dos falla, NADIE puede iniciar sesión y nadie puede comprar:
+# es una caída silenciosa (la app muestra un cartel y sigue "funcionando").
+#
+# No usa ningún secreto: la publishable key es pública y sale del bundle del
+# frontend desplegado, así que el chequeo es idéntico al que hace el
+# navegador.
+#
+# Con un dominio propio, el proxy de Clerk se despliega como un Worker en la
+# zona del dominio. Sin dominio propio (solo *.pages.dev) no se puede
+# attachar un Worker a ese host, y la única salida es la publishable key del
+# DOMINIO NATIVO de la instancia.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17,47 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Frontend API + JWKS responden
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.12 + UV
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: cd backend && uv sync --all-extras
+
+      - name: Check Clerk availability
+        env:
+          DEPLOYED_FRONTEND_URL: https://asistcv-frontend.pages.dev
+        run: cd backend && uv run python scripts/diagnose_clerk.py

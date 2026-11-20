@@ -120,20 +120,27 @@ Lo que eso rompe, en los dos extremos:
 | Backend | `GET /.well-known/jwks.json` (para verificar el token) | 404 → **todos** los tokens de sesión se rechazan |
 
 Un subdominio de un proyecto de Pages **no puede** reenviar `/v1/*` a Clerk:
-eso lo hace un Worker. Hay dos caminos:
+eso lo hace un Worker, y **un Worker no se puede attachar a `*.pages.dev`**
+(el zone `pages.dev` es compartido y no pertenece a la cuenta). Sin un
+dominio propio, la única salida es la segunda:
 
-1. **Desplegar el proxy** — un Cloudflare Worker con una ruta para
-   `clerk.asistcv-frontend.pages.dev` que reenvíe `/v1/*` y
-   `/.well-known/jwks.json` al Frontend API de la instancia. Es el
-   setup que documenta Clerk para dominios propios.
-2. **Dejar de proxear** (menos piezas, recomendado) — en el panel de Clerk,
-   copiar la publishable key del **dominio nativo** de la instancia
-   (`pk_live_...` que codifique `*.clerk.accounts.dev` o
-   `clerk.<instancia>.clerk.com`) y ponerla en los dos lados:
-   `PUBLIC_CLERK_PUBLISHABLE_KEY` en Cloudflare Pages y
-   `CLERK_PUBLISHABLE_KEY` en Render. El SDK habla directo con Clerk y el
-   backend deriva el JWKS del dominio correcto. La instancia debe permitir
-   el origen `https://asistcv-frontend.pages.dev`.
+1. **Sin dominio propio (este caso) — usar la clave del dominio nativo.**
+   En el panel de Clerk, abrí la instancia y copiá la publishable key del
+   **dominio nativo** del Frontend API (el que codifica
+   `<instancia>.clerk.accounts.dev`), NO la del proxy. Poné esa misma key
+   en los dos lados:
+   - Cloudflare Pages → `PUBLIC_CLERK_PUBLISHABLE_KEY`
+   - Render → `CLERK_PUBLISHABLE_KEY`
+
+   El SDK habla directo con Clerk y el backend deriva el JWKS del dominio
+   correcto. En la instancia, agregá el origen permitido
+   `https://asistcv-frontend.pages.dev` (y `http://localhost:5173` para
+   desarrollo local).
+
+2. **Con dominio propio — desplegar el proxy.** Un Cloudflare Worker con
+   una ruta para `clerk.<tu-dominio>` reenvía `/v1/*` y
+   `/.well-known/jwks.json` al Frontend API de la instancia. El panel de
+   Clerk genera el código del Worker.
 
 **Cómo verificar en un comando** (no cambia nada):
 
@@ -143,8 +150,29 @@ CLERK_PUBLISHABLE_KEY="pk_live_..." FRONTEND_URL="https://asistcv-frontend.pages
   uv run python scripts/diagnose_clerk.py
 ```
 
+O, contra lo que está **desplegado** (no necesita ningún secreto: la key
+es pública y sale del bundle del frontend):
+
+```bash
+cd backend
+DEPLOYED_FRONTEND_URL="https://asistcv-frontend.pages.dev" \
+  uv run python scripts/diagnose_clerk.py
+```
+
 Imprime los dos endpoints y un veredicto. Si el proxy (o la clave) están
 bien, los dos dan 200 y el script sale con 0.
+
+**Vigilante automático:** el workflow `Clerk availability`
+(`.github/workflows/clerk-check.yml`) corre este chequeo en cada push a
+`main` y cada 30 minutos. Es el que va a avisar —en el CI, sin que nadie
+mire— si el login vuelve a caerse.
+
+> **CORS:** el backend responde `Access-Control-Allow-Origin` solo para los
+> orígenes configurados; un origen ajeno no recibe la cabecera. Ojo con
+> `http://localhost:5173` / `5174`: están permitidos para el desarrollo
+> local y conviene sacarlos de `CORS_ORIGINS` en Render si no los usás —
+> con el funnel de auditoría anónimo, permitir `localhost` en producción
+> deja abierta una vía innecesaria.
 
 > Lo que **no** es la causa: el `HTTP 500 "Rate exceeded."` de las
 > instancias de desarrollo. Ese síntoma aparece cuando la instancia de
