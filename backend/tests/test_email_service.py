@@ -215,3 +215,107 @@ async def test_sync_send_email_hops_into_event_loop() -> None:
     # Calling the sync wrapper from inside an async test would raise
     # RuntimeError; we don't actually do that here — the assertion
     # above is the contract.
+
+
+# ---------------------------------------------------------------------------
+# Brevo provider (feat/passwordless-auth) — verified sender, no domain.
+# ---------------------------------------------------------------------------
+
+
+def brevo_env(monkeypatch):
+    """Wire up Settings with a Brevo key so the dispatch reaches the provider."""
+    monkeypatch.setenv("EMAIL_PROVIDER", "brevo")
+    monkeypatch.setenv("BREVO_API_KEY", "xkeysib-test-1234567890abcdef")
+    monkeypatch.setenv("EMAIL_FROM", "AsistCV <noreply@asistcv.com>")
+    get_settings.cache_clear()
+    yield {"api_key": "xkeysib-test-1234567890abcdef"}
+    get_settings.cache_clear()
+
+
+brevo_env = pytest.fixture(brevo_env)
+
+
+async def test_brevo_send_posts_expected_payload(brevo_env) -> None:
+    """Brevo branch POSTs the Brevo shape: sender object + to array."""
+    captured: dict = {}
+
+    async def _capture_post(url, *, json, headers):
+        captured["url"] = url
+        captured["json"] = json
+        captured["headers"] = headers
+        return _resend_response(status=200)
+
+    fake_client = MagicMock()
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+    fake_client.post = _capture_post
+
+    with patch.object(httpx, "AsyncClient", return_value=fake_client):
+        ok = await email_service.send_email_async(
+            to="dest@example.com",
+            subject="Tu código para entrar a AsistCV",
+            html_body="<p>123456</p>",
+            text_body="123456",
+        )
+
+    assert ok is True
+    assert captured["url"] == "https://api.brevo.com/v3/smtp/email"
+    assert captured["headers"]["api-key"] == brevo_env["api_key"]
+    body = captured["json"]
+    assert body["sender"] == {"name": "AsistCV", "email": "noreply@asistcv.com"}
+    assert body["to"] == [{"email": "dest@example.com"}]
+    assert body["subject"] == "Tu código para entrar a AsistCV"
+    assert body["htmlContent"] == "<p>123456</p>"
+    assert body["textContent"] == "123456"
+
+
+async def test_brevo_missing_key_is_loud_but_safe(monkeypatch) -> None:
+    """No Brevo key → disabled branch, False, no HTTP call at all."""
+    monkeypatch.setenv("EMAIL_PROVIDER", "brevo")
+    monkeypatch.delenv("BREVO_API_KEY", raising=False)
+    get_settings.cache_clear()
+    try:
+        with patch.object(httpx, "AsyncClient") as never_used:
+            ok = await email_service.send_email_async(
+                to="dest@example.com",
+                subject="s",
+                html_body="<p>b</p>",
+            )
+        never_used.assert_not_called()
+    finally:
+        get_settings.cache_clear()
+    assert ok is False
+
+
+async def test_brevo_non_2xx_returns_false(brevo_env) -> None:
+    """Provider rejection (e.g. unverified sender) → False, never raises."""
+
+    async def _capture_post(url, *, json, headers):
+        return _resend_response(status=401, body='{"message":"sender not verified"}')
+
+    fake_client = MagicMock()
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+    fake_client.post = _capture_post
+
+    with patch.object(httpx, "AsyncClient", return_value=fake_client):
+        ok = await email_service.send_email_async(
+            to="dest@example.com", subject="s", html_body="<p>b</p>"
+        )
+
+    assert ok is False
+
+
+async def test_console_provider_succeeds_without_network(monkeypatch) -> None:
+    """The console dev provider reports success and never touches httpx."""
+    monkeypatch.setenv("EMAIL_PROVIDER", "console")
+    get_settings.cache_clear()
+    try:
+        with patch.object(httpx, "AsyncClient") as never_used:
+            ok = await email_service.send_email_async(
+                to="dest@example.com", subject="s", html_body="<p>123456</p>"
+            )
+        never_used.assert_not_called()
+    finally:
+        get_settings.cache_clear()
+    assert ok is True

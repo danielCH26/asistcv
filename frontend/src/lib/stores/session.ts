@@ -1,73 +1,95 @@
-/**
- * Session store — Clerk-first implementation.
- *
- * All JWT machinery (localStorage pairs, proactivo refresh, single-flight,
- * JWT-decode expiry, /v1/auth/* endpoints) has been removed.
- * Clerk manages token issuance, short-lived JWT delivery via
- * `clerk.session.getToken()`, and automatic refresh.
- *
- * The exported surface is intentionally identical to the previous API so
- * that the 12 existing consumers (layout, pages, client) need no changes.
- */
-
 import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
-import { derived, get, writable } from 'svelte/store';
-import type { Readable } from 'svelte/store';
-import type { Role, SessionUser } from '$api/types';
-import type { UserResource } from '@clerk/shared/types/user';
-import { ApiError } from '$api/types';
+import { derived, get, writable, type Readable } from 'svelte/store';
+import { ApiError, type Role, type SessionUser, type TokenResponse } from '$api/types';
+import { apiClient } from '$api/client';
 import { API_BASE } from '$api/base';
-import {
-	clerkReady,
-	clerkUser,
-	clerkSignOut,
-	getToken,
-	mountSignIn,
-	mountSignUp,
-} from '$lib/clerk';
 
-// ─── Onboarding wizard (localStorage, unchanged) ──────────────────────────────
+/**
+ * Sesión de usuario (JWT dual access + refresh).
+ *
+ * Persistencia en `localStorage` (clave `asistcv.session`): la app es un
+ * SPA estático single-device, según design §8.1. El refresh proactivo
+ * renueva el access token cuando le falta menos de 60 s para expirar.
+ */
 
+const STORAGE_KEY = 'asistcv.session';
 const ONBOARDING_KEY = 'asistcv.onboarding';
-
-export function startOnboarding(): void {
-	if (browser) localStorage.setItem(ONBOARDING_KEY, '1');
-}
-
-export function isOnboarding(): boolean {
-	if (!browser) return false;
-	return localStorage.getItem(ONBOARDING_KEY) === '1';
-}
-
-export function completeOnboarding(): void {
-	if (browser) localStorage.removeItem(ONBOARDING_KEY);
-}
-
-// ─── Audit token helpers (localStorage, unchanged) ────────────────────────────
-
 const AUDIT_TOKEN_KEY = 'asistcv.audit_token';
+const REFRESH_THRESHOLD_MS = 60_000;
+const ACCESS_TTL_FALLBACK_MS = 15 * 60 * 1000;
 
-export function getPendingAuditToken(): string | null {
+export interface Session {
+	accessToken: string;
+	refreshToken: string;
+	user: SessionUser;
+	/** ms epoch en que expira el access token. */
+	expiresAt: number;
+}
+
+function decodeJwtExpMs(jwt: string): number {
+	try {
+		const payload = jwt.split('.')[1];
+		if (!payload) return Date.now() + ACCESS_TTL_FALLBACK_MS;
+		const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+		const json = decodeURIComponent(
+			atob(normalized)
+				.split('')
+				.map((c) => `%${`00${c.charCodeAt(0).toString(16)}`.slice(-2)}`)
+				.join('')
+		);
+		const claims = JSON.parse(json) as { exp?: number };
+		if (typeof claims.exp === 'number' && claims.exp > 0) return claims.exp * 1000;
+	} catch {
+		// Token opaco o malformado: usamos el TTL default.
+	}
+	return Date.now() + ACCESS_TTL_FALLBACK_MS;
+}
+
+function loadPersisted(): Session | null {
 	if (!browser) return null;
-	return localStorage.getItem(AUDIT_TOKEN_KEY);
+	const raw = localStorage.getItem(STORAGE_KEY);
+	if (!raw) return null;
+	try {
+		const parsed = JSON.parse(raw) as Session;
+		if (!parsed.accessToken || !parsed.refreshToken || !parsed.user) return null;
+		return parsed;
+	} catch {
+		return null;
+	}
 }
 
-export function setPendingAuditToken(token: string): void {
-	if (browser) localStorage.setItem(AUDIT_TOKEN_KEY, token);
+function createSessionStore() {
+	const store = writable<Session | null>(loadPersisted());
+
+	store.subscribe((value) => {
+		if (!browser) return;
+		if (value === null) {
+			localStorage.removeItem(STORAGE_KEY);
+		} else {
+			localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+		}
+	});
+
+	return {
+		subscribe: store.subscribe,
+		set(value: Session) {
+			store.set(value);
+		},
+		clear() {
+			store.set(null);
+		}
+	};
 }
 
-export function clearPendingAuditToken(): void {
-	if (browser) localStorage.removeItem(AUDIT_TOKEN_KEY);
-}
+export const session = createSessionStore();
 
-// ─── Internal: backend user ─────────────────────────────────────────────────
+export const isAuthenticated = derived(session, ($s) => $s !== null);
+export const isRecruiter = derived(session, ($s) => $s?.user.role === 'recruiter');
+export const currentRole: Readable<Role | null> = derived(session, ($s) => $s?.user.role ?? null);
 
-/** Backend `SessionUser` populated from `/v1/users/me`. */
-const backendUser = writable<SessionUser | null>(null);
-
-// Track whether a pending audit claim has been fired to avoid double-sending.
-let _auditClaimed = false;
+/** Evento de sesión para banners (login page). */
+export const sessionEvent = writable<'expired' | 'token_reused' | null>(null);
 
 async function parseError(res: Response): Promise<ApiError> {
 	const text = await res.text().catch(() => '');
@@ -84,199 +106,186 @@ async function parseError(res: Response): Promise<ApiError> {
 			message = d.message ?? JSON.stringify(parsed.detail);
 		}
 	} catch {
-		// body no JSON — use raw text.
+		// body no JSON: usamos el texto crudo.
 	}
 	return new ApiError(message || `Error HTTP ${res.status}`, res.status, text || res.statusText, code);
 }
 
-async function fetchBackendUser(): Promise<SessionUser> {
-	const token = await getToken();
-	if (!token) throw new ApiError('No Clerk token available', 401);
+async function fetchMe(accessToken: string): Promise<SessionUser> {
 	const res = await fetch(`${API_BASE}/v1/users/me`, {
-		headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+		headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' }
 	});
-	if (!res.ok) throw await parseError(res);
+	if (!res.ok) {
+		throw await parseError(res);
+	}
 	return (await res.json()) as SessionUser;
 }
 
-/**
- * Fetches the backend user. On 401 (not yet provisioned) retries once after
- * 1 s — the backend auto-provisions on the first authenticated call.
- */
-async function ensureBackendUser(): Promise<SessionUser | null> {
-	try {
-		return await fetchBackendUser();
-	} catch (err) {
-		if (err instanceof ApiError && err.status === 401) {
-			// User not yet provisioned — wait for backend propagation.
-			await new Promise((r) => setTimeout(r, 1_000));
-			try {
-				return await fetchBackendUser();
-			} catch {
-				return null;
-			}
-		}
-		return null;
-	}
+function toSession(tokens: TokenResponse, user: SessionUser): Session {
+	return {
+		accessToken: tokens.access_token,
+		refreshToken: tokens.refresh_token,
+		user,
+		expiresAt: decodeJwtExpMs(tokens.access_token)
+	};
 }
 
+let refreshInflight: Promise<boolean> | null = null;
+
 /**
- * Best-effort claim of a pending audit token.
- * Called after `backendUser` first becomes non-null.
+ * Refresh silencioso, single-flight: llamadas concurrentes comparten
+ * la misma promesa para no rotar el refresh token dos veces.
  */
-async function claimPendingAudit(): Promise<void> {
-	const token = getPendingAuditToken();
-	if (!token || _auditClaimed) return;
-	_auditClaimed = true;
-	try {
-		// The API client will call getToken() for the bearer.
-		const { apiClient } = await import('$api/client');
-		await apiClient.linkAudit(token);
-		clearPendingAuditToken();
-	} catch {
-		// Claim is best-effort; do not block the session.
-	}
-}
-
-// ─── clerkUser → backendUser propagation ──────────────────────────────────────
-
-// Track the previous clerkUser value to detect null→non-null transitions.
-let _prevClerkUserId: string | undefined;
-
-clerkUser.subscribe((user) => {
-	const currentId = user?.id;
-
-	if (user && currentId !== _prevClerkUserId) {
-		// Signed in or switched user — fetch backend user.
-		_prevClerkUserId = currentId;
-		_auditClaimed = false;
-		void ensureBackendUser().then((bu) => {
-			backendUser.set(bu);
-			// After backend user is available, claim pending audit (if any).
-			if (bu) void claimPendingAudit();
+export function refreshTokens(): Promise<boolean> {
+	if (!refreshInflight) {
+		refreshInflight = doRefresh().finally(() => {
+			refreshInflight = null;
 		});
-	} else if (!user && _prevClerkUserId !== undefined) {
-		// Signed out.
-		_prevClerkUserId = undefined;
-		_auditClaimed = false;
-		backendUser.set(null);
 	}
-});
+	return refreshInflight;
+}
 
-// ─── Public session surface ───────────────────────────────────────────────────
+async function doRefresh(): Promise<boolean> {
+	const s = get(session);
+	if (!s) return false;
+	try {
+		const res = await fetch(`${API_BASE}/v1/auth/refresh`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+			body: JSON.stringify({ refresh_token: s.refreshToken })
+		});
+		if (!res.ok) {
+			if (res.status === 401) {
+				const err = await parseError(res);
+				sessionEvent.set(err.code === 'TOKEN_REUSED' ? 'token_reused' : 'expired');
+				session.clear();
+			}
+			return false;
+		}
+		const tokens = (await res.json()) as TokenResponse;
+		session.set(toSession(tokens, s.user));
+		return true;
+	} catch {
+		return false;
+	}
+}
 
-export interface Session {
-	user: SessionUser;
+/** Refresca si el access token expira en <60 s. Devuelve true si hay sesión utilizable. */
+export async function refreshIfNeeded(): Promise<boolean> {
+	const s = get(session);
+	if (!s) return false;
+	if (s.expiresAt - Date.now() > REFRESH_THRESHOLD_MS) return true;
+	return refreshTokens();
 }
 
 /**
- * Derived session: non-null only when both Clerk user AND backend user exist.
- * The `Session` shape intentionally matches the old surface so that
- * `$session?.user.email` etc. continue to work in existing templates.
+ * Paso 1 del flujo passwordless: pide un código de un solo uso.
+ * El backend responde genéricamente (no revela si la cuenta existe);
+ * el código llega por email (o al log con EMAIL_PROVIDER=console).
  */
-/**
- * Email carried by the Clerk session.
- *
- * Used when the backend record is not there (yet): the local `users` row is
- * created by the first `/v1/users/me`, so until that call answers — or when
- * it fails — Clerk's own email is what the UI can show.
- */
-function clerkEmail(user: UserResource | null): string | null {
-	if (!user) return null;
-	const direct = user.primaryEmailAddress?.emailAddress;
-	if (direct) return direct;
-	const addresses = user.emailAddresses ?? [];
-	const primary = addresses.find((a) => a.id === user.primaryEmailAddressId);
-	return primary?.emailAddress ?? addresses[0]?.emailAddress ?? null;
+export async function requestEmailCode(email: string): Promise<void> {
+	const res = await fetch(`${API_BASE}/v1/auth/email-code/request`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+		body: JSON.stringify({ email })
+	});
+	if (!res.ok) throw await parseError(res);
 }
 
-export const session: Readable<Session | null> = derived(
-	[clerkUser, backendUser],
-	([$clerkUser, $backendUser]) => {
-		if (!$clerkUser || !$backendUser) return null;
-		return { user: $backendUser };
+/**
+ * Paso 2: verifica el código y establece la sesión.
+ * Si el email no tiene cuenta, el backend la crea (login y registro
+ * comparten flujo). Vincula el audit anónimo pendiente, si lo hay.
+ */
+export async function verifyEmailCode(email: string, code: string): Promise<SessionUser> {
+	const res = await fetch(`${API_BASE}/v1/auth/email-code/verify`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+		body: JSON.stringify({ email, code })
+	});
+	if (!res.ok) throw await parseError(res);
+	const tokens = (await res.json()) as TokenResponse;
+	const user = await fetchMe(tokens.access_token);
+	session.set(toSession(tokens, user));
+	await claimPendingAudit();
+	return user;
+}
+
+
+/** Audit token pendiente de vincular (funnel anónimo → cuenta). */
+export function getPendingAuditToken(): string | null {
+	if (!browser) return null;
+	return localStorage.getItem(AUDIT_TOKEN_KEY);
+}
+
+export function setPendingAuditToken(token: string): void {
+	if (browser) localStorage.setItem(AUDIT_TOKEN_KEY, token);
+}
+
+export function clearPendingAuditToken(): void {
+	if (browser) localStorage.removeItem(AUDIT_TOKEN_KEY);
+}
+
+async function claimPendingAudit(): Promise<number | undefined> {
+	const token = getPendingAuditToken();
+	if (!token) return undefined;
+	try {
+		// El claim exige sesión: `apiClient` adjunta el bearer desde el store
+		// (ya seteado por `signup`) y reintenta tras un refresh silencioso.
+		// El backend vincula el audit al usuario del JWT, no al body.
+		const body = await apiClient.linkAudit(token);
+		clearPendingAuditToken();
+		return typeof body.analysis_id === 'number' ? body.analysis_id : undefined;
+	} catch {
+		// Claim best-effort: no bloquea el registro.
 	}
-);
+	return undefined;
+}
 
-/**
- * Signed-in state: Clerk holds a session.
- *
- * Deliberately NOT "the backend returned a profile". Those are two different
- * facts, and the second one is slower and failure-prone: the first
- * `/v1/users/me` after a sign-in has to provision the local user, and it
- * fails on its own whenever the service is not configured for Clerk.
- * Deriving the navigation from it made a signed-in user look signed-out —
- * the header offered "Ingresar" to someone who had a live session, with no
- * way to tell that they were logged in.
- */
-export const isAuthenticated = derived(clerkUser, ($u) => $u !== null);
+export async function logout(): Promise<void> {
+	const s = get(session);
+	if (s) {
+		try {
+			await fetch(`${API_BASE}/v1/auth/logout`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${s.accessToken}` },
+				body: JSON.stringify({ refresh_token: s.refreshToken })
+			});
+		} catch {
+			// Logout best-effort: la sesión local se limpia igual.
+		}
+	}
+	session.clear();
+	sessionEvent.set(null);
+	if (browser) await goto('/');
+}
 
-/**
- * Email of the signed-in user: the backend record when it is loaded, Clerk's
- * own email otherwise.
- */
-export const sessionEmail: Readable<string | null> = derived(
-	[clerkUser, backendUser],
-	([$clerkUser, $backendUser]) => $backendUser?.email ?? clerkEmail($clerkUser)
-);
+// === Onboarding wizard (3 pasos, design §8.4) ===
 
-export const isRecruiter = derived(session, ($s) => $s?.user.role === 'recruiter');
+export function startOnboarding(): void {
+	if (browser) localStorage.setItem(ONBOARDING_KEY, '1');
+}
 
-/** Role from the authoritative backend user record. */
-export const currentRole: Readable<Role | null> = derived(
-	session,
-	($s) => $s?.user.role ?? null
-);
+export function isOnboarding(): boolean {
+	if (!browser) return false;
+	return localStorage.getItem(ONBOARDING_KEY) === '1';
+}
 
-// ─── Guards ─────────────────────────────────────────────────────────────────
+export function completeOnboarding(): void {
+	if (browser) localStorage.removeItem(ONBOARDING_KEY);
+}
 
-/**
- * Waits up to 5 s for Clerk to finish loading, then returns false if still
- * not signed in (treats as "not authenticated").  Otherwise ensures the
- * backend user record exists and returns true.
- */
+// === Guards de ruta (ssr=false: todo corre client-side) ===
+
 export async function requireSession(): Promise<boolean> {
 	if (!browser) return false;
-
-	// Wait for Clerk to be ready (max 5 s).
-	// Svelte stores emit the current value SYNCHRONOUSLY on subscribe, so the
-	// ready case must not touch `unsub` inside the first callback invocation
-	// (it would hit the temporal dead zone before assignment). Clean up via
-	// microtask instead.
-	const ready = await Promise.race([
-		(async () => {
-			if (get(clerkReady)) return true;
-			return new Promise<boolean>((resolve) => {
-				let unsub: (() => void) | undefined;
-				unsub = clerkReady.subscribe((v) => {
-					if (!v) return;
-					queueMicrotask(() => unsub?.());
-					resolve(true);
-				});
-			});
-		})(),
-		new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5_000)),
-	]);
-
-	if (!ready) {
-		// Clerk not loaded — treat as signed out.
+	const s = get(session);
+	if (!s) {
 		await goto('/login?reason=required');
 		return false;
 	}
-
-	const u = get(clerkUser);
-	if (!u) {
-		await goto('/login?reason=required');
-		return false;
-	}
-
-	// Ensure backend user is populated (may trigger auto-provision).
-	await ensureBackendUser();
-	if (get(backendUser) === null) {
-		// Could not reach backend; still treat as authenticated (Clerk session OK).
-		// Guards below will fail if they need backend user specifically.
-	}
-	return true;
+	await refreshIfNeeded();
+	return get(session) !== null;
 }
 
 export async function requireRole(role: Role): Promise<boolean> {
@@ -289,23 +298,12 @@ export async function requireRole(role: Role): Promise<boolean> {
 	return true;
 }
 
-// ─── Logout ─────────────────────────────────────────────────────────────────
+let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
-export async function logout(): Promise<void> {
-	await clerkSignOut();
-	backendUser.set(null);
-	_prevClerkUserId = undefined;
-	_auditClaimed = false;
-	if (browser) await goto('/');
+/** Refresh proactivo cada 30 s (design §8.1). Idempotente. */
+export function startSessionRefresh(): void {
+	if (!browser || refreshTimer !== null) return;
+	refreshTimer = setInterval(() => {
+		void refreshIfNeeded();
+	}, 30_000);
 }
-
-// ─── Re-export Clerk mount helpers for use by pages ──────────────────────────
-
-/** Mounts Clerk's SignIn component (exported so login/+page.svelte can call it). */
-export { mountSignIn, mountSignUp };
-
-// NOTE: `login()` and `signup()` functions were removed — their call sites
-// (login page and signup page) now use Clerk's hosted components instead.
-// `refreshTokens`, `refreshIfNeeded`, `startSessionRefresh`, `refreshTimer`,
-// `decodeJwtExpMs`, `sessionEvent`, and the localStorage `asistcv.session`
-// key are all gone (replaced by Clerk's own session management).

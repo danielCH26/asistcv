@@ -5,15 +5,10 @@
 	import Logo from '$components/Logo.svelte';
 	import { page } from '$app/stores';
 	import { _ } from 'svelte-i18n';
-	import { isAuthenticated, isRecruiter, logout, sessionEmail } from '$stores/session';
-	import { initClerk } from '$lib/clerk';
-	import { onMount } from 'svelte';
+	import { isAuthenticated, isRecruiter, logout, session, startSessionRefresh } from '$stores/session';
 
 	setupI18n();
-
-	onMount(() => {
-		void initClerk();
-	});
+	startSessionRefresh();
 
 	$: pathname = $page.url.pathname;
 
@@ -130,6 +125,11 @@
 					class:is-active={pathname.startsWith('/audit')}
 					href="/audit">{$_('app.nav.audit')}</a
 				>
+				<a
+					class="app-shell__link app-shell__link--quiet"
+					class:is-active={pathname.startsWith('/profile')}
+					href="/profile">{$_('app.nav.profile')}</a
+				>
 			</nav>
 
 			<div class="app-shell__actions">
@@ -145,17 +145,12 @@
 					class:is-active={pathname.startsWith('/billing')}
 					href="/billing">{$_('app.nav.billing')}</a
 				>
-				<a
-					class="app-shell__link app-shell__link--quiet"
-					class:is-active={pathname.startsWith('/profile')}
-					href="/profile">{$_('app.nav.profile')}</a
-				>
 				<LanguageToggle />
 				{#if $isAuthenticated}
 					<button
 						type="button"
 						class="app-shell__session"
-						title={$sessionEmail ?? ''}
+						title={$session?.user.email ?? ''}
 						on:click={() => logout()}>{$_('app.nav.logout')}</button
 					>
 				{:else}
@@ -414,8 +409,18 @@
 
 	.app-shell__nav {
 		display: flex;
-		gap: var(--space-1);
-		margin-left: var(--space-4);
+		/* The nav is the one part of the shell whose width is CONTENT-driven:
+		   it grows with the number of links (3 logged out, 6 for a recruiter)
+		   and with the label length of the active locale. Below 640px it is
+		   given `width: 100%` on its own row, and 6 links do not fit a 327px
+		   row -- they overflowed the page sideways. Letting the links wrap
+		   inside the nav is what keeps that row from becoming a scrollbar.
+		   The links keep their own padding and gap; only their line breaking
+		   changes. */
+		flex-wrap: wrap;
+		gap: var(--space-3);
+		margin-left: auto;
+		margin-right: var(--space-4);
 	}
 
 	.app-shell__link {
@@ -447,7 +452,6 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
-		margin-left: auto;
 	}
 
 	.app-shell__session {
@@ -509,7 +513,7 @@
 			order: 3;
 			width: 100%;
 			margin-left: 0;
-			overflow-x: auto;
+			margin-right: 0;
 		}
 
 		.app-shell__actions {

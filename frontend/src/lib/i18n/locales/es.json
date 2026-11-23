@@ -22,16 +22,6 @@
     "required": "Necesitás una cuenta para acceder a esta sección.",
     "tokenReused": "Tu sesión fue invalidada por seguridad. Iniciá sesión nuevamente."
   },
-  "verifyEmail": {
-    "title": "Verificación de email",
-    "checking": "Verificando tu email…",
-    "success": "Tu email quedó verificado. Ya podés comprar un plan.",
-    "missingToken": "Este link no trae el token de verificación.",
-    "invalid": "Este link no es válido. Pedí un nuevo email de verificación.",
-    "expired": "Este link expiró. Pedí un nuevo email de verificación.",
-    "used": "Este link ya se usó.",
-    "cta": "Ir a mi perfil"
-  },
   "home": {
     "heading": "Pegá una descripción del puesto",
     "intro": "Pegá el texto de la descripción del puesto (mínimo 50 caracteres) y obtené una coincidencia honesta contra tu perfil.",
@@ -124,11 +114,6 @@
     "haveAccount": "¿Ya tenés cuenta?",
     "loginLink": "Ingresá",
     "loading": "Preparando tu cuenta…"
-  },
-  "clerk": {
-    "errorTitle": "No pudimos cargar el acceso",
-    "errorBody": "El servicio de autenticación no está disponible en este momento. Revisá tu conexión o intentá de nuevo en unos segundos.",
-    "retry": "Reintentar"
   },
   "login": {
     "title": "Ingresar",
@@ -426,9 +411,21 @@
       "current": "Tu plan actual",
       "mostPopular": "El más elegido",
       "forRecruiters": "Para equipos de reclutamiento",
-      "freeFeatures": ["3 matches al mes", "1 análisis de CV", "Historial de tus análisis"],
-      "seekerFeatures": ["50 matches al mes", "10 adaptaciones de CV", "Alertas de ofertas"],
-      "recruiterFeatures": ["50 candidatos rankeados", "Análisis ilimitados", "Roster de candidatos"]
+      "freeFeatures": [
+        "3 matches al mes",
+        "1 análisis de CV",
+        "Historial de tus análisis"
+      ],
+      "seekerFeatures": [
+        "50 matches al mes",
+        "10 adaptaciones de CV",
+        "Alertas de ofertas"
+      ],
+      "recruiterFeatures": [
+        "50 candidatos rankeados",
+        "Análisis ilimitados",
+        "Roster de candidatos"
+      ]
     },
     "faq": {
       "heading": "Preguntas frecuentes",
@@ -463,5 +460,28 @@
       "rights": "© {year} eptus. Todos los derechos reservados.",
       "madeIn": "Hecho en Colombia"
     }
+  },
+  "auth": {
+    "emailLabel": "Email",
+    "emailPlaceholder": "tu@email.com",
+    "sendCode": "Enviar código",
+    "sending": "Enviando…",
+    "codeLabel": "Código de 6 dígitos",
+    "verify": "Verificar y entrar",
+    "verifying": "Verificando…",
+    "codeSentTo": "Te enviamos un código a {email}.",
+    "changeEmail": "Corregir email",
+    "resend": "Reenviar código",
+    "resendIn": "Reenviar en {seconds}s",
+    "errorSend": "No pudimos enviar el código. Reintentá en unos segundos.",
+    "errorInvalidCode": "El código no es correcto. Revisalo e intentá de nuevo.",
+    "errorExpired": "El código venció. Pedí uno nuevo.",
+    "errorMaxAttempts": "Demasiados intentos fallidos. Pedí un código nuevo.",
+    "errorCooldown": "Espera un minuto antes de pedir otro código.",
+    "errorRateLimited": "Demasiados intentos. Esperá unos minutos y reintentá.",
+    "errorGeneric": "Algo salió mal. Reintentá en unos segundos.",
+    "passwordlessHint": "Entrás con tu email: te mandamos un código, sin contraseñas.",
+    "haveAccount": "¿Ya tenés cuenta?",
+    "loginLink": "Ingresá"
   }
 }

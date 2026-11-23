@@ -17,11 +17,14 @@ vi.mock('$api/client', () => ({
 }));
 
 // `isAuthenticated` es un derived store en la versión Clerk; un writable con
-// `true` cumple el mismo contrato para esta página.
+// `true` cumple el mismo contrato para esta página. `refreshIfNeeded` renueva
+// el access token antes de pedir la suscripción: sin él en el mock, la página
+// revienta en onMount y no renderiza nada.
 vi.mock('$stores/session', async () => {
 	const { writable } = await import('svelte/store');
 	return {
-		isAuthenticated: writable(true)
+		isAuthenticated: writable(true),
+		refreshIfNeeded: vi.fn().mockResolvedValue(undefined)
 	};
 });
 

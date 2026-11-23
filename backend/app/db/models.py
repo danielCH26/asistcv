@@ -1024,3 +1024,59 @@ class PaymentWebhookEvent(SQLModel, table=True):
         default_factory=datetime.utcnow,
         sa_column=Column(DateTime(timezone=True), server_default="NOW()"),
     )
+
+
+# === Passwordless auth (email + code) ===
+
+
+class AuthEmailCode(SQLModel, table=True):
+    """One-shot, short-TTL numeric code for passwordless email login.
+
+    The plaintext code is sent to the user's email; only its SHA256 hash
+    is persisted (same pattern as ``RefreshToken`` /
+    ``EmailVerificationToken``). Login and signup share one flow: if the
+    email has no account yet, verification creates one.
+
+    Lifecycle: ``POST /v1/auth/email-code/request`` inserts a row with a
+    fresh code and ``expires_at = now + ttl``; ``POST
+    /v1/auth/email-code/verify`` matches the hash, increments ``attempts``
+    on misses (max ``settings.email_code_max_attempts``) and stamps
+    ``used_at`` on success so the code can never be replayed.
+    """
+
+    __tablename__ = "auth_email_codes"
+
+    id: int | None = Field(default=None, primary_key=True)
+    email: str = Field(
+        max_length=320,
+        index=True,
+        description="Lowercased destination address for the code.",
+    )
+    code_hash: str = Field(
+        max_length=128,
+        unique=True,
+        description="SHA256 hex digest of the plaintext code.",
+    )
+    purpose: str = Field(
+        default="login",
+        max_length=32,
+        description="What the code grants (reserved for future flows).",
+    )
+    attempts: int = Field(
+        default=0,
+        sa_column=Column(Integer, nullable=False, server_default="0"),
+        description="Failed verification attempts against this code.",
+    )
+    expires_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+        description="When the code stops being valid (short TTL).",
+    )
+    used_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+        description="Set when verification succeeds; a used code is dead.",
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column=Column(DateTime(timezone=True), server_default="NOW()", nullable=False),
+    )

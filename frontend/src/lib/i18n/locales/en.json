@@ -22,16 +22,6 @@
     "required": "You need an account to access this section.",
     "tokenReused": "Your session was invalidated for security reasons. Please log in again."
   },
-  "verifyEmail": {
-    "title": "Email verification",
-    "checking": "Verifying your email…",
-    "success": "Your email is verified. You can now buy a plan.",
-    "missingToken": "This link is missing the verification token.",
-    "invalid": "This link is not valid. Request a new verification email.",
-    "expired": "This link expired. Request a new verification email.",
-    "used": "This link was already used.",
-    "cta": "Go to my profile"
-  },
   "home": {
     "heading": "Paste a Job Description",
     "intro": "Paste the job description text (minimum 50 characters) and get an honest match against your profile.",
@@ -124,11 +114,6 @@
     "haveAccount": "Already have an account?",
     "loginLink": "Log in",
     "loading": "Setting up your account…"
-  },
-  "clerk": {
-    "errorTitle": "We couldn't load sign-in",
-    "errorBody": "The authentication service is unavailable right now. Check your connection or try again in a few seconds.",
-    "retry": "Try again"
   },
   "login": {
     "title": "Log in",
@@ -426,9 +411,21 @@
       "current": "Your current plan",
       "mostPopular": "Most chosen",
       "forRecruiters": "For recruiting teams",
-      "freeFeatures": ["3 matches a month", "1 CV analysis", "History of your analyses"],
-      "seekerFeatures": ["50 matches a month", "10 CV adaptations", "Job alerts"],
-      "recruiterFeatures": ["50 ranked candidates", "Unlimited analyses", "Candidate roster"]
+      "freeFeatures": [
+        "3 matches a month",
+        "1 CV analysis",
+        "History of your analyses"
+      ],
+      "seekerFeatures": [
+        "50 matches a month",
+        "10 CV adaptations",
+        "Job alerts"
+      ],
+      "recruiterFeatures": [
+        "50 ranked candidates",
+        "Unlimited analyses",
+        "Candidate roster"
+      ]
     },
     "faq": {
       "heading": "Frequently asked questions",
@@ -463,5 +460,28 @@
       "rights": "© {year} eptus. All rights reserved.",
       "madeIn": "Made in Colombia"
     }
+  },
+  "auth": {
+    "emailLabel": "Email",
+    "emailPlaceholder": "you@email.com",
+    "sendCode": "Send code",
+    "sending": "Sending…",
+    "codeLabel": "6-digit code",
+    "verify": "Verify and sign in",
+    "verifying": "Verifying…",
+    "codeSentTo": "We sent a code to {email}.",
+    "changeEmail": "Change email",
+    "resend": "Resend code",
+    "resendIn": "Resend in {seconds}s",
+    "errorSend": "We could not send the code. Please try again shortly.",
+    "errorInvalidCode": "That code is not right. Double-check and try again.",
+    "errorExpired": "The code expired. Request a new one.",
+    "errorMaxAttempts": "Too many failed attempts. Request a new code.",
+    "errorCooldown": "Wait a minute before requesting another code.",
+    "errorRateLimited": "Too many attempts. Wait a few minutes and try again.",
+    "errorGeneric": "Something went wrong. Please try again in a few seconds.",
+    "passwordlessHint": "Sign in with your email: we send you a code, no passwords.",
+    "haveAccount": "Already have an account?",
+    "loginLink": "Sign in"
   }
 }

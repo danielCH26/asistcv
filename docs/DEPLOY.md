@@ -73,12 +73,66 @@ secrets "environment variables"; they are injected at runtime, not committed):
 | `WOMPI_INTEGRITY_KEY` | Integrity key del aplicativo: firma la transacción contra el checkout de Wompi. |
 | `WOMPI_ACCEPTANCE_TOKEN` | Token de aceptación (términos). El vigente se pide a `GET /v1/merchants/info` con la public key en el header `x-merchant-public-key`. |
 | `WOMPI_TEST_MODE` | `true` para `sandbox.wompi.co`; `false` para `production.wompi.co`. |
-| `CLERK_PUBLISHABLE_KEY` | **Required for Clerk auth.** The publishable key of the Clerk instance (`pk_live_...` in production). The backend derives the Frontend API domain from it to fetch the JWKS and validate session tokens. Must be the **same** key the frontend uses — otherwise the backend cannot resolve the signing keys. See "Clerk authentication" below. |
-| `CLERK_SECRET_KEY` | **Required for Clerk auth.** Clerk Backend API key (`sk_live_...`). Enables auto-provisioning: when a Clerk token arrives for an unknown user, the backend fetches the profile from `api.clerk.com` and creates the local row. |
-| `CLERK_WEBHOOK_SIGNING_SECRET` | **Required for the Clerk webhook.** Svix signing secret (`whsec_...`) from the Clerk dashboard endpoint's "Signing Secret". The webhook verifies the HMAC-SHA256 signature manually — no extra dependency. |
-| `CLERK_AUTHORIZED_PARTIES` | Comma-separated list of origins allowed in the `azp` claim, e.g. `https://asistcv-frontend.pages.dev`. Empty falls back to `frontend_url`. |
+| `JWT_SECRET` | **Requerido.** Secreto HS256 con el que el backend firma el access token (15 min) y el refresh token (30 días). Debe ser largo y aleatorio: `python -c "import secrets; print(secrets.token_urlsafe(48))"`. Si cambia, caducan todas las sesiones. |
+| `EMAIL_PROVIDER` | `resend` (default), `brevo` o `console`. `console` imprime el código en el log del servicio — solo para QA local. |
+| `RESEND_API_KEY` | Clave de Resend (`re_...`), cuando `EMAIL_PROVIDER=resend`. Requiere un dominio emisor verificado. |
+| `BREVO_API_KEY` | Clave de Brevo (`xkeysib-...`), cuando `EMAIL_PROVIDER=brevo`. Funciona con un **remitente verificado** sin dominio propio — es el camino de $0 mientras eptus no tenga dominio. |
+| `EMAIL_FROM` | Remitente: `eptus <noreply@eptus.com>` por defecto. Brevo exige que la dirección esté verificada en su panel. |
+| `EMAIL_CODE_TTL_SECONDS` | Vigencia del código (default `600` = 10 minutos). |
+| `EMAIL_CODE_MAX_ATTEMPTS` | Intentos fallidos antes de bloquear un código (default `5`). |
+| `EMAIL_CODE_LENGTH` | Longitud del código numérico (default `6`). |
+| `CLERK_PUBLISHABLE_KEY` | **Opcional.** Solo si se retoma Clerk (ver "Clerk (archivado)" más abajo). Vacío = el login nativo por código es el único camino. |
+| `CLERK_SECRET_KEY` | **Opcional.** Auto-provisionado de usuarios de Clerk. Vacío con el login nativo. |
+| `CLERK_WEBHOOK_SIGNING_SECRET` | **Opcional.** Firma del webhook de Clerk. Vacío con el login nativo. |
+| `CLERK_AUTHORIZED_PARTIES` | **Opcional.** Orígenes permitidos en el claim `azp`. Vacío = solo Clerk. |
 
-### Clerk authentication
+### Autenticación passwordless (código de email) — activa
+
+El login ya **no** depende de Clerk: es propio. El usuario escribe su email,
+recibe un código de 6 dígitos y se crea la cuenta en el primer login
+verificado. No hay contraseñas (la columna `users.password_hash` es nullable
+desde la migración 029).
+
+**Flujo completo:**
+
+| Endpoint | Qué hace |
+|---|---|
+| `POST /api/v1/auth/email-code/request` | Genera el código (SHA-256, TTL 10 min, un solo uso), lo envía por email y responde `202 {"detail":"CODE_SENT"}` siempre — genérico a propósito, para no filtrar si la cuenta existe. |
+| `POST /api/v1/auth/email-code/verify` | Valida el código y devuelve el par de tokens (`access` 15 min + `refresh` 30 días con rotación). Crea la cuenta si es la primera vez. |
+| `POST /api/v1/auth/refresh` | Rota el refresh token. Detecta reuso y revoca toda la familia. |
+| `POST /api/v1/auth/logout` | Revoca el refresh token. |
+
+**Variables de entorno en Render** (ver la tabla de arriba): `JWT_SECRET`,
+`EMAIL_PROVIDER`, `RESEND_API_KEY` o `BREVO_API_KEY`, `EMAIL_FROM`.
+
+**Protección contra abuso** (ya implementada, no tocar sin tests):
+
+- Ventana de fuerza bruta compartida: 5 intentos fallidos en 15 min, por
+  **email y por IP** (mismo corte para `request` y `verify`).
+- Cooldown de 60 s por email entre códigos.
+- Tope de 10 códigos por email por hora (anti *mail bombing*).
+- 5 intentos por código antes de bloquearlo.
+- Respuestas genéricas: nunca se distingue "ese email no existe" de "el código
+  no era correcto".
+
+**Qué proveedor usar hoy:**
+
+| Proveedor | Costo | Requisito | Límite free |
+|---|---|---|---|
+| `brevo` | $0 | Remitente verificado (sin dominio propio) | 300 emails/día |
+| `resend` | $0 | **Dominio emisor verificado** | 3.000/mes con tope de 100/día |
+| `console` | $0 | Ninguno | Solo QA: imprime el código en el log |
+
+Como eptus todavía no tiene dominio propio, **`brevo` es el camino de $0 que
+funciona hoy**. `resend` es el camino a largo plazo: en cuanto exista el
+dominio, se verifica el dominio emisor en Resend y el tope diario de 100
+emails desaparece (plan Pro: $20/mes, 50.000 emails sin tope diario).
+
+> Con `EMAIL_PROVIDER=resend` y sin `RESEND_API_KEY`, el endpoint **no falla**:
+> el servicio de email loguea `email_service_disabled` y el request sigue
+> con `202`. El usuario no recibe el código, pero nada se rompe.
+
+### Clerk (archivado — requiere dominio propio)
 
 Auth is passwordless: Clerk sends a 6-digit email code and issues a short-lived session JWT (~60 s, auto-renewed by the SDK). The frontend sends it as `Authorization: Bearer <clerk session token>`; the backend verifies the RS256 signature against Clerk's JWKS, then resolves the local `users` row by `clerk_id`.
 

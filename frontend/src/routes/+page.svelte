@@ -8,9 +8,10 @@
 	import { analysisStore } from '$stores/analysis';
 	import { profileStore } from '$stores/profile';
 	import { apiClient } from '$api/client';
-	import { isAuthenticated } from '$stores/session';
+	// La sesión nativa necesita un token vigente antes de pegarle a la API:
+	// `refreshIfNeeded()` lo renueva si está por expirar.
+	import { isAuthenticated, refreshIfNeeded } from '$stores/session';
 	import { ApiError, type SubscriptionInfo } from '$api/types';
-
 	let subscription: SubscriptionInfo | null = null;
 	// 'unknown' | 'none' | 'some'. Si el usuario tiene un CV, el perfil se arma
 	// solo a partir de ese CV en el primer match: no hay que anunciarle que
@@ -20,6 +21,7 @@
 
 	onMount(async () => {
 		if (!get(isAuthenticated)) return;
+		await refreshIfNeeded();
 		try {
 			subscription = await apiClient.subscription();
 		} catch {
