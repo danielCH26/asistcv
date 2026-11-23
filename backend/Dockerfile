@@ -49,4 +49,17 @@ ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 7860
 
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
+# Las migraciones se aplican al arrancar el contenedor, no como paso manual:
+# el contenedor ya tiene `DATABASE_URL` (lo inyecta la plataforma), así que
+# no hace falta guardar el secreto de la base en ningún otro lado —ni en
+# GitHub Actions— ni acordarse de correrlo.
+#
+# `alembic upgrade head` es idempotente: si no hay migraciones nuevas, no
+# hace nada. Si una migración falla, el contenedor NO levanta: es preferible
+# que no arranque a que sirva código contra un esquema que no corresponde.
+#
+# OJO con el autoescalado: dos contenedores arrancando a la vez podrían
+# correr la misma migración en paralelo. Con una instancia (el plan actual)
+# no puede pasar; si algún día se escala, hay que mover esto a un paso
+# único (un job de despliegue o un lock).
+CMD ["sh", "-c", "uv run alembic upgrade head && exec uv run uvicorn app.main:app --host 0.0.0.0 --port 7860"]

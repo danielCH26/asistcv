@@ -274,28 +274,40 @@ explicitly: Environment → `PORT` = `7860`.
 
 ## 3. Apply the migrations (Neon)
 
-Migrations run **automatically in CI**: the `Migrate database` workflow
-(`.github/workflows/migrate.yml`) applies `alembic upgrade head` on every push
-to `main`. It needs one secret:
+**Las migraciones las aplica el contenedor al arrancar.** El `Dockerfile`
+corre `alembic upgrade head` antes de levantar el servidor, y el contenedor
+ya tiene `DATABASE_URL` (lo inyecta la plataforma). No hay paso manual, no
+hace falta guardar el secreto de la base en GitHub Actions y no hay que
+acordarse de correrlo.
 
-| Where | What |
-|---|---|
-| GitHub → Settings → Secrets and variables → Actions | `DATABASE_URL` — the same pooled connection string Neon gives you (Neon → the project → **Connection string** → *Pooled connection*), with the password substituted |
-
-Without that secret the workflow **warns and skips** the migration (it does not
-fail the push: a missing deployment variable should not paint every commit red)
-and the migrations have to be applied by hand:
-
-```bash
-cd backend
-uv sync --all-extras
-uv run alembic upgrade head
-uv run alembic current   # → <revision> (head)
+```dockerfile
+CMD ["sh", "-c", "uv run alembic upgrade head && exec uv run uvicorn app.main:app --host 0.0.0.0 --port 7860"]
 ```
 
-Run it whenever the migration chain gains a revision. The backend serves traffic against the schema it finds; a missing migration shows up as a runtime error (`column "clerk_id" does not exist`), not as a failed boot.
+`alembic upgrade head` es idempotente: sin migraciones nuevas no hace nada.
+Si una migración falla, **el contenedor no levanta** — es preferible a servir
+código contra un esquema que no corresponde.
 
-Neon suspends the server after inactivity; the first query after the sleep adds ~500 ms. That is expected and does not affect the migration step.
+> **Autoescalado:** dos contenedores arrancando a la vez podrían correr la
+> misma migración en paralelo. Con una instancia (el plan actual) no puede
+> pasar. Si algún día se escala, esto hay que moverlo a un paso único (un
+> job de despliegue o un lock en la base).
+
+Para aplicarlas a mano (por ejemplo, si hay que revisar algo antes de
+desplegar), la shell del servicio en Render:
+
+```bash
+cd /app && uv run alembic upgrade head && uv run alembic current
+```
+
+Neon suspende el servidor después de un rato de inactividad; la primera
+consulta tras el sleep suma ~500 ms. Eso no afecta a la migración.
+
+La cadena de conexión que usa el backend es la **directa** (no la del pooler):
+Neon recomienda la directa para Alembic porque el pooler no soporta
+sentencias preparadas.
+
+
 
 ## 4. Verify the deploy
 
