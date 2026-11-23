@@ -101,46 +101,66 @@ Three things must line up, or sign-up silently fails:
 
 #### El proxy de Clerk (el bloqueante actual en producción)
 
-**Síntoma:** `/login` y `/signup` muestran el cartel "No pudimos cargar el acceso", y ninguna sesión sirve aunque se corrija el login.
+**Estado al 2026-11-23: PENDIENTE, a propósito.** El login no funciona y
+nadie puede comprar hasta que se resuelva. Todo lo demás (Wompi, Mercado
+Pago, planes en COP, migraciones) está desplegado y verificado.
 
-**Causa real (verificada el 2026-11-18):** la publishable key de producción
-`pk_live_Y2xlcmsuYXNpc3Rjdi1mcm9udGVuZC5wYWdlcy5kZXYk` **codifica el
-dominio `clerk.asistcv-frontend.pages.dev`**, que es un proxy. Ese host no
-tiene ningún deployment, así que Cloudflare Pages contesta:
+**Síntoma:** `/login` y `/signup` muestran el cartel "No pudimos cargar el
+acceso", y el backend rechaza todos los tokens de sesión.
 
-```
-HTTP 404 — "Deployment Not Found. Nothing is here yet."
-```
-
-Lo que eso rompe, en los dos extremos:
+**Causa real (verificada contra el panel de Clerk):** la instancia de
+producción tenía **un solo dominio**: `asistcv-frontend.pages.dev`, en estado
+*Checking / Unverified*. Clerk le pide un CNAME `clerk` →
+`frontend-api.clerk.services` en el DNS de ese dominio. **Es imposible:**
+`pages.dev` es el zone compartido de Cloudflare, no una zona de la cuenta, y
+no se le pueden agregar CNAMEs ni attachar un Worker. Sin ese proxy,
+`/v1/environment` y `/.well-known/jwks.json` dan 404: el login no arranca y
+el backend rechaza todos los tokens.
 
 | Extremo | Lo que pide | Resultado |
 |---|---|---|
 | Frontend | `GET /v1/environment` (lo llama `clerk.load()`) | 404 → `clerk.load()` falla → el cartel de error |
 | Backend | `GET /.well-known/jwks.json` (para verificar el token) | 404 → **todos** los tokens de sesión se rechazan |
 
-Un subdominio de un proyecto de Pages **no puede** reenviar `/v1/*` a Clerk:
-eso lo hace un Worker, y **un Worker no se puede attachar a `*.pages.dev`**
-(el zone `pages.dev` es compartido y no pertenece a la cuenta). Sin un
-dominio propio, la única salida es la segunda:
+**Lo que ya está hecho** (para que retomarlo sea rápido):
 
-1. **Sin dominio propio (este caso) — usar la clave del dominio nativo.**
-   En el panel de Clerk, abrí la instancia y copiá la publishable key del
-   **dominio nativo** del Frontend API (el que codifica
-   `<instancia>.clerk.accounts.dev`), NO la del proxy. Poné esa misma key
-   en los dos lados:
+- La app vieja de Clerk (`Eptus`, con el proxy roto) **fue borrada**. Sus
+  claves en Cloudflare Pages y Render quedaron sin instancia: **el login
+  está caído a propósito, no por un descuido.**
+- Hay una **app nueva** en la misma organización: **`eptus`**, con instancia
+  de desarrollo en el dominio nativo `uncommon-pigeon-297.clerk.accounts.dev`
+  (funciona sin DNS) y una instancia de producción creada con el dominio de
+  aplicación `asistcv-frontend.pages.dev` (inverificada, como la anterior).
+- La cuenta de Cloudflare **no tiene ningún dominio propio**: solo el
+  proyecto de Pages y Workers.
+
+**Lo que falta, en orden:**
+
+1. **Un dominio propio** (ej. `eptus.co`, ~10 USD/año). Es la condición para
+   que Clerk sirva una instancia de producción: el FAPI queda en
+   `clerk.<tu-dominio>` y necesita el CNAME + el certificado que emite Clerk.
+   Con dominio, además, eptus deja de depender de `pages.dev`.
+2. **El proxy** según los pasos de Clerk: CNAME `clerk` →
+   `frontend-api.clerk.services` (proxy naranja) y `accounts` →
+   `accounts.clerk.services` (proxy del Account Portal). El panel tiene
+   **"Configure DNS automatically"** si el dominio está en la misma cuenta
+   de Cloudflare.
+3. **La publishable key** nueva (la del dominio nativo) en los dos lados:
    - Cloudflare Pages → `PUBLIC_CLERK_PUBLISHABLE_KEY`
    - Render → `CLERK_PUBLISHABLE_KEY`
 
-   El SDK habla directo con Clerk y el backend deriva el JWKS del dominio
-   correcto. En la instancia, agregá el origen permitido
-   `https://asistcv-frontend.pages.dev` (y `http://localhost:5173` para
-   desarrollo local).
+   Y el `CLERK_SECRET_KEY` de la instancia de producción en Render.
+4. **El webhook de Clerk** en la instancia nueva apuntando a
+   `https://asistcv-backend.onrender.com/api/v1/webhooks/clerk`, y su
+   *signing secret* en `CLERK_WEBHOOK_SIGNING_SECRET` (Render).
+5. **Allowed origins** de la instancia: `https://asistcv-frontend.pages.dev`
+   (y el dominio propio, cuando lo haya).
 
-2. **Con dominio propio — desplegar el proxy.** Un Cloudflare Worker con
-   una ruta para `clerk.<tu-dominio>` reenvía `/v1/*` y
-   `/.well-known/jwks.json` al Frontend API de la instancia. El panel de
-   Clerk genera el código del Worker.
+**Mientras tanto**, si hace falta un login que funcione YA, la instancia de
+**desarrollo** de la app `eptus` sirve: su publishable key codifica
+`uncommon-pigeon-297.clerk.accounts.dev` y no necesita DNS. Es de desarrollo:
+sin SLA, con límites estrictos de uso (emails y MAU) y Clerk puede borrarla
+si queda inactiva. Sirve para probar el flujo completo, no para vender.
 
 **Cómo verificar en un comando** (no cambia nada):
 
@@ -164,8 +184,9 @@ bien, los dos dan 200 y el script sale con 0.
 
 **Vigilante automático:** el workflow `Clerk availability`
 (`.github/workflows/clerk-check.yml`) corre este chequeo en cada push a
-`main` y cada 30 minutos. Es el que va a avisar —en el CI, sin que nadie
-mire— si el login vuelve a caerse.
+`main` y cada 30 minutos. **Está en rojo a propósito** mientras el login
+siga caído: es la señal de que ese es el bloqueo. Cuando se arregle, se pone
+verde solo.
 
 > **CORS:** el backend responde `Access-Control-Allow-Origin` solo para los
 > orígenes configurados; un origen ajeno no recibe la cabecera. Ojo con
