@@ -32,6 +32,7 @@ from app.schemas.audit import (
     ClaimAuditResponse,
 )
 from app.services import pdf_parser
+from app.services.audit_email import send_audit_result_email
 from app.services.audit_rate_limit import AUDIT_RATE_LIMIT, check_rate_limit
 from app.services.audit_retention import delete_expired_audits, verify_cleanup_token
 from app.services.audit_runner import run_audit, run_cv_audit
@@ -331,12 +332,15 @@ async def capture_email(
                 message="Email already captured for this audit",
             )
 
-        # Update audit with email (in real implementation, would trigger email send)
+        # Update audit with email and persist the captured address.
+        # Reassignment (not in-place mutation) is required: audit_result_json
+        # is a plain JSON column, so SQLAlchemy would not detect a nested
+        # write and the address would be silently lost on commit.
         audit.email_captured = True
-        # Store email temporarily in result_json for email sending
-        if audit.audit_result_json is None:
-            audit.audit_result_json = {}
-        audit.audit_result_json["captured_email"] = body.email
+        audit.audit_result_json = {
+            **(audit.audit_result_json or {}),
+            "captured_email": body.email,
+        }
 
         # Log funnel event
         event = AuditFunnelEvent(
@@ -348,8 +352,12 @@ async def capture_email(
 
         await session.commit()
 
-    # In production, trigger email sending here
-    # For now, just return success
+    stored_result = audit.audit_result_json or {}
+    sent = await send_audit_result_email(body.email, stored_result)
+    if not sent:
+        # The funnel step already succeeded (202 is the contract); a
+        # provider outage only loses the copy in the inbox.
+        logger.warning("audit_result_email_failed", audit_id=audit.id)
 
     return CaptureEmailResponse(
         message="Email captured successfully. Result will be sent shortly.",

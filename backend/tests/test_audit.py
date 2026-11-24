@@ -508,6 +508,92 @@ class TestCaptureEmail:
         )
         assert response.status_code == 404
 
+    @pytest.mark.asyncio
+    async def test_capture_email_sends_result_email(self, client):
+        """Capture email stores the address and sends the result to it."""
+        from sqlalchemy import select
+
+        from app.db.models import AuditUpload
+        from app.services.audit_token import compute_token_hash
+
+        _, plain_token, _ = await _seed_claimable_audit("capture-1@example.com")
+
+        sent: list[dict] = []
+
+        async def _fake_send(to, subject, html_body, text_body=None):
+            sent.append(
+                {"to": to, "subject": subject, "html": html_body, "text": text_body}
+            )
+            return True
+
+        with patch("app.services.email_service.send_email_async", _fake_send):
+            response = client.post(
+                f"/v1/audit/{plain_token}/capture-email",
+                json={"email": "capture-1@example.com"},
+            )
+
+        assert response.status_code == 202
+
+        # The result email went out, addressed to the captured inbox.
+        assert len(sent) == 1
+        assert sent[0]["to"] == "capture-1@example.com"
+        assert "80" in sent[0]["subject"]  # CLAIM_RESULT score
+        assert "Strong Python skills" in sent[0]["html"]
+
+        # captured_email is persisted (reassignment, not lost in-place write).
+        async with get_session_context() as session:
+            result = await session.execute(
+                select(AuditUpload).where(
+                    AuditUpload.audit_token_hash == compute_token_hash(plain_token)
+                )
+            )
+            audit = result.scalar_one()
+            assert audit.email_captured is True
+            assert audit.audit_result_json["captured_email"] == "capture-1@example.com"
+            # The original result survived the merge.
+            assert audit.audit_result_json["score"] == 80
+
+    @pytest.mark.asyncio
+    async def test_capture_email_is_idempotent_and_does_not_resend(self, client):
+        """A second capture returns early and does not send another email."""
+        _, plain_token, _ = await _seed_claimable_audit("capture-2@example.com")
+
+        sent: list[dict] = []
+
+        async def _fake_send(to, subject, html_body, text_body=None):
+            sent.append({"to": to})
+            return True
+
+        with patch("app.services.email_service.send_email_async", _fake_send):
+            first = client.post(
+                f"/v1/audit/{plain_token}/capture-email",
+                json={"email": "capture-2@example.com"},
+            )
+            second = client.post(
+                f"/v1/audit/{plain_token}/capture-email",
+                json={"email": "capture-2@example.com"},
+            )
+
+        assert first.status_code == 202
+        assert second.status_code == 202
+        assert len(sent) == 1  # no duplicate delivery
+
+    @pytest.mark.asyncio
+    async def test_capture_email_provider_failure_still_returns_202(self, client):
+        """A failed delivery does not break the funnel response."""
+        _, plain_token, _ = await _seed_claimable_audit("capture-3@example.com")
+
+        with patch(
+            "app.services.email_service.send_email_async",
+            AsyncMock(return_value=False),
+        ):
+            response = client.post(
+                f"/v1/audit/{plain_token}/capture-email",
+                json={"email": "capture-3@example.com"},
+            )
+
+        assert response.status_code == 202
+
 
 class TestAuditRetrieve:
     """Tests for audit retrieval endpoint."""
