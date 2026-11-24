@@ -600,6 +600,17 @@ from the service dashboard.
   `JWT_SECRET` in Environment to a freshly generated value and redeploy.
 - **502/timeout right after Live**: the container is still waking up (cold
   start). Retry after 30-60s.
+- **Wompi webhook answers `400 {"detail":"Invalid webhook signature"}`**: the
+  `X-Event-Checksum` header is missing, or the checksum does not match what
+  `verify_webhook_signature` computes. That function hashes
+  `"".join(values of signature.properties) + event["timestamp"] + secret`:
+  the property paths are relative to `data`, and **the timestamp is read from
+  the ROOT of the event** (`event["timestamp"]`), not from
+  `signature["timestamp"]`. Wompi sends it in both places; a payload with it
+  only inside `signature` always fails. Also check that
+  `WOMPI_WEBHOOK_SECRET` matches the environment the event came from
+  (`test_events_…` for the sandbox, `prod_events_…` for production): mixing
+  them is the usual cause right after switching modes.
 - **A sweeper fails with `HTTP 401`**: the GitHub secret and the Render env
   var are missing or not byte-identical. Copy the existing value from the
   service into the secret; do **not** generate a new one, because
