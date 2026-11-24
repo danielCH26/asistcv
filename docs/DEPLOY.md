@@ -146,13 +146,13 @@ EMAIL_FROM=eptus <eptus.asistcv@gmail.com>
 > `{"provider": "brevo", "status": 201, "event": "email_sent"}` con
 > `POST https://api.brevo.com/v3/smtp/email → 201 Created`.
 >
-> **Pendiente: verificar el remitente en Brevo.** En `app.brevo.com` →
-> Settings → *Senders, domains, IPs*, el remitente `eptus
-> <eptus.asistcv@gmail.com>` sigue en *Not verified*. Hasta que se verifique
-> (Brevo manda un código por correo a esa misma dirección), **solo se pueden
-> hacer envíos de prueba a la dirección del remitente**: cualquier otro
-> destinatario recibe `403 unauthorized sender` de la API de Brevo. O sea: el
-> login por código **no sirve todavía para usuarios distintos del titular**.
+> **Remitente verificado.** En `app.brevo.com` → Settings → *Senders, domains,
+> IPs*, el remitente `eptus <eptus.asistcv@gmail.com>` ya está en **Verified**
+> (Brevo manda el código de verificación a esa misma dirección). Verificado
+> además con un destinatario distinto del titular:
+> `{"provider":"brevo","to":"danielcordobahoward@gmail.com","status":201,
+> "event":"email_sent"}` — o sea, **el login por código ya llega a cualquier
+> usuario**, no solo al dueño de la cuenta.
 >
 > **Entregabilidad (riesgo aceptado).** Un remitente de email gratuito
 > (`gmail.com`) cae más en spam y no tiene DKIM/DMARC propios: Brevo lo avisa
