@@ -43,7 +43,7 @@ _logger = get_logger("app.services.offer_email")
 # Subject / body framing by frequency
 # ---------------------------------------------------------------------------
 
-_SUBJECT_TPL = "{n} {label} para vos"
+_SUBJECT_TPL = "{n} {label} para ti"
 _OFFER_TPL = """
 <h3><a href="{url}">{title}</a></h3>
 <p><strong>{company}</strong> — Score: {score:.0%}</p>

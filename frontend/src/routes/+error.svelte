@@ -13,9 +13,9 @@
 			: `${status} — Error`;
 
 	$: message = is404
-		? 'La página que buscás no existe o fue movida.'
+		? 'La página que buscas no existe o fue movida.'
 		: is500
-			? 'Algo salió mal en el servidor. Reintentá en unos minutos.'
+			? 'Algo salió mal en el servidor. Reintenta en unos minutos.'
 			: $page.error?.message ?? 'Ocurrió un error inesperado.';
 
 	// The store itself is always truthy — the signed-in state is its value.

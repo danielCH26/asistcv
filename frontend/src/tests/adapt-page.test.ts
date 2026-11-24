@@ -78,20 +78,20 @@ describe('adapt page — renderizado básico', () => {
 	it('muestra el heading y subtítulo', async () => {
 		render(AdaptPage);
 
-		expect(await screen.findByRole('heading', { name: /adaptá tu cv/i })).toBeTruthy();
+		expect(await screen.findByRole('heading', { name: /adapta tu cv/i })).toBeTruthy();
 		expect(screen.getByText(/reescribimos/i)).toBeTruthy();
 	});
 
 	it('muestra la empty state cuando no hay CVs cargados', async () => {
 		render(AdaptPage);
 
-		expect(await screen.findByText(/subí un cv primero/i)).toBeTruthy();
+		expect(await screen.findByText(/sube un cv primero/i)).toBeTruthy();
 	});
 
 	it('muestra el textarea de JD', async () => {
 		render(AdaptPage);
 
-		expect(await screen.findByPlaceholderText(/pegá acá la descripción/i)).toBeTruthy();
+		expect(await screen.findByPlaceholderText(/pega aquí la descripción/i)).toBeTruthy();
 	});
 
 	it('el botón submit está disabled cuando no hay CV seleccionado', async () => {
@@ -137,7 +137,7 @@ describe('adapt page — selector de CVs', () => {
 		const select = (await screen.findByRole('combobox')) as HTMLSelectElement;
 		await fireEvent.change(select, { target: { value: '7' } });
 
-		const textarea = await screen.findByPlaceholderText(/pegá acá la descripción/i);
+		const textarea = await screen.findByPlaceholderText(/pega aquí la descripción/i);
 		await fireEvent.input(textarea, { target: { value: 'x'.repeat(60) } });
 
 		const btn = (await screen.findByRole('button', { name: /adaptar mi cv/i })) as HTMLButtonElement;
@@ -156,7 +156,7 @@ describe('adapt page — submit', () => {
 		const select = (await screen.findByRole('combobox')) as HTMLSelectElement;
 		await fireEvent.change(select, { target: { value: '7' } });
 
-		const textarea = await screen.findByPlaceholderText(/pegá acá la descripción/i);
+		const textarea = await screen.findByPlaceholderText(/pega aquí la descripción/i);
 		await fireEvent.input(textarea, { target: { value: 'x'.repeat(60) } });
 
 		const btn = await screen.findByRole('button', { name: /adaptar mi cv/i });

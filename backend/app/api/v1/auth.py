@@ -134,7 +134,7 @@ def _code_email_html(code: str, ttl_minutes: int) -> str:
         "<h2>Tu código para entrar a eptus</h2>"
         f"<p style=\"font-size:28px;font-weight:bold;letter-spacing:6px\">{code}</p>"
         f"<p>Este código vence en {ttl_minutes} minutos y puede usarse una sola vez.</p>"
-        "<p>Si no fuiste vos, ignorá este mensaje.</p>"
+        "<p>Si no fuiste tú, ignora este mensaje.</p>"
         "</body></html>"
     )
 
@@ -144,7 +144,7 @@ def _code_email_text(code: str, ttl_minutes: int) -> str:
     return (
         f"Tu código para entrar a eptus es: {code}\n\n"
         f"Vence en {ttl_minutes} minutos y puede usarse una sola vez.\n"
-        "Si no fuiste vos, ignorá este mensaje."
+        "Si no fuiste tú, ignora este mensaje."
     )
 
 

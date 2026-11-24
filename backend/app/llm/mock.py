@@ -144,8 +144,8 @@ class MockProvider:
                 ),
             ],
             recomendaciones=[
-                "Cuantificá logros con números, porcentajes o alcance",
-                "Verificá que las fechas de experiencia y educación sean consistentes",
+                "Cuantifica logros con números, porcentajes o alcance",
+                "Verifica que las fechas de experiencia y educación sean consistentes",
             ],
             fortalezas=["Estructura general clara y legible"],
         )

@@ -146,9 +146,9 @@ describe('home — resolución del perfil propio antes del match', () => {
 
 		expect(apiClient.match).not.toHaveBeenCalled();
 		expect(apiClient.createProfile).not.toHaveBeenCalled();
-		expect(screen.getByText(/necesitás un cv cargado/i)).toBeTruthy();
+		expect(screen.getByText(/necesitas un cv cargado/i)).toBeTruthy();
 		const alert = screen.getByTestId('home-setup-error');
-		expect(within(alert).getByRole('link', { name: /configurá tu perfil/i })).toBeTruthy();
+		expect(within(alert).getByRole('link', { name: /configura tu perfil/i })).toBeTruthy();
 	});
 });
 

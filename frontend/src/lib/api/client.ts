@@ -91,33 +91,33 @@ function humanizeStatus(
 	// Structured code mapping — these are safe to surface as human messages.
 	const CODE_MESSAGES: Record<string, string> = {
 		// Auth
-		TOKEN_REUSED: 'Tu sesión fue invalidada por seguridad. Iniciá sesión nuevamente.',
-		TOKEN_INVALID: 'Tu sesión expiró. Iniciá sesión nuevamente.',
-		TOKEN_EXPIRED: 'Tu sesión expiró. Iniciá sesión nuevamente.',
+		TOKEN_REUSED: 'Tu sesión fue invalidada por seguridad. Inicia sesión nuevamente.',
+		TOKEN_INVALID: 'Tu sesión expiró. Inicia sesión nuevamente.',
+		TOKEN_EXPIRED: 'Tu sesión expiró. Inicia sesión nuevamente.',
 		INVALID_CREDENTIALS: 'Email o contraseña incorrectos.',
-		RATE_LIMITED: 'Demasiados intentos. Esperá unos minutos y reintentá.',
+		RATE_LIMITED: 'Demasiados intentos. Espera unos minutos y reintenta.',
 		// Billing
-		BILLING_ERROR: 'No se pudo procesar el pago. Reintentá.',
-		EMAIL_REQUIRED: 'Verificá tu email antes de comprar un plan.',
+		BILLING_ERROR: 'No se pudo procesar el pago. Reintenta.',
+		EMAIL_REQUIRED: 'Verifica tu email antes de comprar un plan.',
 		// LLM / embedding
-		LLM_ERROR: 'El servicio de análisis tuvo un error. Reintentá.',
-		EMBEDDING_ERROR: 'No se pudo procesar la descripción del puesto. Reintentá.',
+		LLM_ERROR: 'El servicio de análisis tuvo un error. Reintenta.',
+		EMBEDDING_ERROR: 'No se pudo procesar la descripción del puesto. Reintenta.',
 		// Audit
 		AUDIT_NOT_FOUND: 'Auditoría no encontrada.',
-		AUDIT_EXPIRED: 'Esta auditoría ya expiró. Podés hacer una nueva.',
+		AUDIT_EXPIRED: 'Esta auditoría ya expiró. Puedes hacer una nueva.',
 		PDF_NO_TEXT: 'El PDF no contiene texto extraíble.',
 		FILE_TOO_LARGE: 'El archivo es demasiado grande.',
 		UNSUPPORTED_MEDIA_TYPE: 'Solo se aceptan archivos PDF.',
-		CV_REQUIRED: 'Adjuntá tu CV para continuar.',
+		CV_REQUIRED: 'Adjunta tu CV para continuar.',
 		CV_TOO_SHORT: 'El CV debe tener al menos 50 caracteres.',
 		JD_TOO_SHORT: 'La descripción del puesto debe tener al menos 50 caracteres.',
 	};
 
 	if (status === 401) {
-		return CODE_MESSAGES[code] ?? 'Tu sesión expiró. Iniciá sesión nuevamente.';
+		return CODE_MESSAGES[code] ?? 'Tu sesión expiró. Inicia sesión nuevamente.';
 	}
 	if (status === 402) {
-		return 'Alcanzaste el límite de tu plan. Actualizá para continuar.';
+		return 'Alcanzaste el límite de tu plan. Actualiza para continuar.';
 	}
 	if (status === 404) {
 		return CODE_MESSAGES[code] ?? 'Recurso no encontrado.';
@@ -127,10 +127,10 @@ function humanizeStatus(
 		return CODE_MESSAGES[code] ?? 'Datos inválidos.';
 	}
 	if (status === 429) {
-		return CODE_MESSAGES[code] ?? 'Rate limit alcanzado. Esperá unos segundos y reintentá.';
+		return CODE_MESSAGES[code] ?? 'Rate limit alcanzado. Espera unos segundos y reintenta.';
 	}
 	if (status >= 500) {
-		return 'Error del servidor. Reintentá en unos minutos.';
+		return 'Error del servidor. Reintenta en unos minutos.';
 	}
 	// Fallback: show the code if we have one, otherwise generic.
 	if (code) return CODE_MESSAGES[code] ?? `Error: ${code}`;
@@ -170,7 +170,7 @@ async function request<T>(path: string, init: RequestInit = {}, options: Request
 	} catch (err) {
 		if (err instanceof DOMException && err.name === 'AbortError') {
 			throw new ApiError(
-				'La solicitud excedió el tiempo de espera (60 s). El servidor puede estar en cold start; reintentá.',
+				'La solicitud excedió el tiempo de espera (60 s). El servidor puede estar en cold start; reintenta.',
 				0,
 				'timeout'
 			);
