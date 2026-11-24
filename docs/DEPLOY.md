@@ -362,6 +362,28 @@ y el frontend puede ofrecer la otra como alternativa si el país no aplica.
 > `x-merchant-public-key`, y devuelve **dos** tokens: `acceptance_token`
 > (términos) y `accept_personal_auth` (datos personales).
 
+> **Wompi: E2E verificado de punta a punta (2026-11-24).** Transaccion real de
+> sandbox: `POST /v1/billing/checkout` -> **200** con la URL de
+> `checkout.wompi.co/p/` -> pago con tarjeta de prueba `4242 4242 4242 4242`
+> -> "Pago aprobado!" (transaccion `12230131-1175496842-97639`, referencia
+> `15_job_seeker_monthly_1795496692`, $29.000) -> webhook
+> `POST /api/v1/webhooks/wompi` **200** con `LS upsert sub: user=15
+> plan=job_seeker_monthly status=active` -> `GET /v1/billing/subscription` con
+> `status: active`. Evidencia completa en
+> `qa-reports/REPORTE-QA-2026-11-07.md` (seccion 24).
+>
+> Dos cosas que hacen falta y no son opcionales:
+>
+> - `FRONTEND_URL` debe existir en Render (apunta a
+>   `https://asistcv-frontend.pages.dev`). Sin ella el redirect post-pago
+>   apunta a `localhost:5173` y el usuario aterriza en su propia máquina.
+> - La capa `COPY --from=builder /app/.venv` de `backend/Dockerfile` puede
+>   salir **CACHED** en el build de Render y servir el paquete `app` de una
+>   build anterior. Por eso el Dockerfile escribe `.venv/.source-hash` y el
+>   CMD usa `python -m uvicorn` (no el script de consola). Si un fix no cambia
+>   el comportamiento en produccion, revisa esa capa antes de seguir
+>   depurando codigo.
+
 ### Retention sweepers
 
 Three GitHub Actions crons POST to internal cleanup endpoints on the
