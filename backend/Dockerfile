@@ -21,7 +21,8 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini ./
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev \
+ && find app -name '*.py' -type f -exec sha256sum {} + | sort | sha256sum | cut -d' ' -f1 > .venv/.source-hash
 
 ############################
 # Stage 2: runtime
@@ -40,6 +41,19 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# OJO con la cache de capas: `COPY --from=builder /app/.venv` puede salir
+# CACHED y traerse el PAQUETE INSTALADO de una build anterior. Ese paquete
+# (site-packages/app) es el que importa `uvicorn` cuando se lanza como script
+# de consola, asi que el contenedor servia codigo viejo aunque /app/app
+# tuviera el codigo nuevo: desplegar un fix no cambiaba nada y el sintoma era
+# un traceback con numeros de linea del archivo anterior.
+#
+# Dos barreras:
+#   1. `.venv/.source-hash` (arriba) cambia cuando cambia el codigo, asi que
+#      el contenido del venv cambia y la capa COPY deja de estar cacheada.
+#   2. El CMD usa `python -m ...`: eso mete el directorio de trabajo (/app)
+#      al principio de sys.path, de modo que `import app` resuelve a
+#      /app/app (el codigo copiado en esta imagen) y no al paquete del venv.
 COPY --from=builder --chown=user:user /app/.venv ./.venv
 COPY --chown=user:user pyproject.toml uv.lock alembic.ini ./
 COPY --chown=user:user app ./app
@@ -62,4 +76,7 @@ EXPOSE 7860
 # correr la misma migración en paralelo. Con una instancia (el plan actual)
 # no puede pasar; si algún día se escala, hay que mover esto a un paso
 # único (un job de despliegue o un lock).
-CMD ["sh", "-c", "uv run alembic upgrade head && exec uv run uvicorn app.main:app --host 0.0.0.0 --port 7860"]
+#
+# `python -m` y no el script de consola: ver la nota de la cache de capas
+# arriba.
+CMD ["sh", "-c", "uv run python -m alembic upgrade head && exec uv run python -m uvicorn app.main:app --host 0.0.0.0 --port 7860"]
