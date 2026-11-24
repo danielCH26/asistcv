@@ -74,10 +74,10 @@ secrets "environment variables"; they are injected at runtime, not committed):
 | `WOMPI_ACCEPTANCE_TOKEN` | Token de aceptación (términos). El vigente se pide a `GET /v1/merchants/info` con la public key en el header `x-merchant-public-key`. |
 | `WOMPI_TEST_MODE` | `true` para `sandbox.wompi.co`; `false` para `production.wompi.co`. |
 | `JWT_SECRET` | **Requerido.** Secreto HS256 con el que el backend firma el access token (15 min) y el refresh token (30 días). Debe ser largo y aleatorio: `python -c "import secrets; print(secrets.token_urlsafe(48))"`. Si cambia, caducan todas las sesiones. |
-| `EMAIL_PROVIDER` | `resend` (default), `brevo` o `console`. `console` imprime el código en el log del servicio — solo para QA local. |
-| `RESEND_API_KEY` | Clave de Resend (`re_...`), cuando `EMAIL_PROVIDER=resend`. Requiere un dominio emisor verificado. |
+| `EMAIL_PROVIDER` | `resend` (default), `brevo` o `console`. En producción está en `brevo`. `console` imprime el código en el log del servicio — solo para QA local. |
+| `RESEND_API_KEY` | Clave de Resend (`re_...`), cuando `EMAIL_PROVIDER=resend`. **Hoy es solo plan B**: sin dominio emisor verificado, Resend no entrega a destinatarios distintos del titular de la cuenta. |
 | `BREVO_API_KEY` | Clave de Brevo (`xkeysib-...`), cuando `EMAIL_PROVIDER=brevo`. Funciona con un **remitente verificado** sin dominio propio — es el camino de $0 mientras eptus no tenga dominio. |
-| `EMAIL_FROM` | Remitente: `eptus <noreply@eptus.com>` por defecto. Brevo exige que la dirección esté verificada en su panel. |
+| `EMAIL_FROM` | Remitente: `eptus <eptus.asistcv@gmail.com>` en producción. Brevo exige que la dirección esté verificada en su panel (Settings → *Senders, domains, IPs*). |
 | `EMAIL_CODE_TTL_SECONDS` | Vigencia del código (default `600` = 10 minutos). |
 | `EMAIL_CODE_MAX_ATTEMPTS` | Intentos fallidos antes de bloquear un código (default `5`). |
 | `EMAIL_CODE_LENGTH` | Longitud del código numérico (default `6`). |
@@ -123,35 +123,50 @@ desde la migración 029).
 | `resend` | $0 | **Dominio emisor verificado** | 3.000/mes con tope de 100/día |
 | `console` | $0 | Ninguno | Solo QA: imprime el código en el log |
 
-**Estado actual (nov 2026): `resend` está activo en producción** con la cuenta
-`eptus.asistcv@gmail.com` y la API key `eptus-backend-prod` (permiso *Sending
-access*). Variables en Render:
+**Estado actual (nov 2026): `brevo` está activo en producción** con la cuenta
+`eptus.asistcv@gmail.com` y la API key `eptus-backend-prod-v2` (permisos
+mínimos: *Restricted*, un único scope `Transactional email = All`). Variables
+en Render:
 
 ```
-EMAIL_PROVIDER=resend
-RESEND_API_KEY=re_<clave de eptus-backend-prod>
-EMAIL_FROM=eptus <onboarding@resend.dev>
+EMAIL_PROVIDER=brevo
+BREVO_API_KEY=xkeysib-<clave de eptus-backend-prod-v2>
+EMAIL_FROM=eptus <eptus.asistcv@gmail.com>
 ```
 
-> **Limitación actual:** Resend solo permite enviar al correo de la propia
-> cuenta (`eptus.asistcv@gmail.com`) mientras no se verifique un dominio
-> emisor. La API responde `403` con *"You can only send testing emails to your
-> own email address"* para cualquier otro destinatario. Es decir: **hoy solo
-> el dueño de la cuenta puede iniciar sesión**; los demás usuarios no reciben
-> el código.
+> **Por qué Brevo y no Resend.** Sin dominio propio, Resend solo deja enviar al
+> correo de la propia cuenta: para cualquier otro destinatario la API responde
+> `403` con *"You can only send testing emails to your own email address"*.
+> Brevo, en cambio, acepta **destinatarios arbitrarios** con un remitente
+> verificado, sin comprar dominio (300 emails/día gratis). `RESEND_API_KEY`
+> sigue en Render solo como plan B; lo que decide es `EMAIL_PROVIDER`.
 >
-> Para abrirlo al resto del mundo hay dos caminos:
+> **Verificado en producción:** `POST /v1/auth/email-code/request` →
+> `202` y en el log del servicio
+> `{"provider": "brevo", "status": 201, "event": "email_sent"}` con
+> `POST https://api.brevo.com/v3/smtp/email → 201 Created`.
 >
-> 1. **Verificar un dominio en Resend** (`resend.com/domains`) con los
->    registros DNS que Resend indique en Cloudflare, y cambiar `EMAIL_FROM` a
->    `eptus <noreply@<dominio>>`. Es el camino a largo plazo: también sirve
->    para el dominio propio de la app y habilita Clerk más adelante.
-> 2. **Migrar a `brevo`** con `EMAIL_PROVIDER=brevo` y `BREVO_API_KEY`: acepta
->    un remitente verificado sin dominio propio, con 300 emails/día gratis.
+> **Pendiente: verificar el remitente en Brevo.** En `app.brevo.com` →
+> Settings → *Senders, domains, IPs*, el remitente `eptus
+> <eptus.asistcv@gmail.com>` sigue en *Not verified*. Hasta que se verifique
+> (Brevo manda un código por correo a esa misma dirección), **solo se pueden
+> hacer envíos de prueba a la dirección del remitente**: cualquier otro
+> destinatario recibe `403 unauthorized sender` de la API de Brevo. O sea: el
+> login por código **no sirve todavía para usuarios distintos del titular**.
 >
-> Con `EMAIL_PROVIDER=resend` y sin `RESEND_API_KEY`, el endpoint **no falla**:
-> el servicio de email loguea `email_service_disabled` y el request sigue
-> con `202`. El usuario no recibe el código, pero nada se rompe.
+> **Entregabilidad (riesgo aceptado).** Un remitente de email gratuito
+> (`gmail.com`) cae más en spam y no tiene DKIM/DMARC propios: Brevo lo avisa
+> con *"Freemail domain is not recommended"*. Se acepta mientras no haya
+> dominio: `eptus.com` no está disponible y las alternativas Round-Robin/
+> Cloudflare cuestan USD 5–16 al año.
+>
+> **Cuando se compre el dominio** (recomendado a medio plazo): verificarlo en
+> Brevo (Settings → *Domains*), cambiar `EMAIL_FROM` a
+> `eptus <noreply@<dominio>>` y, si se quiere, habilitar Clerk.
+>
+> Con `EMAIL_PROVIDER=brevo` y sin `BREVO_API_KEY`, el endpoint **no falla**:
+> el servicio de email loguea `email_service_disabled` y el request sigue con
+> `202`. El usuario no recibe el código, pero nada se rompe.
 
 ### Clerk (archivado — requiere dominio propio)
 
