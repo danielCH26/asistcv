@@ -123,11 +123,32 @@ desde la migración 029).
 | `resend` | $0 | **Dominio emisor verificado** | 3.000/mes con tope de 100/día |
 | `console` | $0 | Ninguno | Solo QA: imprime el código en el log |
 
-Como eptus todavía no tiene dominio propio, **`brevo` es el camino de $0 que
-funciona hoy**. `resend` es el camino a largo plazo: en cuanto exista el
-dominio, se verifica el dominio emisor en Resend y el tope diario de 100
-emails desaparece (plan Pro: $20/mes, 50.000 emails sin tope diario).
+**Estado actual (nov 2026): `resend` está activo en producción** con la cuenta
+`eptus.asistcv@gmail.com` y la API key `eptus-backend-prod` (permiso *Sending
+access*). Variables en Render:
 
+```
+EMAIL_PROVIDER=resend
+RESEND_API_KEY=re_<clave de eptus-backend-prod>
+EMAIL_FROM=eptus <onboarding@resend.dev>
+```
+
+> **Limitación actual:** Resend solo permite enviar al correo de la propia
+> cuenta (`eptus.asistcv@gmail.com`) mientras no se verifique un dominio
+> emisor. La API responde `403` con *"You can only send testing emails to your
+> own email address"* para cualquier otro destinatario. Es decir: **hoy solo
+> el dueño de la cuenta puede iniciar sesión**; los demás usuarios no reciben
+> el código.
+>
+> Para abrirlo al resto del mundo hay dos caminos:
+>
+> 1. **Verificar un dominio en Resend** (`resend.com/domains`) con los
+>    registros DNS que Resend indique en Cloudflare, y cambiar `EMAIL_FROM` a
+>    `eptus <noreply@<dominio>>`. Es el camino a largo plazo: también sirve
+>    para el dominio propio de la app y habilita Clerk más adelante.
+> 2. **Migrar a `brevo`** con `EMAIL_PROVIDER=brevo` y `BREVO_API_KEY`: acepta
+>    un remitente verificado sin dominio propio, con 300 emails/día gratis.
+>
 > Con `EMAIL_PROVIDER=resend` y sin `RESEND_API_KEY`, el endpoint **no falla**:
 > el servicio de email loguea `email_service_disabled` y el request sigue
 > con `202`. El usuario no recibe el código, pero nada se rompe.
