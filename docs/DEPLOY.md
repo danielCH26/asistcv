@@ -384,6 +384,22 @@ y el frontend puede ofrecer la otra como alternativa si el país no aplica.
 >   el comportamiento en produccion, revisa esa capa antes de seguir
 >   depurando codigo.
 
+> **Wompi: produccion activa desde el 2026-11-24.** El panel
+> `comercios.wompi.co` -> Desarrollo -> Programadores tiene el modo de pruebas
+> **OFF** y las llaves `pub_prod_` / `prv_prod_` / `prod_events_` /
+> `prod_integrity_`; en Render esta `WOMPI_TEST_MODE=false` con esas mismas
+> llaves. La **URL de Eventos** de produccion es
+> `https://asistcv-backend.onrender.com/api/v1/webhooks/wompi`.
+>
+> Con esto **los pagos del frontend cobran dinero real**. El sandbox queda
+> como plan B: para volver a el, restaura las llaves de test en Render y pon
+> `WOMPI_TEST_MODE=true` (las llaves tambien se recuperan en el panel con
+> "Activar modo de pruebas" + "Mostrar").
+>
+> Si en el panel pulsas **"Regenerar llaves del comercio"**, hay que
+> actualizar en Render las tres claves afectadas (privada, eventos,
+> integridad) en el mismo momento: si no, las transacciones se declinan.
+
 ### Retention sweepers
 
 Three GitHub Actions crons POST to internal cleanup endpoints on the
