@@ -17,7 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import AuditUpload
 
 # Rate limit configuration
-AUDIT_RATE_LIMIT = 3  # Max successful audits per IP per day
+# TEMP: raised 3 -> 100 while the audit email funnel is being QA'd in prod;
+# lower back to 3 once the test window closes (see 2026-11-24 session).
+AUDIT_RATE_LIMIT = 100  # Max successful audits per IP per day
 AUDIT_RATE_LIMIT_WINDOW_HOURS = 24
 
 # Lazy import to avoid circular reference at module load time

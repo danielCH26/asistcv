@@ -199,7 +199,7 @@ class TestAuditRateLimit:
 
     @pytest.mark.asyncio
     async def test_rate_limit_check_allows_first_three(self, clean_db):
-        """Rate limit allows first 3 audits from same IP."""
+        """Rate limit allows audits below the configured limit from same IP."""
         from app.services.audit_rate_limit import check_rate_limit
 
         async with get_session_context() as session:
@@ -209,11 +209,11 @@ class TestAuditRateLimit:
 
     @pytest.mark.asyncio
     async def test_rate_limit_blocks_fourth(self, clean_db):
-        """Rate limit blocks 4th audit from same IP."""
+        """Rate limit blocks once the configured limit is reached for the IP."""
         from datetime import timedelta
 
         from app.db.models import AuditUpload
-        from app.services.audit_rate_limit import check_rate_limit
+        from app.services.audit_rate_limit import AUDIT_RATE_LIMIT, check_rate_limit
         from app.services.audit_token import calculate_expiry, hash_ip
 
         ip = "192.168.1.100"
@@ -223,8 +223,8 @@ class TestAuditRateLimit:
         recent_time = datetime.now(UTC) - timedelta(hours=12)
 
         async with get_session_context() as session:
-            # Create 3 audit records for the same IP
-            for i in range(3):
+            # Create audits up to the configured limit for the same IP
+            for i in range(AUDIT_RATE_LIMIT):
                 audit = AuditUpload(
                     audit_token_hash=f"hash_{i}",
                     jd_text="A" * 100,
@@ -245,15 +245,15 @@ class TestAuditRateLimit:
     async def test_rate_limit_allows_different_ips(self, clean_db):
         """Rate limit allows different IPs independently."""
         from app.db.models import AuditUpload
-        from app.services.audit_rate_limit import check_rate_limit
+        from app.services.audit_rate_limit import AUDIT_RATE_LIMIT, check_rate_limit
         from app.services.audit_token import calculate_expiry, hash_ip
 
         ip1 = "192.168.1.1"
         ip2 = "192.168.1.2"
 
         async with get_session_context() as session:
-            # Create 3 audits for IP1
-            for i in range(3):
+            # Create audits up to the configured limit for IP1
+            for i in range(AUDIT_RATE_LIMIT):
                 audit = AuditUpload(
                     audit_token_hash=f"hash_ip1_{i}",
                     jd_text="A" * 100,
@@ -1183,9 +1183,11 @@ class TestAuditPdfUpload:
 
     @pytest.mark.asyncio
     async def test_rate_limit_applies_to_pdf_path(self, client, mock_llm_provider):
-        """Rate limit (3/IP/day) also blocks the PDF upload path."""
+        """Rate limit (AUDIT_RATE_LIMIT/IP/day) also blocks the PDF upload path."""
+        from app.services.audit_rate_limit import AUDIT_RATE_LIMIT
+
         ip = "203.0.113.18"
-        await self._seed_audits(ip, 3)
+        await self._seed_audits(ip, AUDIT_RATE_LIMIT)
 
         response = client.post(
             "/v1/audit/anonymous",
