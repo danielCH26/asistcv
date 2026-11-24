@@ -203,6 +203,49 @@ def test_integrity_signature_matches_the_documented_scheme() -> None:
     assert signature == expected
 
 
+def test_web_checkout_url_carries_the_integrity_signature() -> None:
+    """El checkout se abre en la pagina alojada de Wompi.
+
+    Por API no se puede crear una transaccion de TARJETA sin el `token` de
+    la tarjeta tokenizada (Wompi responde 422 INPUT_VALIDATION_ERROR con
+    "payment_method.token: No esta presente"). El camino soportado es el Web
+    Checkout: un formulario GET contra checkout.wompi.co/p/ con la llave
+    publica, el monto, la referencia y la firma de integridad.
+    """
+    import hashlib
+    from urllib.parse import parse_qs, urlparse
+
+    client = WompiClient(
+        private_key=PRIVATE_KEY,
+        public_key=PUBLIC_KEY,
+        test_mode=True,
+    )
+    url = client.build_web_checkout_url(
+        reference="7_job_seeker_monthly_1",
+        amount_in_cents=2_900_000,
+        customer_email="comprador@example.com",
+        redirect_url="https://asistcv.app/ok",
+        integrity_key=INTEGRITY_KEY,
+    )
+
+    parsed = urlparse(url)
+    assert parsed.netloc == "checkout.wompi.co"
+    assert parsed.path == "/p/"
+
+    params = parse_qs(parsed.query)
+    assert params["public-key"] == [PUBLIC_KEY]
+    assert params["currency"] == ["COP"]
+    assert params["amount-in-cents"] == ["2900000"]
+    assert params["reference"] == ["7_job_seeker_monthly_1"]
+    assert params["redirect-url"] == ["https://asistcv.app/ok"]
+    assert params["customer-data:email"] == ["comprador@example.com"]
+
+    expected = hashlib.sha256(
+        f"7_job_seeker_monthly_12900000COP{INTEGRITY_KEY}".encode()
+    ).hexdigest()
+    assert params["signature:integrity"] == [expected]
+
+
 def test_webhook_signature_is_validated_against_the_event_body() -> None:
     """La firma se compara contra el checksum del BODY, no contra el header.
 

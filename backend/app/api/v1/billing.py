@@ -244,8 +244,11 @@ async def create_checkout(
         user_id = user.id
 
     settings = get_settings()
-    success_url = f"{settings.frontend_url}/billing/subscription?status=success"
-    cancel_url = f"{settings.frontend_url}/billing/plans"
+    # La unica ruta de billing que existe en el frontend es /billing: el
+    # redirect de Wompi (y el de Mercado Pago) tiene que caer ahi, no en una
+    # ruta inventada, o el usuario aterriza en un 404 despues de pagar.
+    success_url = f"{settings.frontend_url}/billing?status=success"
+    cancel_url = f"{settings.frontend_url}/billing"
 
     # Resolve provider: body takes precedence over query, query over active setting
     effective_provider = request.provider or provider

@@ -327,8 +327,11 @@ pulse.
 
 **Dónde se configura el webhook en cada panel**
 
-- Wompi → panel.wompi.co → **Aplicativos → tu app → Notifica vía Webhook** →
-  `https://<backend>/api/v1/webhooks/wompi`
+- Wompi → `comercios.wompi.co` → **Desarrollo → Programadores** → *URL de
+  Eventos* → `https://<backend>/api/v1/webhooks/wompi` → **Guardar**. La misma
+  pantalla muestra las llaves del API y los secretos de **Eventos** e
+  **Integridad** (botón *Mostrar*), y el interruptor **Activar modo de
+  pruebas** para pasar a las llaves `pub_test_`/`prv_test_` del sandbox.
 - Mercado Pago → **Tus integraciones → Notificaciones → Mercado Pago → URL de
   notificación** → `https://<backend>/api/v1/webhooks/mercadopago`
 
@@ -336,12 +339,28 @@ pulse.
 `=mercadopago`. Con las dos configuradas, el checkout usa la que esté activa
 y el frontend puede ofrecer la otra como alternativa si el país no aplica.
 
+> **Wompi: el checkout es el Web Checkout, no la API de transacciones.**
+> `POST /v1/transactions` **no** sirve para nuestro caso: Wompi responde `422`
+> `INPUT_VALIDATION_ERROR` con *"payment_method.token: No está presente"*
+> (exige el token de una tarjeta tokenizada) y, para PSE, pide los datos
+> completos del pagador (`financial_institution_code`, `user_type`,
+> `user_legal_id`, `user_legal_id_type`, `payment_description`).
+>
+> El camino soportado es el **Web Checkout**: el backend arma la URL
+> `https://checkout.wompi.co/p/?public-key=…&currency=COP&amount-in-cents=…
+> &reference=…&signature:integrity=…&redirect-url=…&customer-data:email=…` y el
+> frontend redirige ahí. Wompi crea la transacción cuando el usuario paga y
+> avisa por webhook (`transaction.updated`), que es lo que activa la
+> suscripción. El mismo host sirve sandbox y producción: el prefijo de la llave
+> pública (`pub_test_` / `pub_prod_`) decide qué entorno se cobra. El
+> `reference` (`{user_id}_{plan_id}_{uniq}`) es lo único que Wompi devuelve en
+> el webhook, y es con lo que se activa el plan.
+>
 > **Wompi: dos tokens, no uno.** `GET /v1/acceptance_tokens` ya no existe
 > (404) y `GET /v1/merchants/{public_key}` quedó deshabilitado el 2026-10-31.
 > El camino vigente es `GET /v1/merchants/info` con la public key en el header
 > `x-merchant-public-key`, y devuelve **dos** tokens: `acceptance_token`
-> (términos) y `accept_personal_auth` (datos personales). Mandar solo el
-> primero hace que Wompi rechace la transacción.
+> (términos) y `accept_personal_auth` (datos personales).
 
 ### Retention sweepers
 

@@ -19,7 +19,7 @@ NUNCA por variables de entorno (Settings es @lru_cache'd).
 
 import hashlib
 import json
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 from sqlmodel import select
@@ -55,13 +55,8 @@ def _fake_client() -> MagicMock:
     """Cliente Wompi falso: no toca la red."""
     client = MagicMock()
     client.calculate_integrity_signature = MagicMock(return_value="sig-abc123")
-    client.create_transaction = AsyncMock(
-        return_value={
-            "data": {
-                "id": "tx_123",
-                "redirect_url": "https://pay.wompi.co/l/abc123",
-            }
-        }
+    client.build_web_checkout_url = MagicMock(
+        return_value="https://checkout.wompi.co/p/?public-key=pub_test&reference=7_job_seeker_monthly_1"
     )
     return client
 
@@ -106,15 +101,17 @@ async def test_create_checkout_builds_the_reference_and_calls_the_client(
     )
 
     assert session.provider_id == "wompi"
-    assert session.session_id == "tx_123"
-    assert session.checkout_url == "https://pay.wompi.co/l/abc123"
+    assert session.session_id.startswith("7_job_seeker_monthly_")
+    assert session.checkout_url.startswith("https://checkout.wompi.co/p/")
 
     # La referencia tiene que existir y llevar user + plan.
-    client.create_transaction.assert_awaited_once()
-    kwargs = client.create_transaction.await_args.kwargs
+    client.build_web_checkout_url.assert_called_once()
+    kwargs = client.build_web_checkout_url.call_args.kwargs
     assert kwargs["reference"].startswith("7_job_seeker_monthly_")
     assert kwargs["amount_in_cents"] == 2_900_000
     assert kwargs["currency"] == "COP"
+    assert kwargs["customer_email"] == "comprador@example.com"
+    assert kwargs["redirect_url"] == "https://asistcv.app/ok"
 
 
 async def test_create_checkout_prefers_the_idempotency_key(wompi_settings) -> None:
@@ -137,7 +134,7 @@ async def test_create_checkout_prefers_the_idempotency_key(wompi_settings) -> No
         idempotency_key="idem-123",
     )
 
-    kwargs = client.create_transaction.await_args.kwargs
+    kwargs = client.build_web_checkout_url.call_args.kwargs
     reference = kwargs["reference"]
     assert reference.startswith("7_job_seeker_monthly_")
     assert reference != "idem-123"
@@ -151,7 +148,7 @@ async def test_create_checkout_prefers_the_idempotency_key(wompi_settings) -> No
         ),
         idempotency_key="idem-123",
     )
-    assert client.create_transaction.await_args.kwargs["reference"] == reference
+    assert client.build_web_checkout_url.call_args.kwargs["reference"] == reference
 
 
 # === Webhook ===

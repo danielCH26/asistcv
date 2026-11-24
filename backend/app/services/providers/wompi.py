@@ -29,14 +29,7 @@ from app.services.billing_provider import (
     WebhookEvent,
 )
 from app.services.providers.cop_prices import cop_amount_cents
-from app.services.wompi_client import (
-    WompiAuthError,
-    WompiClient,
-    WompiConnectionError,
-    WompiError,
-    WompiRateLimitError,
-    WompiTimeoutError,
-)
+from app.services.wompi_client import WompiClient
 
 if TYPE_CHECKING:
     from app.core.config import Settings
@@ -86,11 +79,19 @@ class WompiProvider(BillingProvider):
         *,
         idempotency_key: str | None = None,
     ) -> CheckoutSession:
-        """Create a Wompi checkout transaction.
+        """Crea el checkout de Wompi como URL de Web Checkout alojado.
 
-        For redirect-based payments (PSE, NEQUI), this returns a redirect URL.
-        For card payments, the frontend should use the Wompi Widget and pass
-        the signature back to complete the transaction.
+        El checkout NO se crea por API: Wompi exige el `token` de una
+        tarjeta tokenizada para crear una transaccion de tarjeta, y para PSE
+        pide los datos completos del pagador. La via soportada es el Web
+        Checkout (`https://checkout.wompi.co/p/`), que es un formulario GET
+        con la llave publica, el monto, la referencia y la firma de
+        integridad. Wompi crea la transaccion cuando el usuario paga ahi y
+        despues avisa por webhook (`transaction.updated`), que es lo que
+        activa la suscripcion.
+
+        Por eso `plan["payment_method"]` no decide nada aqui: el metodo de
+        pago lo elige el usuario en la pagina de Wompi.
         """
         plan_id = plan.get("plan_id") or plan.get("tier", "")
 
@@ -104,9 +105,6 @@ class WompiProvider(BillingProvider):
 
         user_email = user.get("email", "")
         user_id = user.get("id", 0)
-
-        # Get payment method from plan or default to PSE
-        payment_method = plan.get("payment_method", "PSE")
 
         # Build reference.
         #
@@ -130,47 +128,19 @@ class WompiProvider(BillingProvider):
             uniq = str(int(time.time()))
         reference = f"{user_id}_{plan_id}_{uniq}"
 
-        # Calculate integrity signature
-        integrity_key = self._settings.wompi_integrity_key or ""
-        signature = self._wompi_client.calculate_integrity_signature(
+        # La firma de integridad la calcula el cliente al armar la URL.
+        checkout_url = self._wompi_client.build_web_checkout_url(
             reference=reference,
             amount_in_cents=amount,
             currency="COP",
-            integrity_key=integrity_key,
+            customer_email=user_email,
+            redirect_url=return_urls.success_url,
+            integrity_key=self._settings.wompi_integrity_key or "",
         )
 
-        # For Wompi, we create a transaction and get a redirect URL
-        # The user will complete payment on Wompi's hosted page
-        try:
-            result = await self._wompi_client.create_transaction(
-                plan_id=plan_id,
-                user_id=user_id,
-                user_email=user_email,
-                amount_in_cents=amount,
-                currency="COP",
-                reference=reference,
-                acceptance_token=self._settings.wompi_acceptance_token,
-                payment_method_type=payment_method.upper(),
-                redirect_url=return_urls.success_url,
-                signature=signature,
-            )
-        except WompiAuthError:
-            raise
-        except WompiRateLimitError:
-            raise
-        except WompiTimeoutError:
-            raise
-        except WompiConnectionError:
-            raise
-        except WompiError:
-            raise
-
-        transaction_id = result.get("data", {}).get("id", "")
-        redirect_url = result.get("data", {}).get("redirect_url", "")
-
         return CheckoutSession(
-            checkout_url=redirect_url,
-            session_id=transaction_id,
+            checkout_url=checkout_url,
+            session_id=reference,
             provider_id=self.provider_id,
         )
 

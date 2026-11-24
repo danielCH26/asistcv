@@ -24,12 +24,16 @@ from __future__ import annotations
 
 import hashlib
 from typing import NoReturn
+from urllib.parse import urlencode
 
 import httpx
 
 # Wompi environments (updated: production uses production.wompi.co)
 _WOMPI_PROD_URL = "https://production.wompi.co"
 _WOMPI_SANDBOX_URL = "https://sandbox.wompi.co"
+# Hosted checkout page. The SAME host serves both environments: the prefix of
+# the public key (pub_test_ / pub_prod_) decides which one is charged.
+_WOMPI_CHECKOUT_URL = "https://checkout.wompi.co/p/"
 _DEFAULT_TIMEOUT = 12.0  # seconds
 
 
@@ -198,6 +202,52 @@ class WompiClient:
                 "permalink"
             ),
         }
+
+    def build_web_checkout_url(
+        self,
+        *,
+        reference: str,
+        amount_in_cents: int,
+        currency: str = "COP",
+        customer_email: str | None = None,
+        redirect_url: str | None = None,
+        integrity_key: str | None = None,
+    ) -> str:
+        """Construye la URL del Web Checkout (checkout alojado) de Wompi.
+
+        Por API NO se puede crear una transaccion de tarjeta sin el `token`
+        de la tarjeta tokenizada: `POST /v1/transactions` responde 422
+        `INPUT_VALIDATION_ERROR` con "payment_method.token: No esta presente".
+        Para PSE exige ademas los datos del pagador (institucion financiera,
+        tipo y numero de documento, `user_type`).
+
+        El camino soportado para un checkout por URL es el Web Checkout: un
+        formulario GET contra `https://checkout.wompi.co/p/` que lleva la
+        llave publica, el monto, la referencia y la firma de integridad.
+        Wompi crea la transaccion cuando el usuario paga en esa pagina, y
+        luego avisa por webhook (`transaction.updated`).
+
+        El mismo host sirve sandbox y produccion: el prefijo de la llave
+        publica (pub_test_ / pub_prod_) decide que entorno se cobra.
+        """
+        signature = self.calculate_integrity_signature(
+            reference=reference,
+            amount_in_cents=amount_in_cents,
+            currency=currency,
+            integrity_key=integrity_key or "",
+        )
+        params = {
+            "public-key": self._public_key,
+            "currency": currency,
+            "amount-in-cents": str(amount_in_cents),
+            "reference": reference,
+            "signature:integrity": signature,
+        }
+        if redirect_url:
+            params["redirect-url"] = redirect_url
+        if customer_email:
+            params["customer-data:email"] = customer_email
+        return f"{_WOMPI_CHECKOUT_URL}?{urlencode(params)}"
 
     async def create_transaction(
         self,
