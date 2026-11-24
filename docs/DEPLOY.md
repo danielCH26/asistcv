@@ -272,11 +272,13 @@ DEPLOYED_FRONTEND_URL="https://asistcv-frontend.pages.dev" \
 Imprime los dos endpoints y un veredicto. Si el proxy (o la clave) están
 bien, los dos dan 200 y el script sale con 0.
 
-**Vigilante automático:** el workflow `Clerk availability`
-(`.github/workflows/clerk-check.yml`) corre este chequeo en cada push a
-`main` y cada 30 minutos. **Está en rojo a propósito** mientras el login
-siga caído: es la señal de que ese es el bloqueo. Cuando se arregle, se pone
-verde solo.
+**Vigilante automático (retirado):** el workflow `Clerk availability`
+(`.github/workflows/clerk-check.yml`) vigilaba estos dos extremos en cada
+push a `main` y cada 30 minutos, en rojo a propósito mientras el proxy
+estuviera pendiente. Se eliminó en nov 2026 al descartar Clerk: el login
+nativo por código de email es el único camino. El script de diagnóstico
+(`backend/scripts/diagnose_clerk.py`) queda disponible para una verificación
+manual si algún día se retoma Clerk.
 
 > **CORS:** el backend responde `Access-Control-Allow-Origin` solo para los
 > orígenes configurados; un origen ajeno no recibe la cabecera. Ojo con
