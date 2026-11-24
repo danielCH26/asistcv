@@ -89,7 +89,7 @@
 					<a href="/privacy">{$_('marketing.footer.privacy')}</a>
 					<a href="/terms">{$_('marketing.footer.terms')}</a>
 					<a href="/cookies">{$_('marketing.footer.cookies')}</a>
-					<a href="mailto:hola@eptus.com">{$_('marketing.footer.contact')}</a>
+					<a href="mailto:eptus.asistcv@gmail.com">{$_('marketing.footer.contact')}</a>
 				</div>
 			</div>
 

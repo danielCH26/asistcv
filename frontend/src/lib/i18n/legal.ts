@@ -13,9 +13,13 @@
  * - Ley 1480 de 2011 (Estatuto del Consumidor: retracto, art. 47).
  * - Ley 527 de 1999 (comercio electrónico, mensajes de datos).
  *
- * Campos `[por completar]`: son datos que solo el titular conoce (NIT,
- * domicilio). No se inventan; quien opere el producto debe llenarlos antes
- * de la publicación definitiva. Este contenido es una base redactada para
+ * Identificación del titular (datos del operador, nov 2026): «eptus» es
+ * operado como persona natural por Daniel Elias Cordoba Howard, C.C.
+ * 1123890948, contacto eptus.asistcv@gmail.com. Cuando exista sociedad
+ * registrada (NIT), actualizar la identificación en los dos idiomas y
+ * subir la versión de los documentos.
+ *
+ * Este contenido es una base redactada para
  * el producto real (planes COP, pasarelas Wompi/Mercado Pago, retención de
  * auditorías a 30 días, etc. según los modelos de `app/db/models.py` y el
  * catálogo de `app/api/v1/billing.py`) y NO sustituye revisión jurídica.
@@ -60,7 +64,7 @@ const termsEs: LegalDoc = {
 	meta: `Versión 1.0 · Última actualización: ${UPDATED_DATE_ES}`,
 	title: 'Términos y Condiciones',
 	intro: [
-		'Los presentes Términos y Condiciones («Términos») regulan el acceso y el uso de AsistCV, la plataforma de análisis y adaptación de hojas de vida operada por eptus («eptus», «nosotros»).',
+		'Los presentes Términos y Condiciones («Términos») regulan el acceso y el uso de AsistCV, la plataforma de análisis y adaptación de hojas de vida operada por Daniel Elias Cordoba Howard bajo la marca «eptus» («eptus», «nosotros»).',
 		'Al crear una cuenta, adquirir un plan o utilizar cualquier función de la Plataforma, usted («Usuario») declara que ha leído y acepta estos Términos y nuestra Política de Privacidad. Si no está de acuerdo, no utilice la Plataforma.'
 	],
 	sections: [
@@ -68,8 +72,8 @@ const termsEs: LegalDoc = {
 			id: 'titular',
 			title: 'Información del titular',
 			bullets: [
-				'Titular y operador: eptus [NIT por completar], con domicilio en Colombia.',
-				'Contacto: hola@eptus.com.',
+				'Titular y operador: Daniel Elias Cordoba Howard, mayor de edad, identificado con cédula de ciudadanía No. 1123890948, quien opera la Plataforma bajo la marca «eptus» (persona natural; a la fecha no existe sociedad registrada).',
+				'Contacto: eptus.asistcv@gmail.com.',
 				'La Plataforma se presta a través de su sitio web y su aplicación web, apoyados en los proveedores de infraestructura descritos en la Política de Privacidad.'
 			]
 		},
@@ -100,7 +104,7 @@ const termsEs: LegalDoc = {
 			bullets: [
 				'El servicio está dirigido a personas mayores de 18 años, con capacidad legal para obligarse.',
 				'El acceso se realiza con su correo electrónico y un código de verificación. Usted es responsable de la exactitud de los datos que registra, de la seguridad de su buzón de correo y de mantener el control de su cuenta.',
-				'Debe avisarnos de inmediato a hola@eptus.com si detecta un acceso no autorizado a su cuenta.',
+				'Debe avisarnos de inmediato a eptus.asistcv@gmail.com si detecta un acceso no autorizado a su cuenta.',
 				'Si usted es reclutador, su rol está sujeto a la verificación que hagamos de la cuenta, y garantiza contar con la autorización de los candidatos cuyas hojas de vida cargue.'
 			]
 		},
@@ -157,7 +161,7 @@ const termsEs: LegalDoc = {
 			bullets: [
 				'El plan pagado cubre un período mensual contado desde la confirmación del pago. Puede consultar el estado de su plan en la página Plan de su cuenta.',
 				'Puede cancelar en cualquier momento desde la página Plan: conserva el acceso hasta el final del período ya pagado y después pasa al plan gratuito. Su hoja de vida y su historial se conservan.',
-				'Retracto y reembolsos: conforme al Estatuto del Consumidor (Ley 1480 de 2011, artículo 47), puede ejercer el derecho de retracto dentro de los cinco (5) días hábiles siguientes a la compra, salvo que el servicio haya comenzado a ejecutarse con su acuerdo. En la práctica: escribimos el reembolso total si nos contacta a hola@eptus.com dentro de ese plazo y no ha consumido los beneficios pagos de su plan. Si ya consumió beneficios del plan, el retracto no procede por tratarse de un servicio ya ejecutado.',
+				'Retracto y reembolsos: conforme al Estatuto del Consumidor (Ley 1480 de 2011, artículo 47), puede ejercer el derecho de retracto dentro de los cinco (5) días hábiles siguientes a la compra, salvo que el servicio haya comenzado a ejecutarse con su acuerdo. En la práctica: escribimos el reembolso total si nos contacta a eptus.asistcv@gmail.com dentro de ese plazo y no ha consumido los beneficios pagos de su plan. Si ya consumió beneficios del plan, el retracto no procede por tratarse de un servicio ya ejecutado.',
 				'Los cobros duplicados o erróneos se reembolsan o corrigen por el mismo medio de pago en un máximo de treinta (30) días calendario.'
 			]
 		},
@@ -165,7 +169,7 @@ const termsEs: LegalDoc = {
 			id: 'propiedad-intelectual',
 			title: 'Propiedad intelectual',
 			paragraphs: [
-				'La Plataforma, su software, su diseño, sus textos y las marcas eptus y AsistCV pertenecen a eptus. Le concedemos una licencia de uso personal, limitada, no transferible y revocable, exclusivamente para usar el servicio conforme a estos Términos.',
+				'La Plataforma, su software, su diseño, sus textos y las marcas eptus y AsistCV pertenecen a su titular y operador. Le concedemos una licencia de uso personal, limitada, no transferible y revocable, exclusivamente para usar el servicio conforme a estos Términos.',
 				'Sus hojas de vida, vacantes y adaptaciones aprobadas son suyos y usted decide cómo usarlos.',
 				'Si nos comparte comentarios o sugerencias, nos autoriza a usarlos para mejorar el producto, sin obligación de compensación.'
 			]
@@ -184,7 +188,7 @@ const termsEs: LegalDoc = {
 			title: 'Disponibilidad, soporte y suspensiones',
 			bullets: [
 				'La Plataforma se ofrece «tal cual», con esfuerzo razonable de disponibilidad. Pueden presentarse interrupciones por mantenimiento o por dependencias de terceros.',
-				'El soporte se presta por hola@eptus.com.',
+				'El soporte se presta por eptus.asistcv@gmail.com.',
 				'Podemos suspender o deshabilitar cuentas que incumplan estos Términos, con aviso previo cuando sea posible.',
 				'Usted puede terminar su cuenta en cualquier momento; el tratamiento posterior de sus datos se rige por la Política de Privacidad.'
 			]
@@ -218,7 +222,7 @@ const termsEs: LegalDoc = {
 			id: 'contacto',
 			title: 'Contacto',
 			paragraphs: [
-				'Preguntas, soporte y reclamaciones: hola@eptus.com.'
+				'Preguntas, soporte y reclamaciones: eptus.asistcv@gmail.com.'
 			]
 		}
 	]
@@ -229,7 +233,7 @@ const termsEn: LegalDoc = {
 	meta: `Version 1.0 · Last updated: ${UPDATED_DATE_EN}`,
 	title: 'Terms and Conditions',
 	intro: [
-		'These Terms and Conditions («Terms») govern access to and use of AsistCV, the résumé analysis and adaptation platform operated by eptus («eptus», «we»).',
+		'These Terms and Conditions («Terms») govern access to and use of AsistCV, the résumé analysis and adaptation platform operated by Daniel Elias Cordoba Howard under the «eptus» brand («eptus», «we»).',
 		'By creating an account, purchasing a plan or using any feature of the Platform, you («User») declare that you have read and accept these Terms and our Privacy Policy. If you do not agree, do not use the Platform.'
 	],
 	sections: [
@@ -237,8 +241,8 @@ const termsEn: LegalDoc = {
 			id: 'titular',
 			title: 'Operator information',
 			bullets: [
-				'Operator: eptus [tax ID to be completed], domiciled in Colombia.',
-				'Contact: hola@eptus.com.',
+				'Owner and operator: Daniel Elias Cordoba Howard, of legal age, identified with Colombian citizenship card (cédula de ciudadanía) No. 1123890948, operating the Platform under the «eptus» brand (natural person; no registered company yet).',
+				'Contact: eptus.asistcv@gmail.com.',
 				'The Platform is provided through its website and web application, supported by the infrastructure providers described in the Privacy Policy.'
 			]
 		},
@@ -269,7 +273,7 @@ const termsEn: LegalDoc = {
 			bullets: [
 				'The service is intended for individuals aged 18 or older with legal capacity.',
 				'Access works with your email address and a verification code. You are responsible for the accuracy of the information you provide, for the security of your mailbox and for keeping control of your account.',
-				'You must notify us immediately at hola@eptus.com if you detect unauthorized access to your account.',
+				'You must notify us immediately at eptus.asistcv@gmail.com if you detect unauthorized access to your account.',
 				'If you are a recruiter, your role is subject to account verification, and you warrant that you have the authorization of the candidates whose résumés you upload.'
 			]
 		},
@@ -324,7 +328,7 @@ const termsEn: LegalDoc = {
 			bullets: [
 				'A paid plan covers a monthly period counted from payment confirmation. You can check your plan status on the Plan page of your account.',
 				'You may cancel at any time from the Plan page: you keep access until the end of the period already paid, then move to the free plan. Your résumé and history are preserved.',
-				'Withdrawal and refunds: under the Colombian Consumer Statute (Law 1480 of 2011, article 47), you may exercise the right of withdrawal within five (5) business days following the purchase, unless the service has already started being performed with your agreement. In practice: we process a full refund if you contact hola@eptus.com within that window and have not consumed the paid benefits of your plan. If you already consumed plan benefits, withdrawal does not apply because the service was already performed.',
+				'Withdrawal and refunds: under the Colombian Consumer Statute (Law 1480 of 2011, article 47), you may exercise the right of withdrawal within five (5) business days following the purchase, unless the service has already started being performed with your agreement. In practice: we process a full refund if you contact eptus.asistcv@gmail.com within that window and have not consumed the paid benefits of your plan. If you already consumed plan benefits, withdrawal does not apply because the service was already performed.',
 				'Duplicate or erroneous charges are refunded or corrected through the same payment method within a maximum of thirty (30) calendar days.'
 			]
 		},
@@ -332,7 +336,7 @@ const termsEn: LegalDoc = {
 			id: 'propiedad-intelectual',
 			title: 'Intellectual property',
 			paragraphs: [
-				'The Platform, its software, design, texts and the eptus and AsistCV trademarks belong to eptus. We grant you a personal, limited, non-transferable and revocable license to use the service solely in accordance with these Terms.',
+				'The Platform, its software, design, texts and the eptus and AsistCV trademarks belong to their owner and operator. We grant you a personal, limited, non-transferable and revocable license to use the service solely in accordance with these Terms.',
 				'Your résumés, job descriptions and approved adaptations are yours, and you decide how to use them.',
 				'If you share feedback or suggestions, you authorize us to use them to improve the product, without obligation of compensation.'
 			]
@@ -351,7 +355,7 @@ const termsEn: LegalDoc = {
 			title: 'Availability, support and suspensions',
 			bullets: [
 				'The Platform is provided «as is», with reasonable effort toward availability. Interruptions may occur due to maintenance or third-party dependencies.',
-				'Support is provided at hola@eptus.com.',
+				'Support is provided at eptus.asistcv@gmail.com.',
 				'We may suspend or disable accounts that breach these Terms, with prior notice when possible.',
 				'You may terminate your account at any time; subsequent data processing is governed by the Privacy Policy.'
 			]
@@ -384,7 +388,7 @@ const termsEn: LegalDoc = {
 		{
 			id: 'contacto',
 			title: 'Contact',
-			paragraphs: ['Questions, support and claims: hola@eptus.com.']
+			paragraphs: ['Questions, support and claims: eptus.asistcv@gmail.com.']
 		}
 	]
 };
@@ -406,7 +410,7 @@ const privacyEs: LegalDoc = {
 			id: 'responsable',
 			title: 'Responsable del tratamiento',
 			paragraphs: [
-				'eptus [NIT por completar], con domicilio en Colombia, es el responsable del tratamiento de sus datos personales. Canal de atención: hola@eptus.com.'
+				'«eptus» es operado por Daniel Elias Cordoba Howard, mayor de edad, identificado con cédula de ciudadanía No. 1123890948 (persona natural; a la fecha no existe sociedad registrada), quien actúa como responsable del tratamiento de sus datos personales. Canal de atención: eptus.asistcv@gmail.com.'
 			]
 		},
 		{
@@ -456,14 +460,14 @@ const privacyEs: LegalDoc = {
 			id: 'menores',
 			title: 'Menores de edad',
 			paragraphs: [
-				'El servicio está dirigido exclusivamente a personas mayores de 18 años. No tratamos datos de menores de edad; si nos escribimos con nosotros, eliminamos la cuenta y los datos asociados.'
+				'El servicio está dirigido exclusivamente a personas mayores de 18 años. No tratamos datos de menores de edad; si nos escribe a eptus.asistcv@gmail.com, eliminamos la cuenta y los datos asociados.'
 			]
 		},
 		{
 			id: 'candidatos-reclutador',
 			title: 'Candidatos cargados por reclutadores',
 			paragraphs: [
-				'Si usted es un candidato cuya hoja de vida fue cargada por un reclutador: el reclutador declara y garantiza que cuenta con su autorización para tratar sus datos en la Plataforma. Usted puede ejercer sus derechos escribiéndonos a hola@eptus.com, y atenderemos su solicitud coordinándonos con la cuenta reclutadora.'
+				'Si usted es un candidato cuya hoja de vida fue cargada por un reclutador: el reclutador declara y garantiza que cuenta con su autorización para tratar sus datos en la Plataforma. Usted puede ejercer sus derechos escribiéndonos a eptus.asistcv@gmail.com, y atenderemos su solicitud coordinándonos con la cuenta reclutadora.'
 			]
 		},
 		{
@@ -494,7 +498,7 @@ const privacyEs: LegalDoc = {
 			id: 'conservacion',
 			title: 'Plazos de conservación y supresión',
 			bullets: [
-				'Cuenta, hoja de vida e historial: mientras su cuenta esté activa. Puede borrar su hoja de vida desde la aplicación y eliminar su cuenta escribiendo a hola@eptus.com; la supresión se ejecuta en máximo treinta (30) días y en copias de respaldo en máximo noventa (90) días.',
+				'Cuenta, hoja de vida e historial: mientras su cuenta esté activa. Puede borrar su hoja de vida desde la aplicación y eliminar su cuenta escribiendo a eptus.asistcv@gmail.com; la supresión se ejecuta en máximo treinta (30) días y en copias de respaldo en máximo noventa (90) días.',
 				'Auditorías sin registro: máximo treinta (30) días, con purga automática.',
 				'Códigos de acceso y tokens de sesión: horas o días, según su función.',
 				'Registros de seguridad: hasta doce (12) meses.',
@@ -511,7 +515,7 @@ const privacyEs: LegalDoc = {
 				{
 					title: 'Canales',
 					paragraphs: [
-						'Varias acciones puede hacerlas usted mismo desde la Plataforma: borrar su hoja de vida, editar sus datos y cancelar su plan. Para lo demás, escriba a hola@eptus.com; respondemos en máximo diez (10) días hábiles, prorrogables por diez (10) días más cuando la solicitud lo requiera.'
+						'Varias acciones puede hacerlas usted mismo desde la Plataforma: borrar su hoja de vida, editar sus datos y cancelar su plan. Para lo demás, escriba a eptus.asistcv@gmail.com; respondemos en máximo diez (10) días hábiles, prorrogables por diez (10) días más cuando la solicitud lo requiera.'
 					]
 				}
 			]
@@ -546,7 +550,7 @@ const privacyEs: LegalDoc = {
 			id: 'contacto',
 			title: 'Contacto',
 			paragraphs: [
-				'Solicitudes, consultas y reclamos de datos personales: hola@eptus.com.'
+				'Solicitudes, consultas y reclamos de datos personales: eptus.asistcv@gmail.com.'
 			]
 		}
 	]
@@ -565,7 +569,7 @@ const privacyEn: LegalDoc = {
 			id: 'responsable',
 			title: 'Data controller',
 			paragraphs: [
-				'eptus [tax ID to be completed], domiciled in Colombia, is the controller of your personal data. Support channel: hola@eptus.com.'
+				'«eptus» is operated by Daniel Elias Cordoba Howard, of legal age, identified with Colombian citizenship card (cédula de ciudadanía) No. 1123890948 (natural person; no registered company yet), who acts as controller of your personal data. Support channel: eptus.asistcv@gmail.com.'
 			]
 		},
 		{
@@ -622,7 +626,7 @@ const privacyEn: LegalDoc = {
 			id: 'candidatos-reclutador',
 			title: 'Candidates uploaded by recruiters',
 			paragraphs: [
-				'If you are a candidate whose résumé was uploaded by a recruiter: the recruiter declares and warrants that they have your authorization to process your data on the Platform. You may exercise your rights by writing to hola@eptus.com, and we will handle your request in coordination with the recruiter account.'
+				'If you are a candidate whose résumé was uploaded by a recruiter: the recruiter declares and warrants that they have your authorization to process your data on the Platform. You may exercise your rights by writing to eptus.asistcv@gmail.com, and we will handle your request in coordination with the recruiter account.'
 			]
 		},
 		{
@@ -653,7 +657,7 @@ const privacyEn: LegalDoc = {
 			id: 'conservacion',
 			title: 'Retention and deletion periods',
 			bullets: [
-				'Account, résumé and history: while your account is active. You can delete your résumé from the application and remove your account by writing to hola@eptus.com; deletion is executed within a maximum of thirty (30) days, and within a maximum of ninety (90) days in backup copies.',
+				'Account, résumé and history: while your account is active. You can delete your résumé from the application and remove your account by writing to eptus.asistcv@gmail.com; deletion is executed within a maximum of thirty (30) days, and within a maximum of ninety (90) days in backup copies.',
 				'Unregistered audits: a maximum of thirty (30) days, with automatic purging.',
 				'Access codes and session tokens: hours or days, depending on their function.',
 				'Security records: up to twelve (12) months.',
@@ -670,7 +674,7 @@ const privacyEn: LegalDoc = {
 				{
 					title: 'Channels',
 					paragraphs: [
-						'Several actions you can take yourself from the Platform: delete your résumé, edit your data and cancel your plan. For everything else, write to hola@eptus.com; we respond within a maximum of ten (10) business days, extendable by ten (10) more days when the request requires it.'
+						'Several actions you can take yourself from the Platform: delete your résumé, edit your data and cancel your plan. For everything else, write to eptus.asistcv@gmail.com; we respond within a maximum of ten (10) business days, extendable by ten (10) more days when the request requires it.'
 					]
 				}
 			]
@@ -705,7 +709,7 @@ const privacyEn: LegalDoc = {
 			id: 'contacto',
 			title: 'Contact',
 			paragraphs: [
-				'Personal data requests, inquiries and claims: hola@eptus.com.'
+				'Personal data requests, inquiries and claims: eptus.asistcv@gmail.com.'
 			]
 		}
 	]
