@@ -21,12 +21,17 @@
 	 * La portada aparece cuando la persona NO tiene cuenta: si ya la tiene,
 	 * "/" es la herramienta y tiene que verse como la herramienta. El funnel
 	 * anónimo de auditoría (3 al día, sin registro) va en la misma superficie
-	 * clara, porque es la puerta de entrada sin compromiso.
+	 * clara, porque es la puerta de entrada sin compromiso. Los documentos
+	 * legales (/terms, /privacy, /cookies) también viven acá: son páginas
+	 * editoriales enlazadas desde el pie, no pantallas de trabajo.
 	 */
+	const LEGAL_PATHS = ['/terms', '/privacy', '/cookies'];
+
 	$: isMarketing =
 		pathname === '/login' ||
 		pathname === '/signup' ||
 		pathname === '/audit' ||
+		LEGAL_PATHS.some((p) => pathname.startsWith(p)) ||
 		(pathname === '/' && !$isAuthenticated);
 
 	const year = new Date().getFullYear();
@@ -83,6 +88,7 @@
 					<h3>{$_('marketing.footer.legal')}</h3>
 					<a href="/privacy">{$_('marketing.footer.privacy')}</a>
 					<a href="/terms">{$_('marketing.footer.terms')}</a>
+					<a href="/cookies">{$_('marketing.footer.cookies')}</a>
 					<a href="mailto:hola@eptus.com">{$_('marketing.footer.contact')}</a>
 				</div>
 			</div>
@@ -177,6 +183,13 @@
 			<span class="app-shell__footer-tag">
 				{$_('marketing.footer.rights', { values: { year } })}
 			</span>
+			<!-- Las legales también dentro de la app: quien trabaja logueado
+			     no debería tener que salir a la portada para leerlas. -->
+			<nav class="app-shell__footer-legal" aria-label={$_('marketing.footer.legal')}>
+				<a href="/privacy">{$_('marketing.footer.privacy')}</a>
+				<a href="/terms">{$_('marketing.footer.terms')}</a>
+				<a href="/cookies">{$_('marketing.footer.cookies')}</a>
+			</nav>
 		</footer>
 	</div>
 {/if}
@@ -500,6 +513,21 @@
 
 	.app-shell__footer-tag {
 		color: var(--color-ink-muted);
+	}
+
+	.app-shell__footer-legal {
+		display: flex;
+		gap: var(--space-3);
+		margin-left: auto;
+	}
+
+	.app-shell__footer-legal a {
+		color: var(--color-ink-muted);
+	}
+
+	.app-shell__footer-legal a:hover {
+		color: var(--color-ink);
+		text-decoration: none;
 	}
 
 	@media (max-width: 880px) {
